@@ -214,10 +214,11 @@ class Scenario:
                 node_att = attack
                 attack_sample_percent = poisoned_sample_percent / 100
                 poisoned_ratio = poisoned_noise_percent / 100
+                attack_params["poisoned_percent"] = attack_sample_percent
+                attack_params["poisoned_ratio"] = poisoned_ratio
             nodes[node]["malicious"] = malicious
             nodes[node]["attacks"] = node_att
-            attack_params["poisoned_percent"] = attack_sample_percent
-            attack_params["poisoned_ratio"] = poisoned_ratio
+            filtered_attack_params = {key: value for key, value in attack_params.items() if value is not None and value != 0}
             nodes[node]["attack_params"] = attack_params
         return nodes
 

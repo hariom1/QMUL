@@ -52,7 +52,10 @@ def labelFlipping(
         - In targeted mode, labels that match `target_label` are directly changed to `target_changed_label`.
     """
     new_dataset = copy.deepcopy(dataset)
-    targets = new_dataset.targets.detach().clone()
+
+    targets = torch.tensor(new_dataset.targets) if isinstance(new_dataset.targets, list) else new_dataset.targets
+    targets = targets.detach().clone()
+
     num_indices = len(indices)
     # classes = new_dataset.classes
     # class_to_idx = new_dataset.class_to_idx

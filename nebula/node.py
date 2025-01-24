@@ -218,7 +218,7 @@ async def main(config):
     else:
         raise ValueError(f"Dataset {dataset_str} not supported")
 
-    dataset = DataModule(
+    datamodule = DataModule(
         train_set=dataset.train_set,
         train_set_indices=dataset.train_indices_map,
         test_set=dataset.test_set,
@@ -293,7 +293,7 @@ async def main(config):
 
     node = node_cls(
         model=model,
-        dataset=dataset,
+        datamodule=datamodule,
         config=config,
         trainer=trainer,
         security=False,
