@@ -51,11 +51,7 @@ class Scenario:
         poisoned_node_percent,
         poisoned_sample_percent,
         poisoned_noise_percent,
-        # noise_type,
         attack_params,
-        # targeted,
-        # target_label,
-        # target_changed_label,
         with_reputation,
         is_dynamic_topology,
         is_dynamic_aggregation,
@@ -218,7 +214,6 @@ class Scenario:
                 attack_params["poisoned_ratio"] = poisoned_ratio
             nodes[node]["malicious"] = malicious
             nodes[node]["attacks"] = node_att
-            filtered_attack_params = {key: value for key, value in attack_params.items() if value is not None and value != 0}
             nodes[node]["attack_params"] = attack_params
         return nodes
 

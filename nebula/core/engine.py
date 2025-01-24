@@ -587,17 +587,14 @@ class MaliciousNode(Engine):
             security,
         )
         self.attack = create_attack(self)
-
-        self.fit_time = 0.0
-        self.extra_time = 0.0
-
-        self.round_start_attack = 0
-        self.round_stop_attack = 5
-
         self.aggregator_bening = self._aggregator
 
     async def _extended_learning_cycle(self):
-        await self.attack.attack()
+        try:
+            await self.attack.attack()
+        except:
+            attack_name = self.config.participant["adversarial_args"]["attacks"]
+            logging.error(f"Attack {attack_name} failed")
 
         if self.role == "aggregator":
             await AggregatorNode._extended_learning_cycle(self)
