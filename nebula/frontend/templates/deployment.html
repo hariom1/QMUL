@@ -282,7 +282,12 @@
                             <option>Random</option>
                         </select>
                         <input type="number" class="form-control" id="predefined-topology-nodes"
-                            placeholder="Number of nodes" min="1" value="3" oninput="greaterThan0(this)" style="display: inline; width: 40%">
+                            placeholder="Number of nodes" min="1" value="3" oninput="greaterthan0(this)" style="display: inline; width: 40%">
+                        <div id="random-topology-options" style="display: none; margin-top: 10px;">
+                            <label for="random-probability">Edge Probability:</label>
+                            <input type="number" class="form-control" id="random-probability"
+                                placeholder="Probability (0-1)" min="0" max="1" step="0.1" value="0.5" style="display: inline; width: 40%">
+                        </div>
                     </div>
                 </div>
                 <div class="form-group row container-shadow tiny grey">
@@ -1198,7 +1203,7 @@
                 document.getElementById("poisoned-sample-percent").value = data["poisoned_sample_percent"]
                 document.getElementById("poisoned-noise-percent").value = data["poisoned_noise_percent"]
                 setAttackParams(data["attacks"], data.attack_params)
-                
+
                 if (data["poisoned_node_percent"] == 0)
                 {
                     var selectElement = document.getElementById("malicious-nodes-select");
@@ -1247,7 +1252,7 @@
                 console.error(error);
             }
         }
-    
+
         function getAttackParams(attack) {
             let attack_params = {
                 noise_type: null,
@@ -1258,7 +1263,7 @@
                 layer_idx: null,
                 delay: null,
             };
-        
+
             if (attack === "GLLNeuronInversionAttack") {
                 // no parameters needed
             } else if (attack === "NoiseInjectionAttack") {
@@ -1280,7 +1285,7 @@
             }
             attack_params.round_start_attack = document.getElementById("start-attack").value
             attack_params.round_stop_attack = document.getElementById("stop-attack").value
-        
+
             return attack_params;
         }
 
@@ -1315,13 +1320,13 @@
                 document.getElementById("poisoned-noise-percent").value = attack_params.poisoned_ratio ?? defaultParams.poisoned_ratio;
                 document.getElementById("noise_type").value = attack_params.noise_type ?? defaultParams.noise_type;
             }
-            document.getElementById("start-attack").value = attack_params.round_start_attack 
-            document.getElementById("stop-attack").value = attack_params.round_stop_attack 
+            document.getElementById("start-attack").value = attack_params.round_start_attack
+            document.getElementById("stop-attack").value = attack_params.round_stop_attack
 
             return attack_params;
         }
     </script>
-        
+
     <script>
         // When click on "save-config-btn" button, create a JSON file with the name "config.json" with the all parameters of the scenario
         $('#save-config-btn').click(function () {
@@ -2497,6 +2502,7 @@
 
 
             if ($("#predefined-topology-select").val() === 'Fully') {
+                $("#random-topology-options").hide();
                 // Update gData: create a link between each node
                 for (var i = 0; i < gData.nodes.length; i++) {
                     for (var j = 0; j < gData.nodes.length; j++) {
@@ -2508,6 +2514,7 @@
             }
             // If networkTopology is changed to Ring, gData is updated to a ring graph
             else if ($("#predefined-topology-select").val() === 'Ring') {
+                $("#random-topology-options").hide();
                 // Update gData: create a link between each node and its two neighbors
                 for (var i = 0; i < gData.nodes.length; i++) {
                     gData.links.push({ source: i, target: (i + 1) % gData.nodes.length });
@@ -2516,19 +2523,24 @@
             }
             // If networkTopology is changed to Star, gData is updated to a star graph
             else if ($("#predefined-topology-select").val() === 'Star') {
+                $("#random-topology-options").hide();
                 // Update gData: create a link between each node and the central node
                 for (var i = 0; i < gData.nodes.length; i++) {
                     gData.links.push({ source: i, target: 0 });
                 }
             } else if ($("#predefined-topology-select").val() === 'Random') {
-                // Update gData: create a link between each node and a random node
-                for (var i = 0; i < gData.nodes.length; i++) {
-                    var randomNode = Math.floor(Math.random() * gData.nodes.length);
-                    while (randomNode === i) {
-                        randomNode = Math.floor(Math.random() * gData.nodes.length);
-                    }
-                    gData.links.push({ source: i, target: randomNode });
-                }
+                // Show probability input
+                $("#random-topology-options").show();
+                const probability = parseFloat($("#random-probability").val());
+
+                // Clear existing links
+                gData.links = [];
+
+                // Generate random links using Erdős-Rényi model
+                gData.links = generateRandomLinks(gData.nodes, probability);
+            } else {
+                // Hide probability input
+                $("#random-topology-options").hide();
             }
 
             if (document.getElementById("predefined-topology-nodes").value > 10) {
