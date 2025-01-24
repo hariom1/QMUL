@@ -381,7 +381,10 @@ class CommunicationsManager:
             await self.engine.event_manager.trigger_event(source, message)
         except Exception as e:
             logging.error(f"🔍  handle_link_message | Error while processing: {message.action} {message.arguments} | {e}")
-            
+
+    def create_message(self, message_type: str, action: str = "", **kwargs):
+        return self.mm.create_message(message_type, action, kwargs)
+
     def start_external_connection_service(self):
         if self.ecs == None:
             self.ecs = NebulaConnectionService(self.addr)

@@ -2,6 +2,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from nebula.core.pb import nebula_pb2
+from nebula.core.network.actions import factory_message_action
+import inspect
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -118,5 +120,50 @@ class MessagesManager:
         message_wrapper = nebula_pb2.Wrapper()
         message_wrapper.source = self.addr
         message_wrapper.link_message.CopyFrom(message)
+        data = message_wrapper.SerializeToString()
+        return data
+    
+
+    def create_message(self, message_type: str, action: str = "", **kwargs):
+        message_action = None
+        if action:
+            message_action = factory_message_action(message_type, action)
+
+        message_generators_map = {
+            "model": self.generate_model_message,
+            "reputation": self.generate_reputation_message,
+            "connection": self.generate_connection_message,
+            "federation": self.generate_federation_message,
+            "discovery": self.generate_discovery_message,
+            "control": self.generate_control_message,
+            "discover": self.generate_discover_message,
+            "offer": self.generate_offer_message,
+            "link": self.generate_link_message,
+        }
+        message_generator_function = message_generators_map.get(message_type)
+        if not message_generator_function:
+            raise ValueError(f"Invalid message type '{message_type}'")
+        
+        generator_signature = inspect.signature(message_generator_function)
+        generator_params = generator_signature.parameters
+
+        generator_args = []
+        generator_kwargs = {}
+
+        if "action" in generator_params and message_action is not None:
+            generator_args.append(message_action)
+
+        if "kwargs" in generator_params:
+            generator_kwargs.update(kwargs)
+
+        if generator_kwargs:  
+            message = message_generator_function(*generator_args, **generator_kwargs)
+        else:
+            message = message_generator_function(*generator_args)
+
+        message_wrapper = nebula_pb2.Wrapper()
+        message_wrapper.source = self.addr
+        field_name = f"{message_type}_message"
+        getattr(message_wrapper, field_name).CopyFrom(message)
         data = message_wrapper.SerializeToString()
         return data

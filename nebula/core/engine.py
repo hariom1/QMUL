@@ -470,14 +470,22 @@ class Engine:
             await self.trainning_in_progress_lock.release_async()
             if round != -1:
                 epochs = self.config.participant["training_args"]["epochs"]
-                msg = self.cm.mm.generate_offer_message(
-                    nebula_pb2.OfferMessage.Action.OFFER_MODEL, 
-                    len(self.get_federation_nodes()), 
-                    0, #self.trainer.get_current_loss(),
-                    model,
-                    rounds,
-                    round,
-                    epochs
+                #msg = self.cm.mm.generate_offer_message(
+                #    nebula_pb2.OfferMessage.Action.OFFER_MODEL, 
+                #    len(self.get_federation_nodes()), 
+                #    0, #self.trainer.get_current_loss(),
+                #    model,
+                #    rounds,
+                #    round,
+                #    epochs
+                #)
+                msg = self.cm.create_message("offer",
+                                             "offer_model",
+                                             len(self.get_federation_nodes()),
+                                             model,
+                                             rounds,
+                                             round,
+                                             epochs
                 )
                 await self.cm.send_offer_model(source, msg)
             else:

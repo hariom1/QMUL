@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
+RESTRUCTURE_COOLDOWN = 5
+
 class NodeManager():
     
     def __init__(
@@ -47,6 +49,7 @@ class NodeManager():
         self.recieve_offer_timer = 5
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self.restructure = False
+        self._restructure_cooldown = RESTRUCTURE_COOLDOWN
         self.discarded_offers_addr_lock = Locker(name="discarded_offers_addr_lock")
         self.discarded_offers_addr = [] 
         self._push_acceleration = push_acceleration
@@ -85,6 +88,13 @@ class NodeManager():
     def fast_reboot_on(self):
         return self._fast_reboot_status
     
+    def _update_restructure_cooldown(self):
+        if self._restructure_cooldown:
+            self._restructure_cooldown = (self._restructure_cooldown + 1) % RESTRUCTURE_COOLDOWN
+
+    def _restructure_available(self):
+        return self._restructure_cooldown == 0
+
     def get_push_acceleration(self):
         return self._push_acceleration
     
@@ -291,7 +301,6 @@ class NodeManager():
             action = lambda: self.engine.cm.init_external_connection_service()
         return action
 
-    #TODO NOT infinite loop, define n_tries
     async def start_late_connection_process(self, connected=False, msg_type="discover_join", addrs_known=None):
         """
             This function represents the process of discovering the federation and stablish the first
@@ -323,6 +332,7 @@ class NodeManager():
             # create message to send to candidates selected
             if not connected:
                 msg = self.engine.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.LATE_CONNECT)
+                msg = self.engine.cm.create_message("connection", "late_connect")
             else:
                 msg = self.engine.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.RESTRUCTURE)
                         
@@ -363,8 +373,9 @@ class NodeManager():
             if not self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
                 #await self.reconnect_to_federation()
-            elif self.neighbor_policy.need_more_neighbors() and self.engine.get_sinchronized_status():
+            elif self.neighbor_policy.need_more_neighbors() and self.engine.get_sinchronized_status() and self._restructure_available():
                 logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
+                self._update_restructure_cooldown()
                 asyncio.create_task(self.upgrade_connection_robustness())
             else:
                 if not self.engine.get_sinchronized_status():
