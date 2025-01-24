@@ -481,11 +481,12 @@ class Engine:
                 #)
                 msg = self.cm.create_message("offer",
                                              "offer_model",
-                                             len(self.get_federation_nodes()),
-                                             model,
-                                             rounds,
-                                             round,
-                                             epochs
+                                             n_neighbors=len(self.get_federation_nodes()),
+                                             loss=0,
+                                             parameters=model,
+                                             rounds=rounds,
+                                             round=round,
+                                             epochs=epochs
                 )
                 await self.cm.send_offer_model(source, msg)
             else:

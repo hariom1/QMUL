@@ -22,7 +22,7 @@ class FCCandidateSelector(CandidateSelector):
         #0145
         #listed = ["192.168.51.2:45001", "192.168.51.3:45002", "192.168.51.6:45005", "192.168.51.7:45006"]
         #defined = []
-        #self.candidates_lock.acquire()
+        self.candidates_lock.acquire()
         cdts = self.candidates.copy()
         #for (addr,a,b) in cdts:
         #    if addr in listed:
