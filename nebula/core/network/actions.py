@@ -18,7 +18,7 @@ def factory_message_action(message_type: str, action: str):
     if message_actions:
         normalized_action = action.upper()
         enum_action = message_actions[normalized_action]
-        return enum_action.value
+        return enum_action
     else:
         return None
 
