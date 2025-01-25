@@ -332,7 +332,7 @@ class NodeManager():
             # create message to send to candidates selected
             if not connected:
                 msg = self.engine.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.LATE_CONNECT)
-                msg = self.engine.cm.create_message("connection", "late_connect")
+                #msg = self.engine.cm.create_message("connection", "late_connect")
             else:
                 msg = self.engine.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.RESTRUCTURE)
                         

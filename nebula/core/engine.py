@@ -411,12 +411,14 @@ class Engine:
             ct_actions , df_actions = self.nm.get_actions()         
             if len(ct_actions):            
                 #for addr in ct_actions.split():
-                cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
+                #cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
+                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
             
             if len(df_actions):    
                 #for addr in df_actions.split():
-                df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
+                #df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
+                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 await self.cm.send_message(source, df_msg) 
 
             await self.nm.register_late_neighbor(source, joinning_federation=True)           
@@ -481,13 +483,13 @@ class Engine:
                 #)
                 msg = self.cm.create_message("offer",
                                              "offer_model",
-                                             n_neighbors=len(self.get_federation_nodes()),
-                                             loss=0,
-                                             parameters=model,
+                                             len(self.get_federation_nodes()),
+                                             0,
+                                             serialized_model=model,
                                              rounds=rounds,
                                              round=round,
                                              epochs=epochs
-                )
+                                            )
                 await self.cm.send_offer_model(source, msg)
             else:
                 logging.info("Discover join received before federation is running..")
@@ -504,6 +506,11 @@ class Engine:
         #self.nm.meet_node(source)
         if len(self.get_federation_nodes()) > 0:
             msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
+            msg = self.cm.create_message("offer", 
+                                         "offer_metric",
+                                         n_neighbors=len(self.get_federation_nodes()),
+                                         loss=self.trainer.get_current_loss()
+                                         )
             await self.cm.send_message(source, msg)
         else:
             logging.info(f"🔗  Dissmissing discover nodes from {source} | no active connections at the moment")                

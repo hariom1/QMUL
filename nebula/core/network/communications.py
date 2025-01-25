@@ -414,9 +414,11 @@ class CommunicationsManager:
             addrs = addrs_known
             
         if msg_type=="discover_join":
-            msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_JOIN)
+            #msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_JOIN)
+            msg = self.create_message("discover", "discover_join")
         elif msg_type=="discover_nodes":
-            msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_NODES)
+            #msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_NODES)
+            msg = self.create_message("discover", "discover_nodes")
             
         logging.info("Starting communications with devices found")
         #TODO filtrar para para quitar las que ya son vecinos

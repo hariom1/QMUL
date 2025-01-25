@@ -88,6 +88,7 @@ class MessagesManager:
         message = nebula_pb2.DiscoverMessage(
             action=action,
         )
+        return message
         message_wrapper = nebula_pb2.Wrapper()
         message_wrapper.source = self.addr
         message_wrapper.discover_message.CopyFrom(message)
@@ -105,6 +106,7 @@ class MessagesManager:
             round = round,
             epochs = epochs
         )
+        return message
         message_wrapper = nebula_pb2.Wrapper()
         message_wrapper.source = self.addr
         message_wrapper.offer_message.CopyFrom(message)
@@ -117,6 +119,7 @@ class MessagesManager:
             action=action,
             addrs = addrs,
         )
+        return message
         message_wrapper = nebula_pb2.Wrapper()
         message_wrapper.source = self.addr
         message_wrapper.link_message.CopyFrom(message)
@@ -124,7 +127,7 @@ class MessagesManager:
         return data
     
 
-    def create_message(self, message_type: str, action: str = "", **kwargs):
+    def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         message_action = None
         if action:
             message_action = factory_message_action(message_type, action)
@@ -144,22 +147,25 @@ class MessagesManager:
         if not message_generator_function:
             raise ValueError(f"Invalid message type '{message_type}'")
         
+        class_name =  message_type.capitalize() + "Message"
+        message_class = getattr(nebula_pb2, class_name, None)
+    
+        if message_class is None:
+            raise AttributeError(f"Message type {message_type} not found on the protocol")
+            
         generator_signature = inspect.signature(message_generator_function)
         generator_params = generator_signature.parameters
 
-        generator_args = []
-        generator_kwargs = {}
-
+        logging.info(f"Parameters in message: {generator_params}")
+        
         if "action" in generator_params and message_action is not None:
-            generator_args.append(message_action)
+            kwargs["action"] = message_action
 
-        if "kwargs" in generator_params:
-            generator_kwargs.update(kwargs)
-
-        if generator_kwargs:  
-            message = message_generator_function(*generator_args, **generator_kwargs)
-        else:
-            message = message_generator_function(*generator_args)
+        if args:
+            for param_name, arg_value in zip(generator_params, args):
+                kwargs[param_name] = arg_value
+            
+        message = message_class(**kwargs)
 
         message_wrapper = nebula_pb2.Wrapper()
         message_wrapper.source = self.addr
