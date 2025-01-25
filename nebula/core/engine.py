@@ -485,7 +485,7 @@ class Engine:
                                              "offer_model",
                                              len(self.get_federation_nodes()),
                                              0,
-                                             serialized_model=model,
+                                             parameters=model,
                                              rounds=rounds,
                                              round=round,
                                              epochs=epochs

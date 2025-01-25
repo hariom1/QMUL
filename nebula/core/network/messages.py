@@ -131,6 +131,8 @@ class MessagesManager:
         message_action = None
         if action:
             message_action = factory_message_action(message_type, action)
+            logging.info(f"action defined: {message_action}")
+            
 
         message_generators_map = {
             "model": self.generate_model_message,
