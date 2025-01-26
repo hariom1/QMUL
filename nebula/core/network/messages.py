@@ -74,121 +74,10 @@ class MessagesManager:
             # Add additional message types here
         }
 
-
-    """     def generate_discovery_message(self, action, latitude=0.0, longitude=0.0):
-            message = nebula_pb2.DiscoveryMessage(
-                action=action,
-                latitude=latitude,
-                longitude=longitude,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.discovery_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_control_message(self, action, log="Control message"):
-            message = nebula_pb2.ControlMessage(
-                action=action,
-                log=log,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.control_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_federation_message(self, action, arguments=[], round=None):
-            logging.info(f"Building federation message with [Action {action}], arguments {arguments}, and round {round}")
-
-            message = nebula_pb2.FederationMessage(
-                action=action,
-                arguments=[str(arg) for arg in (arguments or [])],
-                round=round,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.federation_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_model_message(self, round, parameters, weight=1):
-            message = nebula_pb2.ModelMessage(
-                round=round,
-                parameters=parameters,
-                weight=weight,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.model_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_connection_message(self, action):
-            message = nebula_pb2.ConnectionMessage(
-                action=action,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.connection_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_reputation_message(self, reputation):
-            message = nebula_pb2.ReputationMessage(
-                reputation=reputation,
-            )
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.reputation_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-        
-        def generate_discover_message(self, action):
-            message = nebula_pb2.DiscoverMessage(
-                action=action,
-            )
-            return message
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.discover_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_offer_message(self, action, n_neighbors, loss, parameters=None, rounds=1, round=-1, epochs = 1):
-            message = nebula_pb2.OfferMessage(
-                action=action,
-                n_neighbors = n_neighbors,
-                loss = loss,
-                parameters = parameters,
-                rounds = rounds,
-                round = round,
-                epochs = epochs
-            )
-            return message
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.offer_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-
-        def generate_link_message(self, action, addrs):
-            pass
-            message = nebula_pb2.LinkMessage(
-                action=action,
-                addrs = addrs,
-            )
-            return message
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.source = self.addr
-            message_wrapper.link_message.CopyFrom(message)
-            data = message_wrapper.SerializeToString()
-            return data
-        
-    """
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
+        #logging.info(f"Creating message | type: {message_type}, action: {action}, positionals: {args}, explicits: {kwargs.keys()}")
         # If an action is provided, convert it to its corresponding enum value using the factory
-        message_action = None
+        message_action = None    
         if action:
             message_action = factory_message_action(message_type, action)
               
@@ -221,7 +110,7 @@ class MessagesManager:
                 kwargs[param_name] = arg_value
         
         # Fill in missing parameters with their default values
-        # logging.info(f"kwargs parameters: {kwargs.keys()}")
+        logging.info(f"kwargs parameters: {kwargs.keys()}")
         for param_name in template_params:
             if param_name not in kwargs:
                 logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")

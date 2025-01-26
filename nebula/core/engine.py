@@ -919,9 +919,9 @@ class Engine:
 
     async def send_reputation(self, malicious_nodes):
         logging.info(f"Sending REPUTATION to the rest of the topology: {malicious_nodes}")
-        message = self.cm.mm.generate_federation_message(
-            nebula_pb2.FederationMessage.Action.REPUTATION, malicious_nodes
-        )
+        #message = self.cm.mm.generate_federation_message(
+        #    nebula_pb2.FederationMessage.Action.REPUTATION, malicious_nodes
+        #)
         message = self.cm.create_message("federation","reputation", arguments=[str(arg) for arg in (malicious_nodes)])
         await self.cm.send_message_to_neighbors(message)
 
