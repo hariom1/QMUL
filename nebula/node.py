@@ -361,7 +361,7 @@ async def main(config):
         #if config.participant["network_args"]["ip"] == "192.168.50.11":
             #time.sleep(820)
         
-        time.sleep(250)
+        time.sleep(200)
         
         #if config.participant["network_args"]["ip"] == "192.168.51.11":
         #    logging.info("waiting 385s")

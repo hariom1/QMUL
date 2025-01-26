@@ -1,5 +1,6 @@
 from nebula.core.pb import nebula_pb2
 from enum import Enum
+import logging
 
 
 def factory_message_action(message_type: str, action: str):
@@ -18,7 +19,8 @@ def factory_message_action(message_type: str, action: str):
     if message_actions:
         normalized_action = action.upper()
         enum_action = message_actions[normalized_action]
-        return enum_action
+        logging.info(f"Message action: {enum_action}, value: {enum_action.value}")
+        return enum_action.value
     else:
         return None
 
