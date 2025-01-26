@@ -413,12 +413,7 @@ class CommunicationsManager:
             logging.info("Searching federation process beginning... | Using addrs previously known")
             addrs = addrs_known
             
-        if msg_type=="discover_join":
-            #msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_JOIN)
-            msg = self.create_message("discover", "discover_join")
-        elif msg_type=="discover_nodes":
-            #msg = self.mm.generate_discover_message(nebula_pb2.DiscoverMessage.Action.DISCOVER_NODES)
-            msg = self.create_message("discover", "discover_nodes")
+        msg = self.create_message("discover", msg_type)
             
         logging.info("Starting communications with devices found")
         #TODO filtrar para para quitar las que ya son vecinos
@@ -765,7 +760,8 @@ class CommunicationsManager:
                 logging.info(
                     f"Sending model to {dest_addr} with round {round}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
                 )
-                message = self.mm.generate_model_message(round, serialized_model, weight)
+                #message = self.mm.generate_model_message(round, serialized_model, weight)
+                message = self.create_message("model", round, serialized_model, weight)
                 await conn.send(data=message, is_compressed=True)
                 logging.info(f"Model sent to {dest_addr} with round {round}")
             except Exception as e:
@@ -976,7 +972,8 @@ class CommunicationsManager:
         try:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(
-                    data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
+                    #data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
+                    data=self.create_message("connection", "disconnect")
                 )
                 await asyncio.sleep(1)
                 self.connections[dest_addr].stop()

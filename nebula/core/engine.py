@@ -383,8 +383,11 @@ class Engine:
             await self.cm.get_connections_lock().release_async()
 
 
+    """                                                     ##############################
+                                                            #     Mobility callbacks     #
+                                                            ############################## 
+    """
 
-    # Mobility callbacks
     @event_handler(
         nebula_pb2.ConnectionMessage,
         nebula_pb2.ConnectionMessage.Action.LATE_CONNECT,
@@ -405,19 +408,17 @@ class Engine:
             await self.cm.connect(source, direct=True)
             
             # Verify conenction is accepted
-            conf_msg = self.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.LATE_CONNECT)
+            conf_msg = self.cm.create_message("connection", "late_connect")
             await self.cm.send_message(source, conf_msg)
             
             ct_actions , df_actions = self.nm.get_actions()         
             if len(ct_actions):            
                 #for addr in ct_actions.split():
-                #cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
                 cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
             
             if len(df_actions):    
                 #for addr in df_actions.split():
-                #df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
                 df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 await self.cm.send_message(source, df_msg) 
 
@@ -444,16 +445,20 @@ class Engine:
             logging.info(f"🔗  handle_connection_message | Trigger | restructure connection accepted from {source}")
             await self.cm.connect(source, direct=True)
             
-            conf_msg = self.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.RESTRUCTURE)
+            #conf_msg = self.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.RESTRUCTURE)
+            conf_msg = self.cm.create_message("connection", "restructure")
+            
             await self.cm.send_message(source, conf_msg)
             
             ct_actions , df_actions = self.nm.get_actions()                         
             if len(ct_actions):            
-                cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
+                #cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
+                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
             
             if len(df_actions):    
-                df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
+                #df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
+                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 await self.cm.send_message(source, df_msg)
                
             await self.nm.register_late_neighbor(source, joinning_federation=False)          
@@ -472,15 +477,6 @@ class Engine:
             await self.trainning_in_progress_lock.release_async()
             if round != -1:
                 epochs = self.config.participant["training_args"]["epochs"]
-                #msg = self.cm.mm.generate_offer_message(
-                #    nebula_pb2.OfferMessage.Action.OFFER_MODEL, 
-                #    len(self.get_federation_nodes()), 
-                #    0, #self.trainer.get_current_loss(),
-                #    model,
-                #    rounds,
-                #    round,
-                #    epochs
-                #)
                 msg = self.cm.create_message("offer",
                                              "offer_model",
                                              len(self.get_federation_nodes()),
@@ -505,7 +501,7 @@ class Engine:
         logging.info(f"🔍  handle_discover_message | Trigger | Received discover_node message from {source} ")
         #self.nm.meet_node(source)
         if len(self.get_federation_nodes()) > 0:
-            msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
+            #msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
             msg = self.cm.create_message("offer", 
                                          "offer_metric",
                                          n_neighbors=len(self.get_federation_nodes()),
@@ -570,7 +566,12 @@ class Engine:
         for addr in addrs.split():
             await self.cm.disconnect(source, mutual_disconnection=False)
             await self.nm.update_neighbors(addr, remove=True)                
-                    
+           
+    """                                                     ##############################
+                                                            #    ENGINE FUNCTIONALITY    #
+                                                            ############################## 
+    """
+                          
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
@@ -684,7 +685,8 @@ class Engine:
                 while not await self.cm.check_federation_ready():
                     await asyncio.sleep(1)
                 logging.info("Sending FEDERATION_START to neighbors...")
-                message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_START)
+                #message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_START)
+                message = self.cm.create_message("federation", "federation_start")
                 await self.cm.send_message_to_neighbors(message)
                 await self.get_federation_ready_lock().release_async()
                 await self.create_trainer_module()
@@ -694,7 +696,8 @@ class Engine:
 
         else:
             logging.info("Sending FEDERATION_READY to neighbors...")
-            message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_READY)
+            #message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_READY)
+            message = self.cm.create_message("federation", "federation_ready")
             await self.cm.send_message_to_neighbors(message)
             logging.info("💤  Waiting until receiving the start signal from the start node")
 
@@ -919,6 +922,7 @@ class Engine:
         message = self.cm.mm.generate_federation_message(
             nebula_pb2.FederationMessage.Action.REPUTATION, malicious_nodes
         )
+        message = self.cm.create_message("federation","reputation", arguments=[str(arg) for arg in (malicious_nodes)])
         await self.cm.send_message_to_neighbors(message)
 
 

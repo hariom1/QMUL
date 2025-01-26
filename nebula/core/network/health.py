@@ -32,9 +32,10 @@ class Health:
             conn.set_active(True)
         while True:
             if len(self.cm.connections) > 0:
-                message = self.cm.mm.generate_control_message(
-                    nebula_pb2.ControlMessage.Action.ALIVE, log="Alive message"
-                )
+                #message = self.cm.mm.generate_control_message(
+                #    nebula_pb2.ControlMessage.Action.ALIVE, log="Alive message"
+                #)
+                message = self.cm.create_message("control", "alive", log="Alive message")
                 current_connections = list(self.cm.connections.values())
                 for conn in current_connections:
                     if conn.get_direct():
