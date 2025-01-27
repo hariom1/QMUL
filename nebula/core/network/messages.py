@@ -92,6 +92,7 @@ class MessagesManager:
             if not message_type:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
+            logging.info(f"Message type received: {message_type}")
 
             message_data = getattr(message_wrapper, message_type)
             
@@ -107,7 +108,7 @@ class MessagesManager:
                         self.cm.forward_message(data, addr_from)
                     
                     if message_type == "model_message":
-                        self.cm.handle_model_message(source, message_data)
+                        await self.cm.handle_model_message(source, message_data)
                     else:
                         await self.cm.handle_message(source, message_type, message_data)
                         
