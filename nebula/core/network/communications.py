@@ -143,6 +143,8 @@ class CommunicationsManager:
         self.ready_connections.add(addr)
 
     async def handle_incoming_message(self, data, addr_from):
+        await self.mm.process_message(data, addr_from)
+        return
         try:
             message_wrapper = nebula_pb2.Wrapper()
             message_wrapper.ParseFromString(data)
@@ -189,6 +191,21 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())
+
+
+    async def forward_message(self, data, addr_from):
+        await self.forwarder.forward(data, addr_from=addr_from)
+
+    # generic point to handle messages
+    async def handle_message(self, source, msg_type, message):
+        logging.info(
+            f"🔍  handle_{msg_type} | Received [Action {message.action}] from {source}"
+        )
+        try:
+            await self.engine.event_manager.trigger_event(source, message)
+        except Exception as e:
+            logging.exception(f"🔍  handle_{msg_type} | Error while processing: {e}")
+
 
     async def handle_discovery_message(self, source, message):
         logging.info(

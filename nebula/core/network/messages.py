@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING
 
 from nebula.core.pb import nebula_pb2
 from nebula.core.network.actions import factory_message_action
-import inspect
+import hashlib
+import traceback
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -73,7 +74,62 @@ class MessagesManager:
             },
             # Add additional message types here
         }
+         
+    async def process_message(self, data, addr_from):
+        not_processing_messages = {"control_message", "connection_message"}
+        special_processing_messages = {"discovery_message", "federation_message", "model_message"}
+        
+        try:
+            message_wrapper = nebula_pb2.Wrapper()
+            message_wrapper.ParseFromString(data)
+            source = message_wrapper.source
+            logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
+            if source == self.addr:
+                return
+            
+            # Extract the active message from the oneof field
+            message_type = message_wrapper.WhichOneof("message")
+            if not message_type:
+                logging.warning("Received message with no active field in the 'oneof'")
+                return
 
+            message_data = getattr(message_wrapper, message_type)
+            
+            # Not required processing messages
+            if message_type in not_processing_messages:
+                await self.cm.handle_message(source, message_type, message_data)
+                
+            # Message-specific forwarding and processing
+            elif message_type in special_processing_messages:
+                if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                    # Forward the message if required
+                    if self._should_forward_message(message_type, message_wrapper):
+                        self.cm.forward_message(data, addr_from)
+                    
+                    if message_type == "model_message":
+                        self.cm.handle_model_message(source, message_data)
+                    else:
+                        await self.cm.handle_message(source, message_type, message_data)
+                        
+            # Rest of messages
+            else:
+                if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                    await self.cm.handle_message(source, message_type, message_data)
+        except Exception as e:
+            logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
+            logging.exception(traceback.format_exc())
+     
+    def _should_forward_message(self, message_type, message_wrapper):
+        if self.cm.config.participant["device_args"]["proxy"]:
+            return True
+        # TODO: Improve the technique. Now only forward model messages if the node is a proxy
+        # Need to update the expected model messages receiving during the round
+        # Round -1 is the initialization round --> all nodes should receive the model
+        if message_type == "model_message" and message_wrapper.model_message.round == -1:
+            return True
+        if message_type == "federation_message" and message_wrapper.federation_message.action == nebula_pb2.FederationMessage.Action.Value("FEDERATION_START"):
+            return True
+     
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         #logging.info(f"Creating message | type: {message_type}, action: {action}, positionals: {args}, explicits: {kwargs.keys()}")
         # If an action is provided, convert it to its corresponding enum value using the factory
@@ -110,7 +166,7 @@ class MessagesManager:
                 kwargs[param_name] = arg_value
         
         # Fill in missing parameters with their default values
-        logging.info(f"kwargs parameters: {kwargs.keys()}")
+        # logging.info(f"kwargs parameters: {kwargs.keys()}")
         for param_name in template_params:
             if param_name not in kwargs:
                 logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")
