@@ -157,16 +157,16 @@
                         </div>
                         <div class="col-md-7" style="right: inherit;">
                             <label>
-                                <input type="checkbox" id="mod-neuroninversion" value='GLLNeuronInversionAttack' style="margin-right: 10px;">GLLNeuronInversionAttack
+                                <input type="checkbox" id="mod-neuroninversion" value='GLLNeuronInversionAttack' style="margin-right: 10px;">GLL Neuron Inversion
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-noiseinjection" value='NoiseInjectionAttack' style="margin-right: 10px;">NoiseInjectionAttack
+                                <input type="checkbox" id="mod-noiseinjection" value='NoiseInjectionAttack' style="margin-right: 10px;">Noise Injection
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-swappingweights" value='SwappingWeightsAttack' style="margin-right: 10px;">SwappingWeightsAttack
+                                <input type="checkbox" id="mod-swappingweights" value='SwappingWeightsAttack' style="margin-right: 10px;">Swapping Weights
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-delayer" value='DelayerAttack' style="margin-right: 10px;">DelayerAttack
+                                <input type="checkbox" id="mod-delayer" value='DelayerAttack' style="margin-right: 10px;">Delayer
                             </label>
                         </div>
                     </div>
@@ -498,20 +498,20 @@
                     <h5 class="step-title">Attack Type</h5>
                     <div class="form-check form-check-inline">
                         <select class="form-control" id="poisoning-attack-select" name="poisoning-attack"
-                            style="display: inline; width: 80%">
+                            style="display: inline; width: 15%">
                             <option selected>No Attack</option>
                             <option>Label Flipping</option>
                             <option>Sample Poisoning</option>
                             <option>Model Poisoning</option>
-                            <option>GLLNeuronInversionAttack</option>
-                            <option>NoiseInjectionAttack</option>
-                            <option>SwappingWeightsAttack</option>
-                            <option>DelayerAttack</option>
+                            <option>GLL Neuron Inversion</option>
+                            <option>Noise Injection</option>
+                            <option>Swapping Weights</option>
+                            <option>Delayer</option>
                         </select>
-                        <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">% malicious nodes</h5>
+                        <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">% Malicious nodes</h5>
                         <div class="form-check form-check-inline" style="display: none;" id="poisoned-node-percent-container">
                             <input type="number" class="form-control" id="poisoned-node-percent"
-                                placeholder="% malicious nodes" min="0" value="0" style="display: inline; width: 80%">
+                                placeholder="% malicious nodes" min="0" value="0" style="display: inline; width: 20%">
                                 <select class="form-control" id="malicious-nodes-select" name="malicious-nodes-select"
                                 style="display: inline; width: 10%">
                                 <option selected>Percentage</option>
@@ -521,51 +521,51 @@
                                 <i id="maliciousHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                             </small>
                         </div>
-                        <h5 class="step-title" id="poisoned-sample-title" style="display: none;">% samples poisoned by each malicious node</h5>
+                        <h5 class="step-title" id="poisoned-sample-title" style="display: none;">% Samples poisoned by each malicious node</h5>
                         <div class="form-check form-check-inline" id="poisoned-sample-percent-container" style="display: none;">
                             <input type="number" class="form-control" id="poisoned-sample-percent"
                                 placeholder="% samples poisoned in each malicious node" min="0" value="0" max="100"
                                 oninput="isInRange(this, 0, 100)"
-                                style="display: inline; width: 80%">
+                                style="display: inline; width: 20%">
                         </div>
-                        <h5 id="poisoned-noise-title" class="step-title" style="display: none;">% poisoned noise</h5>
+                        <h5 id="poisoned-noise-title" class="step-title" style="display: none;">% Poisoned noise</h5>
                         <div class="form-check form-check-inline" id="poisoned-noise-percent-container" style="display: none;">
                             <input type="number" class="form-control" id="poisoned-noise-percent"
                                 placeholder="% noise in each poisoned sample" min="0" value="0"
-                                style="display: inline; width: 80%">
+                                style="display: inline; width: 20%">
                         </div>
-                        <h5 id="noise-type-title" class="step-title" style="display: none;">noise type</h5>
+                        <h5 id="noise-type-title" class="step-title" style="display: none;">Noise type</h5>
                         <div class="form-check form-check-inline" id="noise-type-container" style="display: none;">
                             <select class="form-control" id="noise_type" name="noise-type"
-                            style="display: inline; width: 80%">
+                            style="display: inline; width: 20%">
                                 <option selected>Salt</option>
                                 <option>Gaussian</option>
                                 <option>S&P</option>
                             </select>
                         </div>
-                        <h5 id="targeted-title" class="step-title" style="display: none;">targeted</h5>
+                        <h5 id="targeted-title" class="step-title" style="display: none;">Targeted</h5>
                         <div class="form-check form-check-inline" id="targeted-container" style="display: none;">
                             <div class="form-check form-switch" style="margin-bottom: 20px;">
                                 <input class="form-check-input" type="checkbox" id="targeted" checked="false" style="display: inline; width: 80px; height: 30px;">
                             </div>
                         </div>
-                        <h5 id="target_label-title" class="step-title" style="display: none;">target label</h5>
+                        <h5 id="target_label-title" class="step-title" style="display: none;">Target label</h5>
                         <div class="form-check form-check-inline" id="target_label-container" style="display: none;">
                             <input type="number" class="form-control" id="target_label"
                                 placeholder="target label" min="0" value="4"
-                                style="display: inline; width: 80%">
+                                style="display: inline; width: 20%">
                         </div>
-                        <h5 id="target_changed_label-title" class="step-title" style="display: none;">target changed label</h5>
+                        <h5 id="target_changed_label-title" class="step-title" style="display: none;">Target changed label</h5>
                         <div class="form-check form-check-inline" id="target_changed_label-container" style="display: none;">
                             <input type="number" class="form-control" id="target_changed_label"
                                 placeholder="target changed label" min="0" value="7"
-                                style="display: inline; width: 80%">
+                                style="display: inline; width: 20%">
                         </div>
                         <h5 id="strength-title" class="step-title" style="display: none;">Noise strength</h5>
                         <div class="form-check form-check-inline" id="strength-container" style="display: none;">
                             <input type="number" class="form-control" id="strength"
                                 placeholder="Noise strength" value="10000"
-                                style="display: inline; width: 80%">
+                                style="display: inline; width: 20%">
                         </div>
                         <h5 id="layer_idx-title" class="step-title" style="display: none;">Layer</h5>
                         <div class="form-check form-check-inline" id="layer_idx-container" style="display: none;">
@@ -2778,7 +2778,7 @@
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
             }
-            else if(this.value == "GLLNeuronInversionAttack"){
+            else if(this.value == "GLL Neuron Inversion"){
                 document.getElementById("poisoned-node-title").style.display = "block";
                 document.getElementById("poisoned-node-percent-container").style.display = "block";
                 document.getElementById("poisoned-sample-title").style.display = "none";
@@ -2787,10 +2787,12 @@
                 document.getElementById("poisoned-noise-percent-container").style.display = "none";
                 document.getElementById("noise-type-title").style.display = "none";
                 document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted").checked = false;
-                document.getElementById("targeted").dispatchEvent(new Event('change'));
                 document.getElementById("targeted-title").style.display = "none";
                 document.getElementById("targeted-container").style.display = "none";
+                document.getElementById("target_label-title").style.display = "none";
+                document.getElementById("target_label-container").style.display = "none";
+                document.getElementById("target_changed_label-title").style.display = "none";
+                document.getElementById("target_changed_label-container").style.display = "none";
                 document.getElementById("strength-title").style.display = "none";
                 document.getElementById("strength-container").style.display = "none";
                 document.getElementById("layer_idx-title").style.display = "none";
@@ -2802,7 +2804,7 @@
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
             }
-            else if(this.value == "NoiseInjectionAttack"){
+            else if(this.value == "Noise Injection"){
                 document.getElementById("poisoned-node-title").style.display = "block";
                 document.getElementById("poisoned-node-percent-container").style.display = "block";
                 document.getElementById("poisoned-sample-title").style.display = "none";
@@ -2811,10 +2813,12 @@
                 document.getElementById("poisoned-noise-percent-container").style.display = "none";
                 document.getElementById("noise-type-title").style.display = "none";
                 document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted").checked = false;
-                document.getElementById("targeted").dispatchEvent(new Event('change'));
                 document.getElementById("targeted-title").style.display = "none";
                 document.getElementById("targeted-container").style.display = "none";
+                document.getElementById("target_label-title").style.display = "none";
+                document.getElementById("target_label-container").style.display = "none";
+                document.getElementById("target_changed_label-title").style.display = "none";
+                document.getElementById("target_changed_label-container").style.display = "none";
                 document.getElementById("strength-title").style.display = "block";
                 document.getElementById("strength-container").style.display = "block";
                 document.getElementById("layer_idx-title").style.display = "none";
@@ -2826,7 +2830,7 @@
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
             }
-            else if(this.value == "SwappingWeightsAttack"){
+            else if(this.value == "Swapping Weights"){
                 document.getElementById("poisoned-node-title").style.display = "block";
                 document.getElementById("poisoned-node-percent-container").style.display = "block";
                 document.getElementById("poisoned-sample-title").style.display = "none";
@@ -2835,10 +2839,12 @@
                 document.getElementById("poisoned-noise-percent-container").style.display = "none";
                 document.getElementById("noise-type-title").style.display = "none";
                 document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted").checked = false;
-                document.getElementById("targeted").dispatchEvent(new Event('change'));
                 document.getElementById("targeted-title").style.display = "none";
                 document.getElementById("targeted-container").style.display = "none";
+                document.getElementById("target_label-title").style.display = "none";
+                document.getElementById("target_label-container").style.display = "none";
+                document.getElementById("target_changed_label-title").style.display = "none";
+                document.getElementById("target_changed_label-container").style.display = "none";
                 document.getElementById("strength-title").style.display = "none";
                 document.getElementById("strength-container").style.display = "none";
                 document.getElementById("layer_idx-title").style.display = "block";
@@ -2850,7 +2856,7 @@
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
             }
-            else if(this.value == "DelayerAttack"){
+            else if(this.value == "Delayer"){
                 document.getElementById("poisoned-node-title").style.display = "block";
                 document.getElementById("poisoned-node-percent-container").style.display = "block";
                 document.getElementById("poisoned-sample-title").style.display = "none";
@@ -2859,10 +2865,12 @@
                 document.getElementById("poisoned-noise-percent-container").style.display = "none";
                 document.getElementById("noise-type-title").style.display = "none";
                 document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted").checked = false;
-                document.getElementById("targeted").dispatchEvent(new Event('change'));
                 document.getElementById("targeted-title").style.display = "none";
                 document.getElementById("targeted-container").style.display = "none";
+                document.getElementById("target_label-title").style.display = "none";
+                document.getElementById("target_label-container").style.display = "none";
+                document.getElementById("target_changed_label-title").style.display = "none";
+                document.getElementById("target_changed_label-container").style.display = "none";
                 document.getElementById("strength-title").style.display = "none";
                 document.getElementById("strength-container").style.display = "none";
                 document.getElementById("layer_idx-title").style.display = "none";
