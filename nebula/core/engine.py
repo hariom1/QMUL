@@ -981,7 +981,6 @@ class AggregatorNode(Engine):
                 # gpu_percent = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
                 gpu_power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
                 gpu_powers += gpu_power
-            logging.info("gpu powers ", gpu_powers)
 
         cpu_percents = psutil.cpu_percent(percpu=True)
         cpu_util = [cpu_percents[i] for i in self.cpu_index]
@@ -1075,7 +1074,6 @@ class ServerNode(Engine):
                 # gpu_percent = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
                 gpu_power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
                 gpu_powers += gpu_power
-            logging.info("gpu powers ", gpu_powers)
 
         cpu_percents = psutil.cpu_percent(percpu=True)
         cpu_util = [cpu_percents[i] for i in self.cpu_index]
@@ -1175,7 +1173,6 @@ class TrainerNode(Engine):
                 # gpu_percent = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
                 gpu_power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
                 gpu_powers += gpu_power
-            logging.info("gpu powers ", gpu_powers)
 
         cpu_percents = psutil.cpu_percent(percpu=True)
         cpu_util = [cpu_percents[i] for i in self.cpu_index]
