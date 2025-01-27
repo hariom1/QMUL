@@ -72,6 +72,7 @@ class Scenario:
         node_selection_strategy,
         communication_method,
         node_selection_parameter,
+        random_topology_probability,
     ):
         """
         Initialize the scenario.
@@ -118,6 +119,7 @@ class Scenario:
             schema_additional_participants (str): Schema for additional participants.
             node_selection_strategy (str): Strategy for select models to aggergate.
             communication_method (float): Enengy comsuption for Communication approach, e.g. wifi=0.0005506.
+            random_topology_probability (float): Probability for random topology.
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -169,6 +171,7 @@ class Scenario:
         self.node_selection_parameter = node_selection_parameter
         # Sustainability related
         self.communication_method = communication_method
+        self.random_topology_probability = random_topology_probability
 
     def attack_node_assign(
         self,
@@ -616,8 +619,23 @@ class ScenarioManagement:
 
     def create_topology(self, matrix=None):
         import numpy as np
+        
+        logging.info(f"Creating network topology for scenario {self.scenario_name}")
+        logging.info(f"Scenario values: {self.scenario.__dict__}")
+        logging.info(f"Topology values: {self.scenario.topology}")
 
-        if matrix is not None:
+        if self.scenario.topology == "Random":
+            # Create network topology using topology manager (random)
+            probability = float(self.scenario.random_topology_probability)
+            logging.info(f"Creating random network topology using erdos_renyi_graph: nodes={self.n_nodes}, probability={probability}")
+            topologymanager = TopologyManager(
+                scenario_name=self.scenario_name,
+                n_nodes=self.n_nodes,
+                b_symmetric=True,
+                undirected_neighbor_num=3,
+            )
+            topologymanager.generate_random_topology(probability)
+        elif matrix is not None:
             if self.n_nodes > 2:
                 topologymanager = TopologyManager(
                     topology=np.array(matrix),
@@ -634,7 +652,7 @@ class ScenarioManagement:
                     b_symmetric=True,
                     undirected_neighbor_num=2,
                 )
-        elif self.scenario.topology == "fully":
+        elif self.scenario.topology == "Fully":
             # Create a fully connected network
             topologymanager = TopologyManager(
                 scenario_name=self.scenario_name,
@@ -643,19 +661,10 @@ class ScenarioManagement:
                 undirected_neighbor_num=self.n_nodes - 1,
             )
             topologymanager.generate_topology()
-        elif self.scenario.topology == "ring":
+        elif self.scenario.topology == "Ring":
             # Create a partially connected network (ring-structured network)
             topologymanager = TopologyManager(scenario_name=self.scenario_name, n_nodes=self.n_nodes, b_symmetric=True)
             topologymanager.generate_ring_topology(increase_convergence=True)
-        elif self.scenario.topology == "random":
-            # Create network topology using topology manager (random)
-            topologymanager = TopologyManager(
-                scenario_name=self.scenario_name,
-                n_nodes=self.n_nodes,
-                b_symmetric=True,
-                undirected_neighbor_num=3,
-            )
-            topologymanager.generate_topology()
         elif self.scenario.topology == "star" and self.scenario.federation == "CFL":
             # Create a centralized network
             topologymanager = TopologyManager(scenario_name=self.scenario_name, n_nodes=self.n_nodes, b_symmetric=True)
