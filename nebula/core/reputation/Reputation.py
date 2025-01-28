@@ -939,7 +939,7 @@ class Reputation:
                     "score": score,
                 })
             else:
-                score = 0.0
+                score = 0
 
             data = {
                 "addr": addr,
@@ -958,7 +958,7 @@ class Reputation:
 
         except Exception as e:
             logging.exception(f"Error managing model_arrival_latency: {e}")
-            return 0.0
+            return 0
 
     @staticmethod
     def manage_metric_time_message(messages_time_message, addr, nei, current_round, scenario):
@@ -1018,7 +1018,7 @@ class Reputation:
                 np.percentile(previous_counts, 85) * 1.20 if previous_counts else 0
             )
 
-            normalized_messages = 1
+            normalized_messages = 1.0
             relative_position = 0
 
             if previous_round > 4:
@@ -1147,25 +1147,42 @@ class Reputation:
 
             Reputation.reputation_history[key][current_round] = reputation
 
-            total_reputation = 0
-            total_weights = 0
+            # total_reputation = 0
+            # total_weights = 0
             avg_reputation = 0
             rounds = sorted(Reputation.reputation_history[key].keys(), reverse=True)[:2]
 
-            for i, n_round in enumerate(rounds, start=1):
-                rep = Reputation.reputation_history[key][n_round]
-                decay_factor = Reputation.calculate_decay_rate(rep) ** i
-                total_reputation += rep * decay_factor
-                total_weights += decay_factor
-                # logging.info(
-                #     f"Round: {n_round}, Reputation: {rep}, Decay: {decay_factor}, Total reputation: {total_reputation}"
-                # )
+            if len(rounds) >= 2:
+                current_round = rounds[0]
+                previous_round = rounds[1]
 
-            avg_reputation = total_reputation / total_weights
-            if total_weights > 0:
-                return avg_reputation
+                current_rep = Reputation.reputation_history[key][current_round]
+                previous_rep = Reputation.reputation_history[key][previous_round]
+                logging.info(f"Current reputation: {current_rep}, Previous reputation: {previous_rep}")
+
+                avg_reputation = (current_rep * 0.8) + (previous_rep * 0.2)
+                logging.info(f"Reputation ponderated: {avg_reputation}")
             else:
-                return -1
+                logging.info(f"Reputation history: {Reputation.reputation_history}")
+                avg_reputation = Reputation.reputation_history[key][current_round]
+                logging.info(f"Current reputation: {avg_reputation}")
+
+            return avg_reputation
+
+            # for i, n_round in enumerate(rounds, start=1):
+            #     rep = Reputation.reputation_history[key][n_round]
+            #     decay_factor = Reputation.calculate_decay_rate(rep) ** i
+            #     total_reputation += rep * decay_factor
+            #     total_weights += decay_factor
+            #     logging.info(
+            #         f"Round: {n_round}, Reputation: {rep}, Decay: {decay_factor}, Total reputation: {total_reputation}"
+            #     )
+
+            # avg_reputation = total_reputation / total_weights
+            # if total_weights > 0:
+            #     return avg_reputation
+            # else:
+            #     return -1
 
         except Exception:
             logging.exception("Error saving reputation history")
@@ -1185,10 +1202,12 @@ class Reputation:
 
         if reputation > 0.8:
             return 0.9  # Muy bajo decaimiento
+        elif reputation > 0.7:
+            return 0.8  # Bajo decaimiento
         elif reputation > 0.6:
             return 0.6  # Bajo decaimiento
         elif reputation > 0.4:
-            return 0.3  # Alto decaimiento
+            return 0.2  # Alto decaimiento
         else:
             return 0.1  # Muy alto decaimiento
 
