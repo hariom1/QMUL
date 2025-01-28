@@ -1,13 +1,13 @@
 import asyncio
 import logging
 import os
-import numpy as np
+
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
-from nebula.core.aggregation.aggregator import create_aggregator, create_malicious_aggregator
+from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager, event_handler
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.pb import nebula_pb2
@@ -61,13 +61,10 @@ class Engine:
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         self.config = config
         self.idx = config.participant["device_args"]["idx"]
@@ -97,11 +94,8 @@ class Engine:
         self.log_dir = os.path.join(config.participant["tracking_args"]["log_dir"], self.experiment_name)
 
         self.security = security
-        self.model_poisoning = model_poisoning
-        self.poisoned_ratio = poisoned_ratio
-        self.noise_type = noise_type
 
-        self._trainer = trainer(model, dataset, config=self.config)
+        self._trainer = trainer(model, datamodule, config=self.config)
         self._aggregator = create_aggregator(config=self.config, engine=self)
 
         self._secure_neighbors = []
@@ -495,13 +489,15 @@ class Engine:
         reputation_with_weights = None
 
         for nei in neighbors:
-            metric_messages_time, metric_similarity, metric_fraction, metric_model_arrival_latency = self.reputation_instance.calculate_value_metrics(
-                self.config.participant["scenario_args"]["name"],
-                self.log_dir,
-                self.idx,
-                self.addr,
-                nei,
-                current_round=current_round,
+            metric_messages_time, metric_similarity, metric_fraction, metric_model_arrival_latency = (
+                self.reputation_instance.calculate_value_metrics(
+                    self.config.participant["scenario_args"]["name"],
+                    self.log_dir,
+                    self.idx,
+                    self.addr,
+                    nei,
+                    current_round=current_round,
+                )
             )
 
             logging.info(f"metric_messages_time at round {self.round}: {metric_messages_time}")
@@ -510,25 +506,28 @@ class Engine:
             logging.info(f"metric_model_arrival_latency at round {self.round}: {metric_model_arrival_latency}")
 
             history_data = self.reputation_instance.history_data
-            self.reputation_instance.calculate_weighted_values(metric_messages_time, 
-                                                                metric_similarity, 
-                                                                metric_fraction, 
-                                                                metric_model_arrival_latency, 
-                                                                history_data, 
-                                                                current_round,
-                                                                self.addr,
-                                                                nei)
+            self.reputation_instance.calculate_weighted_values(
+                metric_messages_time,
+                metric_similarity,
+                metric_fraction,
+                metric_model_arrival_latency,
+                history_data,
+                current_round,
+                self.addr,
+                nei,
+            )
             # logging.info(f"history_data after calculate_weighted_values at {self.round}: {history_data}")
 
         if current_round >= 5:
             average_weights = {}
             for metric_name in history_data.keys():
                 valid_entries = [
-                    entry for entry in history_data[metric_name] 
+                    entry
+                    for entry in history_data[metric_name]
                     if entry["round"] >= current_round and entry.get("weight") not in [None, -1]
                 ]
                 # logging.info(f"valid_entries for {metric_name} at round {self.round}: {valid_entries}")
-                
+
                 if valid_entries:
                     average_weight = sum([entry["weight"] for entry in valid_entries]) / len(valid_entries)
                     average_weights[metric_name] = average_weight
@@ -558,11 +557,18 @@ class Engine:
                 logging.info(f"metric_messages_time_history at round {self.round}: {metric_messages_time_history}")
                 logging.info(f"metric_similarity_history at round {self.round}: {metric_similarity_history}")
                 logging.info(f"metric_fraction_history at round {self.round}: {metric_fraction_history}")
-                logging.info(f"metric_model_arrival_latency_history at round {self.round}: {metric_model_arrival_latency_history}")
+                logging.info(
+                    f"metric_model_arrival_latency_history at round {self.round}: {metric_model_arrival_latency_history}"
+                )
 
                 logging.info(f"average_weights at round {self.round}: {average_weights}")
 
-                if metric_messages_time_history is not None and metric_similarity_history is not None and metric_fraction_history is not None and metric_model_arrival_latency_history is not None:
+                if (
+                    metric_messages_time_history is not None
+                    and metric_similarity_history is not None
+                    and metric_fraction_history is not None
+                    and metric_model_arrival_latency_history is not None
+                ):
                     reputation_with_weights = (
                         metric_messages_time_history * average_weights["messages_time"]
                         + metric_similarity_history * average_weights["similarity"]
@@ -595,20 +601,26 @@ class Engine:
                     # logging.info(f"reputation_with_weights at round {self.round}: {reputation_with_weights}")
 
                 if reputation_with_weights is not None:
-                    avg_reputation = self.reputation_instance.save_reputation_history_in_memory(self.addr, nei, reputation_with_weights, current_round)
+                    avg_reputation = self.reputation_instance.save_reputation_history_in_memory(
+                        self.addr, nei, reputation_with_weights, current_round
+                    )
                     logging.info(f"Average reputation for node {nei}: {avg_reputation}")
                 else:
                     avg_reputation = 0
                     # logging.info(f"Average reputation for node {nei}: {avg_reputation}")
 
                 if nei not in self.reputation:
-                    self.reputation[nei] = {"reputation": avg_reputation, "round": current_round, "last_feedback_round": -1}
+                    self.reputation[nei] = {
+                        "reputation": avg_reputation,
+                        "round": current_round,
+                        "last_feedback_round": -1,
+                    }
                 else:
                     self.reputation[nei]["reputation"] = avg_reputation
                     self.reputation[nei]["round"] = current_round
 
                 if self.reputation[nei]["reputation"] is not None:
-                    metrics_data =  {
+                    metrics_data = {
                         "addr": self.addr.split(":")[0].strip(),
                         "nei": nei.split(":")[0].strip(),
                         "round": self.round,
@@ -637,7 +649,13 @@ class Engine:
             if self.with_reputation:
                 # logging.info("Reputation system enabled")
                 federation = self.config.participant["network_args"]["neighbors"].split()
-                self.reputation_instance.init_reputation(self.addr, federation_nodes=federation, round_num=current_round, last_feedback_round=-1, scenario=self.experiment_name)
+                self.reputation_instance.init_reputation(
+                    self.addr,
+                    federation_nodes=federation,
+                    round_num=current_round,
+                    last_feedback_round=-1,
+                    scenario=self.experiment_name,
+                )
 
         status = await self.include_feedback_in_reputation()
         if status:
@@ -866,56 +884,27 @@ class MaliciousNode(Engine):
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         super().__init__(
             model,
-            dataset,
+            datamodule,
             config,
             trainer,
             security,
-            model_poisoning,
-            poisoned_ratio,
-            noise_type,
         )
-        self.attack = create_attack(config.participant["adversarial_args"]["attacks"])
-        logging.info(f"Attack: {self.attack}")
-        self.fit_time = 0.0
-        self.extra_time = 0.0
-
-        self.round_start_attack = 7
-        self.round_stop_attack = 10
-
+        self.attack = create_attack(self)
         self.aggregator_bening = self._aggregator
 
     async def _extended_learning_cycle(self):
-        if type(self.attack).__name__ == "FloodingAttack":
-            logging.info("Running Flooding Attack")
-            if self.round in range(self.round_start_attack, self.round_stop_attack):
-                await self.attack.attack(self.cm, self.addr, self.round, repetitions=2, interval=0.15)
-
-        if type(self.attack).__name__ == "DelayerAttack":
-            logging.info("Running Delayer Attack")
-            if self.round in range(self.round_start_attack, self.round_stop_attack):
-                await self.attack.attack()
-
-        if (
-            self.attack != None
-            and type(self.attack).__name__ != "FloodingAttack"
-            and type(self.attack).__name__ != "DelayerAttack"
-        ):
-            if self.round in range(self.round_start_attack, self.round_stop_attack):
-                logging.info("Changing aggregation function maliciously...")
-                self._aggregator = create_malicious_aggregator(self._aggregator, self.attack)
-            elif self.round == self.round_stop_attack:
-                logging.info("Changing aggregation function benignly...")
-                self._aggregator = self.aggregator_bening
+        try:
+            await self.attack.attack()
+        except:
+            attack_name = self.config.participant["adversarial_args"]["attacks"]
+            logging.exception(f"Attack {attack_name} failed")
 
         if self.role == "aggregator":
             await AggregatorNode._extended_learning_cycle(self)
@@ -929,23 +918,17 @@ class AggregatorNode(Engine):
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         super().__init__(
             model,
-            dataset,
+            datamodule,
             config,
             trainer,
             security,
-            model_poisoning,
-            poisoned_ratio,
-            noise_type,
         )
 
     async def _extended_learning_cycle(self):
@@ -968,23 +951,17 @@ class ServerNode(Engine):
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         super().__init__(
             model,
-            dataset,
+            datamodule,
             config,
             trainer,
             security,
-            model_poisoning,
-            poisoned_ratio,
-            noise_type,
         )
 
     async def _extended_learning_cycle(self):
@@ -1006,23 +983,17 @@ class TrainerNode(Engine):
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         super().__init__(
             model,
-            dataset,
+            datamodule,
             config,
             trainer,
             security,
-            model_poisoning,
-            poisoned_ratio,
-            noise_type,
         )
 
     async def _extended_learning_cycle(self):
@@ -1049,23 +1020,17 @@ class IdleNode(Engine):
     def __init__(
         self,
         model,
-        dataset,
+        datamodule,
         config=Config,
         trainer=Lightning,
         security=False,
-        model_poisoning=False,
-        poisoned_ratio=0,
-        noise_type="gaussian",
     ):
         super().__init__(
             model,
-            dataset,
+            datamodule,
             config,
             trainer,
             security,
-            model_poisoning,
-            poisoned_ratio,
-            noise_type,
         )
 
     async def _extended_learning_cycle(self):

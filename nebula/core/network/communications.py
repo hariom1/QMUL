@@ -144,7 +144,7 @@ class CommunicationsManager:
 
             if source == self.addr:
                 return
-            
+
             if message_wrapper.HasField("discovery_message"):
                 message_type = "discovery"
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
@@ -193,7 +193,7 @@ class CommunicationsManager:
             else:
                 round_num = self.get_round()
             self.store_receive_timestamp(addr_from, message_type, round=round_num)
-            
+
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())
