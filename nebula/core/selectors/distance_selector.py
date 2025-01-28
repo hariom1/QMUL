@@ -100,6 +100,16 @@ class DistanceSelector(Selector):
         logging.info(f"[DistanceSelector] sustainability_scores: {sustainability_scores}")            
         
         distance_values = distances.values()
+        
+        if len(distance_values) == 0:
+            logging.error("[DistanceSelector] No distances to select from")
+            self.selected_nodes = [node.addr]
+            return self.selected
+        elif len(distance_values) == 1:
+            logging.info("[DistanceSelector] Only one neighbor, selecting it")
+            self.selected_nodes = [list(distances.keys())[0], node.addr]
+            return self.selected_nodes
+        
         avg_distance = mean(distance_values)
         std_dev_distance = stdev(distance_values)
 
