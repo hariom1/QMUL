@@ -139,16 +139,22 @@ class CommunicationsManager:
             message_wrapper = nebula_pb2.Wrapper()
             message_wrapper.ParseFromString(data)
             source = message_wrapper.source
+            message_round = None
             logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
+
             if source == self.addr:
                 return
+            
             if message_wrapper.HasField("discovery_message"):
+                message_type = "discovery"
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     await self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_discovery_message(source, message_wrapper.discovery_message)
             elif message_wrapper.HasField("control_message"):
+                message_type = "control"
                 await self.handle_control_message(source, message_wrapper.control_message)
             elif message_wrapper.HasField("federation_message"):
+                message_type = "federation"
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     if self.config.participant["device_args"][
                         "proxy"
@@ -158,6 +164,7 @@ class CommunicationsManager:
                         await self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_federation_message(source, message_wrapper.federation_message)
             elif message_wrapper.HasField("model_message"):
+                message_type = "model"
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     # TODO: Improve the technique. Now only forward model messages if the node is a proxy
                     # Need to update the expected model messages receiving during the round
@@ -166,15 +173,27 @@ class CommunicationsManager:
                         await self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_model_message(source, message_wrapper.model_message)
             elif message_wrapper.HasField("reputation_message"):
+                message_type = "reputation"
+                message_round = message_wrapper.reputation_message.round
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_reputation_message(source, message_wrapper.reputation_message)
             elif message_wrapper.HasField("flood_attack_message"):
+                message_type = "flood_attack"
                 await self.handle_flooding_attack_message(source, message_wrapper.flood_attack_message)
             elif message_wrapper.HasField("connection_message"):
+                message_type = "connection"
                 await self.handle_connection_message(source, message_wrapper.connection_message)
             else:
+                message_type = "unknown"
                 logging.info(f"Unknown handler for message: {message_wrapper}")
+
+            if message_round is not None:
+                round_num = message_round
+            else:
+                round_num = self.get_round()
+            self.store_receive_timestamp(addr_from, message_type, round=round_num)
+            
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())
@@ -203,6 +222,7 @@ class CommunicationsManager:
         logging.info(
             f"📝  handle_federation_message | Received [Action {message.action}] from {source} with arguments {message.arguments}"
         )
+        self.store_receive_timestamp(source, "federation", self.engine.get_round())
         try:
             await self.engine.event_manager.trigger_event(source, message)
         except Exception as e:
@@ -281,7 +301,7 @@ class CommunicationsManager:
 
                 if "time_0" not in self._model_arrival_latency_data[round_id]:
                     self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
-                    logging.info(f"start_time: {start_time} of source {self.addr} for round {round_id}")
+                    # logging.info(f"start_time: {start_time} of source {source} for round {round_id}")
 
                 relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
                 # federation_nodes = await self.get_addrs_current_connections(only_direct=True, myself=True)
@@ -419,7 +439,6 @@ class CommunicationsManager:
             )
 
             self.store_receive_timestamp(source, "reputation", message.round)
-            # self.calculate_latency(source, "reputation")
 
             current_node = self.addr
             nei = message.node_id
@@ -444,8 +463,7 @@ class CommunicationsManager:
             logging.info(
                 f"🔥  handle_flooding_attack_message | Received flooding attack message from {source} | Attacker: {message.attacker_id} | Frequency: {message.frequency} | Duration: {message.duration} | Target node: {message.target_node}"
             )
-            current_round = self.engine.get_round()
-            self.store_receive_timestamp(source, "flooding_attack", current_round)
+            self.store_receive_timestamp(source, "flooding_attack", self.engine.get_round())
         except Exception as e:
             logging.exception(f"🔥  handle_flooding_attack_message | Error while processing: {e}")
 
@@ -848,7 +866,7 @@ class CommunicationsManager:
         current_round = self.get_round()
         if current_time:
             if round is None:
-                round = self.get_round()
+                round = current_round
             save_data(
                 self.config.participant["scenario_args"]["name"],
                 "time_message",
