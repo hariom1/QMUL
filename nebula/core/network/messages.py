@@ -2,7 +2,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nebula.core.pb import nebula_pb2
-from nebula.core.network.actions import factory_message_action
+from nebula.core.network.actions import factory_message_action, get_actions_names
 import hashlib
 import traceback
 
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 class MessagesManager:
+
     def __init__(self, addr, config, cm: "CommunicationsManager"):
         self.addr = addr
         self.config = config
@@ -74,7 +75,13 @@ class MessagesManager:
             },
             # Add additional message types here
         }
-         
+
+    def get_messages_events(self):
+        message_events = {}
+        for message_name in self._message_templates.keys():
+            message_events[message_name] = get_actions_names(message_name)
+        return message_events
+
     async def process_message(self, data, addr_from):
         not_processing_messages = {"control_message", "connection_message"}
         special_processing_messages = {"discovery_message", "federation_message", "model_message"}
@@ -98,7 +105,8 @@ class MessagesManager:
             
             # Not required processing messages
             if message_type in not_processing_messages:
-                await self.cm.handle_message(source, message_type, message_data)
+                #await self.cm.handle_message(source, message_type, message_data)
+                await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
                 
             # Message-specific forwarding and processing
             elif message_type in special_processing_messages:
@@ -110,12 +118,14 @@ class MessagesManager:
                     if message_type == "model_message":
                         await self.cm.handle_model_message(source, message_data)
                     else:
-                        await self.cm.handle_message(source, message_type, message_data)
+                        #await self.cm.handle_message(source, message_type, message_data)
+                        await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
                         
             # Rest of messages
             else:
                 if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.cm.handle_message(source, message_type, message_data)
+                    #await self.cm.handle_message(source, message_type, message_data)
+                    await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())
@@ -182,3 +192,9 @@ class MessagesManager:
         getattr(message_wrapper, field_name).CopyFrom(message)
         data = message_wrapper.SerializeToString()
         return data
+
+class MessageEvent:
+        def __init__(self, message_type, source, message):
+            self.source = source
+            self.message_type = message_type
+            self.message = message

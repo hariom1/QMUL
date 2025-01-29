@@ -197,14 +197,16 @@ class CommunicationsManager:
         await self.forwarder.forward(data, addr_from=addr_from)
 
     # generic point to handle messages
-    async def handle_message(self, source, msg_type, message):
-        logging.info(
-            f"🔍  handle_{msg_type} | Received [Action {message.action}] from {source}"
-        )
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.exception(f"🔍  handle_{msg_type} | Error while processing: {e}")
+    #async def handle_message(self, source, msg_type, message):
+    async def handle_message(self, message_event):
+        #logging.info(
+        #    f"🔍  handle_{msg_type} | Received [Action {message.action}] from {source}"
+        #)
+        #try:
+            #await self.engine.event_manager.trigger_event(source, message)
+        await self.engine.trigger_event(message_event)
+        #except Exception as e:
+        #    logging.exception(f"🔍  handle_{msg_type} | Error while processing: {e}")
 
 
     async def handle_discovery_message(self, source, message):
@@ -401,6 +403,9 @@ class CommunicationsManager:
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         return self.mm.create_message(message_type, action, *args, **kwargs)
+    
+    def get_messages_events(self):
+        return self.mm.get_messages_events()
 
     def start_external_connection_service(self):
         if self.ecs == None:

@@ -3,6 +3,26 @@ from enum import Enum
 import logging
 
 
+
+
+def get_actions_names(message_type: str):
+    options = {
+        "connection": ConnectionAction,
+        "federation": FederationAction,
+        "discovery": DiscoveryAction,
+        "control": ControlAction,
+        "discover": DiscoverAction,
+        "offer": OfferAction,
+        "link": LinkAction,
+    }
+
+    message_actions = options.get(message_type)
+    if not message_actions:
+        raise ValueError(f"Invalid message type: {message_type}")
+
+    return [action.name.lower() for action in message_actions]
+
+
 def factory_message_action(message_type: str, action: str):
     options = {
         "connection": ConnectionAction,

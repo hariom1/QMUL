@@ -273,6 +273,11 @@ class Engine:
         self.trainer.set_current_round(new_round)
         
 
+    """                                                     ##############################
+                                                            #      General callbacks     #
+                                                            ############################## 
+    """
+
     @event_handler(nebula_pb2.DiscoveryMessage, nebula_pb2.DiscoveryMessage.Action.DISCOVER)
     async def _discovery_discover_callback(self, source, message):
         logging.info(
@@ -571,7 +576,23 @@ class Engine:
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ############################## 
     """
-                          
+
+  
+    def register_message_events_callbacks(self):
+        me_dict = self.cm.get_messages_events()
+        message_events = [(message_name, message_action) for (message_name, message_actions) in me_dict.items() for message_action in message_actions]
+        logging.info(f"{message_events}")
+        for event_type, action in message_events:
+            callback_name = f"_ {event_type}_{action}_callback"
+            method = getattr(self, callback_name, None)
+
+            if callable(method):
+                self._event_manager.subscribe((event_type, action), method)
+
+    async def trigger_event(self, message_event):
+        logging.info(f"Publishing MessageEvent: {message_event.message_type}")
+        await self._event_manager.publish(message_event)
+
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
