@@ -119,7 +119,7 @@ class MessagesManager:
                         await self.cm.handle_model_message(source, message_data)
                     else:
                         #await self.cm.handle_message(source, message_type, message_data)
-                        await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
+                        await self.cm.handle_message(MessageEvent((message_type, message_data.action), source, message_data))
                         
             # Rest of messages
             else:
