@@ -96,6 +96,7 @@ class MessagesManager:
             
             # Extract the active message from the oneof field
             message_type = message_wrapper.WhichOneof("message")
+            msg_name = message_type.split('_')[0]
             if not message_type:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
@@ -106,7 +107,7 @@ class MessagesManager:
             # Not required processing messages
             if message_type in not_processing_messages:
                 #await self.cm.handle_message(source, message_type, message_data)
-                await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
+                await self.cm.handle_message(MessageEvent(msg_name, message_data.action), source, message_data)
                 
             # Message-specific forwarding and processing
             elif message_type in special_processing_messages:
@@ -119,13 +120,13 @@ class MessagesManager:
                         await self.cm.handle_model_message(source, message_data)
                     else:
                         #await self.cm.handle_message(source, message_type, message_data)
-                        await self.cm.handle_message(MessageEvent((message_type, message_data.action), source, message_data))
+                        await self.cm.handle_message(MessageEvent((msg_name, message_data.action), source, message_data))
                         
             # Rest of messages
             else:
                 if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     #await self.cm.handle_message(source, message_type, message_data)
-                    await self.cm.handle_message(MessageEvent(message_type, message_data.action), source, message_data)
+                    await self.cm.handle_message(MessageEvent(msg_name, message_data.action), source, message_data)
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())

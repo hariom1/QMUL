@@ -144,6 +144,8 @@ class Engine:
         self._cm = CommunicationsManager(engine=self)
         # Set the communication manager in the model (send messages from there)
         self.trainer.model.set_communication_manager(self._cm)
+        logging.info("Registering callbacks for MessageEvents...")
+        self.register_message_events_callbacks()
 
         self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
         
