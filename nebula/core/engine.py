@@ -144,9 +144,7 @@ class Engine:
         self._cm = CommunicationsManager(engine=self)
         # Set the communication manager in the model (send messages from there)
         self.trainer.model.set_communication_manager(self._cm)
-        logging.info("Registering callbacks for MessageEvents...")
-        self.register_message_events_callbacks()
-
+        
         self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
         
         self._sinchronized_status = True
@@ -171,9 +169,9 @@ class Engine:
                 self._control_alive_callback,
                 self._connection_connect_callback,
                 self._connection_disconnect_callback,
-                self._federation_ready_callback,
-                self._start_federation_callback,
-                self._federation_models_included_callback,
+                #self._federation_ready_callback,
+                #self._start_federation_callback,
+                #self._federation_models_included_callback,
                 self._discover_discover_join_callback,
                 self._discover_discover_nodes_callback,
                 self._connection_late_connect_callback,
@@ -185,14 +183,17 @@ class Engine:
             ]
         )
 
+        logging.info("Registering callbacks for MessageEvents...")
+        self.register_message_events_callbacks()
+
         # Register additional callbacks
-        self._event_manager.register_event(
-            (
-                nebula_pb2.FederationMessage,
-                nebula_pb2.FederationMessage.Action.REPUTATION,
-            ),
-            self._reputation_callback,
-        )
+        #self._event_manager.register_event(
+        #    (
+        #        nebula_pb2.FederationMessage,
+        #        nebula_pb2.FederationMessage.Action.REPUTATION,
+        #    ),
+        #    self._reputation_callback,
+        #)
         
         # ... add more callbacks here
               
@@ -338,7 +339,7 @@ class Engine:
         nebula_pb2.FederationMessage,
         nebula_pb2.FederationMessage.Action.FEDERATION_READY,
     )
-    async def _federation_ready_callback(self, source, message):
+    async def _federation_federation_ready_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received ready federation message from {source}")
         if self.config.participant["device_args"]["start"]:
             logging.info(f"📝  handle_federation_message | Trigger | Adding ready connection {source}")
@@ -348,12 +349,12 @@ class Engine:
         nebula_pb2.FederationMessage,
         nebula_pb2.FederationMessage.Action.FEDERATION_START,
     )
-    async def _start_federation_callback(self, source, message):
+    async def _federation_federation_start_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received start federation message from {source}")
         await self.create_trainer_module()
 
     @event_handler(nebula_pb2.FederationMessage, nebula_pb2.FederationMessage.Action.REPUTATION)
-    async def _reputation_callback(self, source, message):
+    async def _federation_reputation_callback(self, source, message):
         malicious_nodes = message.arguments  # List of malicious nodes
         if self.with_reputation:
             if len(malicious_nodes) > 0 and not self._is_malicious:
@@ -369,7 +370,7 @@ class Engine:
         nebula_pb2.FederationMessage,
         nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
     )
-    async def _federation_models_included_callback(self, source, message):
+    async def _federation_federation_models_included_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received aggregation finished message from {source}")
         try:
             await self.cm.get_connections_lock().acquire_async()
@@ -585,15 +586,16 @@ class Engine:
         message_events = [(message_name, message_action) for (message_name, message_actions) in me_dict.items() for message_action in message_actions]
         logging.info(f"{message_events}")
         for event_type, action in message_events:
-            callback_name = f"_ {event_type}_{action}_callback"
+            callback_name = f"_{event_type}_{action}_callback"
+            logging.info(f"Searching callback named: {callback_name}")
             method = getattr(self, callback_name, None)
 
             if callable(method):
-                self._event_manager.subscribe((event_type, action), method)
+                self.event_manager.subscribe((event_type, action), method)
 
     async def trigger_event(self, message_event):
         logging.info(f"Publishing MessageEvent: {message_event.message_type}")
-        await self._event_manager.publish(message_event)
+        await self.event_manager.publish(message_event)
 
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)

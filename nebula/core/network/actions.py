@@ -3,6 +3,29 @@ from enum import Enum
 import logging
 
 
+def get_action_name_from_value(message_type: str, action_value: int) -> str:
+    # Diccionario que asocia cada tipo de mensaje con su Enum correspondiente
+    action_classes = {
+        "connection": ConnectionAction,
+        "federation": FederationAction,
+        "discovery": DiscoveryAction,
+        "control": ControlAction,
+        "discover": DiscoverAction,
+        "offer": OfferAction,
+        "link": LinkAction,
+    }
+
+    # Obtener el Enum correspondiente al tipo de mensaje
+    enum_class = action_classes.get(message_type)
+    if not enum_class:
+        raise ValueError(f"Unknown message type: {message_type}")
+
+    # Buscar el nombre de la acción a partir del valor
+    for action in enum_class:
+        if action.value == action_value:
+            return action.name.lower()  # Convertimos a lowercase para mantener el formato "late_connect"
+
+    raise ValueError(f"Unknown action value {action_value} for message type {message_type}")
 
 
 def get_actions_names(message_type: str):

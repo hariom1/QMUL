@@ -2,7 +2,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nebula.core.pb import nebula_pb2
-from nebula.core.network.actions import factory_message_action, get_actions_names
+from nebula.core.network.actions import factory_message_action, get_actions_names, get_action_name_from_value
 import hashlib
 import traceback
 
@@ -79,7 +79,8 @@ class MessagesManager:
     def get_messages_events(self):
         message_events = {}
         for message_name in self._message_templates.keys():
-            message_events[message_name] = get_actions_names(message_name)
+            if message_name != "model" and message_name != "reputation":
+                message_events[message_name] = get_actions_names(message_name)
         return message_events
 
     async def process_message(self, data, addr_from):
@@ -107,7 +108,8 @@ class MessagesManager:
             # Not required processing messages
             if message_type in not_processing_messages:
                 #await self.cm.handle_message(source, message_type, message_data)
-                await self.cm.handle_message(MessageEvent(msg_name, message_data.action), source, message_data)
+                me = MessageEvent((msg_name,get_action_name_from_value(msg_name, message_data.action)), source, message_data)
+                await self.cm.handle_message(me)
                 
             # Message-specific forwarding and processing
             elif message_type in special_processing_messages:
@@ -120,13 +122,14 @@ class MessagesManager:
                         await self.cm.handle_model_message(source, message_data)
                     else:
                         #await self.cm.handle_message(source, message_type, message_data)
-                        await self.cm.handle_message(MessageEvent((msg_name, message_data.action), source, message_data))
-                        
+                        me = MessageEvent((msg_name,get_action_name_from_value(msg_name, message_data.action)), source, message_data)
+                        await self.cm.handle_message(me)
             # Rest of messages
             else:
                 if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
                     #await self.cm.handle_message(source, message_type, message_data)
-                    await self.cm.handle_message(MessageEvent(msg_name, message_data.action), source, message_data)
+                    me = MessageEvent((msg_name,get_action_name_from_value(msg_name, message_data.action)), source, message_data)
+                    await self.cm.handle_message(me)
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())
