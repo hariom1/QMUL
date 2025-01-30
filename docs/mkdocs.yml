@@ -82,6 +82,12 @@ extra:
       content: "index, follow"
   generator: false
 
+extra_css:
+  - css/toc.css 
+
+extra_javascript:
+  - js/toc.js
+
 markdown_extensions:
   - toc:
       permalink: true

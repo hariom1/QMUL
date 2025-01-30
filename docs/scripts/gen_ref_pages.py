@@ -39,6 +39,12 @@ for path in sorted(src.rglob("*.py")):
 
     with mkdocs_gen_files.open(full_doc_path, "w") as fd:
         ident = ".".join(parts)
+
+        custom_title = f"Documentation for {parts[-1].capitalize()} Module"
+        fd.write(f"---\n")
+        fd.write(f"hide:\n  - toc\n")
+        fd.write(f"---\n")
+        fd.write(f"# {custom_title}\n\n")
         fd.write(f"::: {ident}")
 
     mkdocs_gen_files.set_edit_path(full_doc_path, path.relative_to(root))

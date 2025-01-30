@@ -12,7 +12,7 @@ In this section, we will explain how to use the NEBULA Platform
 -   [Realtime metrics](#realtime-metrics)
 
 ## Running NEBULA
-![Scenario configuration](static/running_nebula.png) 
+![Scenario configuration](static/userguide/running_nebula.png) 
 
 To run NEBULA, you can use the following command line:
 
