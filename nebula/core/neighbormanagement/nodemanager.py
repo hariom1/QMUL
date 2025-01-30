@@ -174,7 +174,7 @@ class NodeManager():
             return
         await self.fr.apply_weight_strategy(updates)
         if self._momemtum:
-            self._momemtum.calculate_momentum_weights(updates)
+            await self._momemtum.calculate_momentum_weights(updates)
       
 
 

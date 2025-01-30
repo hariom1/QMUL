@@ -144,54 +144,6 @@ class CommunicationsManager:
 
     async def handle_incoming_message(self, data, addr_from):
         await self.mm.process_message(data, addr_from)
-        return
-        try:
-            message_wrapper = nebula_pb2.Wrapper()
-            message_wrapper.ParseFromString(data)
-            source = message_wrapper.source
-            logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
-            if source == self.addr:
-                return
-            if message_wrapper.HasField("discovery_message"):
-                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.forwarder.forward(data, addr_from=addr_from)
-                    await self.handle_discovery_message(source, message_wrapper.discovery_message)
-            elif message_wrapper.HasField("control_message"):
-                await self.handle_control_message(source, message_wrapper.control_message)
-            elif message_wrapper.HasField("federation_message"):
-                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    if self.config.participant["device_args"][
-                        "proxy"
-                    ] or message_wrapper.federation_message.action == nebula_pb2.FederationMessage.Action.Value(
-                        "FEDERATION_START"
-                    ):
-                        await self.forwarder.forward(data, addr_from=addr_from)
-                    await self.handle_federation_message(source, message_wrapper.federation_message)
-            elif message_wrapper.HasField("model_message"):
-                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    # TODO: Improve the technique. Now only forward model messages if the node is a proxy
-                    # Need to update the expected model messages receiving during the round
-                    # Round -1 is the initialization round --> all nodes should receive the model
-                    if self.config.participant["device_args"]["proxy"] or message_wrapper.model_message.round == -1:
-                        await self.forwarder.forward(data, addr_from=addr_from)
-                    await self.handle_model_message(source, message_wrapper.model_message)
-            elif message_wrapper.HasField("connection_message"):
-                await self.handle_connection_message(source, message_wrapper.connection_message)
-            elif message_wrapper.HasField("discover_message"):
-                if self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.handle_discover_message(source, message_wrapper.discover_message)
-            elif message_wrapper.HasField("offer_message"):
-                if self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.handle_offer_message(source, message_wrapper.offer_message)
-            elif message_wrapper.HasField("link_message"):
-                if self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.handle_offer_message(source, message_wrapper.link_message)
-            else:
-                logging.info(f"Unknown handler for message: {message_wrapper}")
-        except Exception as e:
-            logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
-            logging.exception(traceback.format_exc())
-
 
     async def forward_message(self, data, addr_from):
         await self.forwarder.forward(data, addr_from=addr_from)
