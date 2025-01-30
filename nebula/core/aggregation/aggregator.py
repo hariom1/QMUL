@@ -138,6 +138,8 @@ class Aggregator(ABC):
         elif source not in self.get_nodes_pending_models_to_aggregate():
             if source in self.engine.rejected_nodes:
                 logging.info("🔄  _add_pending_model | Ignoring model from rejected node...")
+                await self._add_model_lock.release_async()
+                return None
             else:
                 self._pending_models_to_aggregate.update({source: (model, weight)})
                 logging.info(
@@ -179,7 +181,9 @@ class Aggregator(ABC):
         logging.info(f"🔄  _add_pending_model | federation_nodes={self._federation_nodes}")
         logging.info(f"🔄  _add_pending_model | rejected_nodes={self.engine.rejected_nodes}")
         logging.info(f"🔄  _add_pending_model | valid_federation_nodes={valid_federation_nodes}")
-        if len(self.get_nodes_pending_models_to_aggregate()) >= len(valid_federation_nodes):
+        logging.info(f"🔄  _add_pending_model | tam_get_nodes_pending_models_to_aggregate={len(self.get_nodes_pending_models_to_aggregate())}")
+        logging.info(f"🔄  _add_pending_model | tam_valid_federation_nodes={len(valid_federation_nodes)}")
+        if len(self.get_nodes_pending_models_to_aggregate()) == len(valid_federation_nodes):
             logging.info("🔄  _add_pending_model | All models were added in the aggregation buffer. Run aggregation...")
             if self._aggregation_done_lock.locked():
                 logging.info("🔄  _add_pending_model | Releasing aggregation_done_lock")
@@ -245,7 +249,8 @@ class Aggregator(ABC):
         except Exception as e:
             logging.exception(f"🔄  get_aggregation | Error acquiring lock: {e}")
         finally:
-            await self._aggregation_done_lock.release_async()
+            if self._aggregation_done_lock.locked():
+                await self._aggregation_done_lock.release_async()
 
         if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
             logging.info(
