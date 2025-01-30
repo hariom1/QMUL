@@ -11,6 +11,7 @@ from nebula.core.neighbormanagement.neighborpolicies.neighborpolicy import facto
 from nebula.core.pb import nebula_pb2
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.neighbormanagement.fastreboot import FastReboot
+from nebula.core.neighbormanagement.momentum import Momentum
 from nebula.addons.functions import print_msg_box
 
 from typing import TYPE_CHECKING
@@ -28,7 +29,7 @@ class NodeManager():
         push_acceleration,
         engine : "Engine",
         fastreboot=True,
-        momentum=False,
+        momentum=True,
     ):
         self.topology = "fully"#topology
         print_msg_box(msg=f"Starting NodeManager module...\nTopology: {self.topology}", indent=2, title="NodeManager module")
@@ -60,8 +61,9 @@ class NodeManager():
         if (fastreboot):
             self._fastreboot = FastReboot(self)
             
+        self._momemtum = None    
         if (momentum):
-            pass
+            self._momemtum = Momentum(self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False)
                  
         #self.set_confings()
 
@@ -171,6 +173,8 @@ class NodeManager():
         if not self.fast_reboot_on():
             return
         await self.fr.apply_weight_strategy(updates)
+        if self._momemtum:
+            self._momemtum.calculate_momentum_weights(updates)
       
 
 

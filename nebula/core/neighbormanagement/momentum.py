@@ -26,8 +26,8 @@ class Momentum():
         self,  
         node_manager: "NodeManager",
         nodes,
-        global_priority=GLOBAL_PRIORITY,
         dispersion_penalty=True,
+        global_priority=GLOBAL_PRIORITY,     
         similarity_metric : SimilarityMetricType = cosine_metric,
         mapping_similarity : MappingSimilarityType = lambda sim_value, e=EPSILON: e + ((sim_value + 1) / 2),
     ):
@@ -155,6 +155,7 @@ class Momentum():
             mapped_sim_value = self.msf(sim_value)                  # Mapped into [0, 1] interval
             smoothed_value = sigmoid(mapped_sim_value)
             adjusted_weight = smoothed_value * self._global_prio + (1 - self._global_prio) * mapped_sim_value
+            logging.info(f"Momemtum values | adjusted_weight: {adjusted_weight}, map_value: {mapped_sim_value}, smoothed_value: {smoothed_value}")
         
         if self._dispersion_penalty:
             self._calculate_dispersion_penalty(historic, updates)
