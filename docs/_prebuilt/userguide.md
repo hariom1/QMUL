@@ -2,15 +2,6 @@
 
 In this section, we will explain how to use the NEBULA Platform
 
-## Table of contents
-
--   [Running NEBULA](#running-nebula)
--   [NEBULA Frontend](#nebula-frontend)
--   [Deployment of scenarios](#deployment-of-scenarios)
--   [NEBULA Dashboard](#dashboard)
--   [Monitor](#monitor)
--   [Realtime metrics](#realtime-metrics)
-
 ## Running NEBULA
 ![Scenario configuration](static/userguide/running_nebula.png) 
 

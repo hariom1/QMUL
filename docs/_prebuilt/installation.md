@@ -2,18 +2,6 @@
 
 In this section, we will explain how to install the NEBULA platform.
 
-## Table of contents
-
--   [Prerequisites](#prerequisites)
--   [Obtaining NEBULA platform](#obtaining-nebula-platform)
--   [Installing NEBULA platform](#installing-nebula-platform)
--   [Checking the installation](#checking-the-installation)
--   [Building NEBULA core](#building-nebula-core)
--   [Running NEBULA](#running-nebula)
--   [NEBULA Frontend](#nebula-frontend)
--   [Stop NEBULA](#stop-nebula)
--   [Possible issues during the installation or execution](#possible-issues-during-the-installation-or-execution)
-
 ## Prerequisites
 
 -   Python 3.10 or higher (3.11 recommended)

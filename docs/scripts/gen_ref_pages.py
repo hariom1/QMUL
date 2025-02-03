@@ -45,6 +45,8 @@ for path in sorted(src.rglob("*.py")):
         fd.write(f"hide:\n  - toc\n")
         fd.write(f"---\n")
         fd.write(f"# {custom_title}\n\n")
+        if parts[-1].capitalize() == "Nebula":
+            fd.write("This API Reference is designed to help developers understand every part of the code, providing detailed information about functions, parameters, data structures, and interactions within the platform.\n\n On the left, you'll find the directory tree of the platform, including folders, functions, code, and documentation.\n\n")
         fd.write(f"::: {ident}")
 
     mkdocs_gen_files.set_edit_path(full_doc_path, path.relative_to(root))

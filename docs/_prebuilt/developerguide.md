@@ -1,52 +1,49 @@
-# Developer Guide
+# **Developer Guide**
 
 This guide is designed to help developers understand and contribute to the project. It provides detailed instructions on navigating the codebase, and implementing new features. Whether you're looking to fix bugs, add enhancements, or better understand the architecture, this guide will walk you through the essential processes and best practices for development.
 
 
-## NEBULA Frontend
+## **NEBULA Frontend**
 
 This section explains the structure of the frontend and provides instructions on how to add new parameters or sections.
 
-### Frontend Structure  
+### **Frontend Structure**
 
-- **/nebula/**
-  - pycache/
-  - addons/
-  - config/
-  - core/
-  - **frontend/**
-    - __pycache__/
-    - **config/**
-      - `__init__.py`
-      - `nebula`
-      - `participant.json.example`
-    - **databases/**
-      - `participants.db`
-      - `notes.db`
-      - `scenarios.db`
-      - `scenarios.db-shm`
-      - `scenarios.db-wal`
-      - `users.db`
-    - **static/**
-    - **templates/**
-      - `401.html`
-      - `403.html`
-      - `404.html`
-      - `405.html`
-      - `413.html`
-      - `admin.html`
-      - `dashboard.html`
-      - `deployment.html`
-      - `index.html`
-      - `layout.html`
-      - `monitor.html`
-      - `private.html`
-      - `statistics.html`
-    - `__init__.py`
-    - `app.py`
-    - `database.py`
-    - `Dockerfile`
-    - `start_services.sh`
+??? info "Structure"
+    ```
+    /nebula/
+      addons/
+      config/
+      core/
+      frontend/
+        config/
+          nebula
+          participant.json.example
+        databases/
+          participants.db
+          notes.db
+          scenarios.db
+          users.db
+        static/
+        templates/
+          401.html
+          403.html
+          404.html
+          405.html
+          413.html
+          admin.html
+          dashboard.html
+          deployment.html
+          index.html
+          layout.html
+          monitor.html
+          private.html
+          statistics.html
+        app.py
+        database.py
+        Dockerfile
+        start_services.sh
+    ```
 
 The frontend is organized within the `frontend/` directory. Key files and folders include:  
 
@@ -55,99 +52,101 @@ The frontend is organized within the `frontend/` directory. Key files and folder
 - `static/` → Holds static assets (CSS, images, JS, etc.).  
 - `templates/` → Contains HTML templates. Focus on **deployment.html** 
 
-### Adding a New Parameter  
+### **Adding a New Parameter**
 
 Define the new parameter in the **participant.json.example** file. Only create a new field if necessary
 
-```json
-{
-    "scenario_args": {
-      "name": "",
-      "start_time": "",
-      "federation": "DFL",
-      "rounds": 10,
-      "deployment": "process",
-      "controller": "127.0.0.1:5000",
-      "random_seed": 42,
-      "n_participants": 0,
-      /* New parameter in each setting */
-      "new_parameter_key" : "new_parameter_value",
-      "config_version": "development"
-    },
-    /* Add a new_field if necessary */
-    "new_field": {
-        "new_parameter_key" : "new_parameter_value"
+??? quote "participant.json.example"
+    ```json linenums="1"
+    {
+        "scenario_args": {
+          "name": "",
+          "start_time": "",
+          "federation": "DFL",
+          "rounds": 10,
+          "deployment": "process",
+          "controller": "127.0.0.1:5000",
+          "random_seed": 42,
+          "n_participants": 0,
+          /* New parameter in each setting */
+          "new_parameter_key" : "new_parameter_value",
+          "config_version": "development"
+        },
+        /* Add a new_field if necessary */
+        "new_field": {
+            "new_parameter_key" : "new_parameter_value"
+        }
     }
-}
-```
+    ```
 
-### Define the parameter on the **deployment.html**
 For example, let's assume you want to implement a new attack type. Search for the section where attacks are defined and add the new attack option, as well as the new parameter for the attack. Below is an example of how to add the attack and its associated parameter.
 
-```html
-<div class="form-group row container-shadow tiny grey">
-    <h5 class="step-number">Robustness <i class="fa fa-shield"></i>
-        <input type="checkbox" tyle="display: none;">
-        <label for="robustness-lock" class="icon-container" style="float: right;">
-            <i class="fa fa-lock"></i>
-        </label>
-    </h5>
-    <h5 class="step-title">Attack Type</h5>
-    <div class="form-check form-check-inline">
-        <select class="form-control" id="poisoning-attack-select" name="poisoning-attack">
-            <option selected>No Attack</option>
-            <option>New Attack</option> <!-- Add this -->
-        </select>
-        <h5 id="poisoned-participant-title" class="step-title">
-            % Malicious participants
+??? quote "deployment.html"
+    ```html linenums="140"
+    <div class="form-group row container-shadow tiny grey">
+        <h5 class="step-number">Robustness <i class="fa fa-shield"></i>
+            <input type="checkbox" tyle="display: none;">
+            <label for="robustness-lock" class="icon-container" style="float: right;">
+                <i class="fa fa-lock"></i>
+            </label>
         </h5>
-        <div class="form-check form-check-inline" style="display: none;" id="poisoned-participant-percent-container">
-            <input type="number" class="form-control" id="poisoned-participant-percent"
-                placeholder="% malicious participants" min="0" value="0">
-                <select class="form-control" id="malicious-participants-select" name="malicious-participants-select">
-                <option selected>Percentage</option>
-                <option>Manual</option>
+        <h5 class="step-title">Attack Type</h5>
+        <div class="form-check form-check-inline">
+            <select class="form-control" id="poisoning-attack-select" name="poisoning-attack">
+                <option selected>No Attack</option>
+                <option>New Attack</option> <!-- Add this -->
             </select>
-        </div>
-        <h5 id="poisoned-participant-title" class="step-title">
-            % Malicious participants
-        </h5>
-        <div class="form-check form-check-inline" style="display: none;" id="poisoned-participant-percent-container">
-            <input type="number" class="form-control" id="poisoned-participant-percent"
-                placeholder="% malicious participants" min="0" value="0">
-        </div>
-        <h5 id="new-parameter-title" class="step-title"> <!-- Add this -->
-            New parameter
-        </h5>
-        <div class="form-check form-check-inline" style="display: none;" id="new-parameter-container">
-            <input type="number" class="form-control" id="new-parameter-value"
-                placeholder="new parameter value" min="0" value="0"> 
+            <h5 id="poisoned-participant-title" class="step-title">
+                % Malicious participants
+            </h5>
+            <div class="form-check form-check-inline" style="display: none;" id="poisoned-participant-percent-container">
+                <input type="number" class="form-control" id="poisoned-participant-percent"
+                    placeholder="% malicious participants" min="0" value="0">
+                    <select class="form-control" id="malicious-participants-select" name="malicious-participants-select">
+                    <option selected>Percentage</option>
+                    <option>Manual</option>
+                </select>
+            </div>
+            <h5 id="poisoned-participant-title" class="step-title">
+                % Malicious participants
+            </h5>
+            <div class="form-check form-check-inline" style="display: none;" id="poisoned-participant-percent-container">
+                <input type="number" class="form-control" id="poisoned-participant-percent"
+                    placeholder="% malicious participants" min="0" value="0">
+            </div>
+            <h5 id="new-parameter-title" class="step-title"> <!-- Add this -->
+                New parameter
+            </h5>
+            <div class="form-check form-check-inline" style="display: none;" id="new-parameter-container">
+                <input type="number" class="form-control" id="new-parameter-value"
+                    placeholder="new parameter value" min="0" value="0"> 
+            </div>
         </div>
     </div>
-</div>
-```
+    ```
 
 To receive the parameter in nebula/scenarios.py. You need to modify the Scenario class to accept the new parameter.
 
-```python
-class Scenario:
-    def __init__(
-        self,
-        scenario_title,
-        scenario_description,
-        new_paramater, # <--- Add this
-    ):
-        self.scenario_title = scenario_title
-        self.scenario_description = scenario_description
-        self.new_parameter = new_parameter # <--- Add this
-```
+??? quote "Class Scenario"
+    ```python linenums="24"
+    class Scenario:
+        def __init__(
+            self,
+            scenario_title,
+            scenario_description,
+            new_paramater, # <--- Add this
+        ):
+            self.scenario_title = scenario_title
+            self.scenario_description = scenario_description
+            self.new_parameter = new_parameter # <--- Add this
+    ```
 
 Now you must save the parameter in the **participant configuration**.
 
 The participant configuration files are located in the **/app/config/ directory**. You'll need to ensure the new parameter is added to the participant's JSON file.
 
-???+ info "Code example"
-    ```python
+??? quote "Class ScenarioManagement"
+    ```python linenums="246"
         class ScenarioManagement:
         def __init__(self, scenario, user=None):
             # Save participant settings
@@ -174,194 +173,613 @@ The participant configuration files are located in the **/app/config/ directory*
                 participant_config["new_field"]["new_parameter"] = self.scenario.new_parameter
     ```
 
-## NEBULA Backend
+## **NEBULA Backend**
 
 To view the documentation of functions in more detail you must go to the **NEBULA API Reference**
 
-### Backend Structure
+### **Backend Structure**
 
-This guide explains the structure of the **Backend**, outlining its components and their functionalities. 
+??? info "Structure"
+    ```
+    /nebula/
+      addons/
+        attacks/
+        blockchain/
+        trustworthiness/
+        waf/
+      core/
+        aggregation/
+        datasets/
+        models/
+        network/
+        pb/
+        training/
+        utils/
+        engine.py
+        eventmanager.py
+        role.py
+      controller.py
+      participant.py
+      scenarios.py
+      utils.py
+    ```
 
-- **/nebula/**
-  - **addons/**
-    - **attacks/**
-    - **blockchain/**
-    - **trustworthiness/**
-    - **waf/**
-  - **core/**
-    - **aggregation/**
-    - **datasets/**
-    - **models/**
-    - **network/**
-    - **pb/**
-    - **training/**
-    - **utils/**
-    - `engine.py`
-    - `eventmanager.py`
-    - `role.py`
-  - `controller.py`
-  - `participant.py`
-  - `scenarios.py`
-  - `utils.py`
+The backend is organized within the `/nebula/` directory. Key files and folders include:  
 
-## Addons
+**Addons/**
 
-The **addons/** directory contains extended functionalities that can be integrated into the core participant operations.
+The `addons/` directory contains extended functionalities that can be integrated into the core system.
 
-### **`attacks/`**
-- A module to simulate attacks.
-- Primarily used for security purposes, such as adversarial attacks in machine learning or penetration testing.
+- **`attacks/`** → Simulates attacks, primarily for security purposes, including adversarial attacks in machine learning.  
+- **`blockchain/`** → Integrates blockchain technology, potentially for decentralized storage or security enhancements.  
+- **`trustworthiness/`** → Evaluates the trustworthiness and reliability of participants, focusing on security and ethical considerations.  
+- **`waf/`** → Implements a Web Application Firewall (WAF) to filter and monitor HTTP traffic for potential threats.  
 
-### **`blockchain/`**
-- Integrates blockchain technology into the participant.
-- Could be used for decentralized storage, transactions, or security.
+**Core/**  
 
-### **`trustworthiness/`**
-- Focuses on evaluating the trustworthiness and reliability of the participant.
-- Assess the performance, security, or ethical reliability of participants.
+The `core/` directory contains the essential components for the backend operation.
 
-### **`waf/`**
-- Stands for **Web Application Firewall**.
-- Protects the web applications by filtering and monitoring HTTP traffic for potential threats.
+- **`aggregation/`** → Manages the aggregation of data from different nodes.  
+- **`datasets/`** → Handles dataset management, including loading and preprocessing data.  
+- **`models/`** → Defines machine learning model architectures and related functionalities, such as training and evaluation.  
+- **`network/`** → Manages communication between participants in a distributed system.  
+- **`pb/`** → Implements Protocol Buffers (PB) for efficient data serialization and communication.  
+- **`training/`** → Contains the logic for model training, optimization, and evaluation.  
+- **`utils/`** → Provides utility functions for file handling, logging, and common tasks.  
 
-## Core
+**Files**  
 
-The **core/** directory contains the essential components for the participant's operation.
+- **`engine.py`** → The main engine orchestrating participant communications, training, and overall behavior.  
+- **`eventmanager.py`** → Handles event management, logging, and notifications within the system.  
+- **`role.py`** → Defines participant roles and their interactions.  
 
-### **`aggregation/`**
-- Manages the aggregation of data from the different nodes
+**Standalone Scripts**  
 
-### **`datasets/`**
-- Contains functionalities for managing datasets, including loading and preprocessing data.
+These scripts act as entry points or controllers for various backend functionalities.
 
-### **`models/`**
-- Defines the architecture and functionality of machine learning models.
-- Handles model-related logic such as training, evaluation, and saving.
+- **`controller.py`** → Manages the flow of operations, coordinating tasks and interactions.  
+- **`participant.py`** → Represents a participant in the decentralized network, handling computations and communication.  
+- **`scenarios.py`** → Defines different simulation scenarios for testing and running participants under specific conditions.  
+- **`utils.py`** → Contains helper functions that simplify development and maintenance.  
 
-### **`network/`**
-- Manages network-related operations within the participant.
-- Responsible for communication between participants.
 
-### **`pb/`**
-- **Protocol Buffers**, a method for serializing structured data.
-- Used for efficient communication or storing model data in a compact format.
+### **Adding new Datasets**
 
-### **`training/`**
-- Contains the logic for training models, including optimization, evaluation, and tuning.
-- Facilitates the machine learning lifecycle.
+#### Add the Dataset option in the front
 
-### **`utils/`**
-- Contains utility functions or helper methods used across the participant.
-- Include file handling, logging, or other repetitive tasks that simplify the main codebase.
+First you must add the Dataset option in the front, adding the Dataset option to the scenario generated by the front is a bit different
 
-## Files
+??? quote "Datasets in Deployment.html"
+    ``` javascript linenums="1"
+    <script>
+        // Add the dataset with each model here
+        var datasets = {
+            "MNIST": ["MLP", "CNN"],
+            "FashionMNIST": ["MLP", "CNN"],
+            "EMNIST": ["MLP", "CNN"],
+            "CIFAR10": ["CNN", "CNNv2", "CNNv3", "ResNet9", "fastermobilenet", "simplemobilenet"],
+            "CIFAR100": ["CNN"],
+            "KITSUN": ["MLP"],
+        }
+        var datasetSelect = document.getElementById("datasetSelect");
+        var modelSelect = document.getElementById("modelSelect");
 
-### **`engine.py`**
-- Is the main engine, the one that orchestrates the participant communications, trining, behaviour, etc.
+        function updateModelOptions() {
+            var selected = datasetSelect.value;
+            var options = datasets[selected];
+            modelSelect.innerHTML = ''; // Clear all options
+            for (var i = 0; i < options.length; i++) {
+                var option = new Option(options[i], options[i]);
+                modelSelect.options.add(option);
+            }
+            return options[0] //Return first option
+        }
 
-### **`eventmanager.py`**
-- Handles events or notifications within the participant.
-- Used for managing triggers, logging, or participant alerts.
+        function populateDatasets() {
+            for (var dataset in datasets) {
+                var option = new Option(dataset, dataset);
+                datasetSelect.options.add(option);
+            }
+            updateModelOptions(); // Update model options after populating datasets
+        }
 
-### **`role.py`**
-- Defines the participant roles of the platform
+        window.onload = populateDatasets; // Populate datasets on page load
 
-## Standalone Scripts
-
-These scripts may serve as the entry points or high-level controllers for specific tasks.
-
-### **`controller.py`**
-- Manages the flow of operations within the participant.
-- Likely used for coordinating tasks, controlling user interactions, or managing subprocesses.
-
-### **`participant.py`**
-- Represents a participant in a distributed or decentralized network.
-- Likely manages tasks such as computations, data handling, or communication with other participants.
-
-### **`scenarios.py`**
-- Defines different use cases or simulation scenarios.
-- Could be used for testing, training, or running the participant under different conditions.
-
-### **`utils.py`**
-- Contains utility functions or helper methods used throughout the participant.
-- Includes common operations that simplify development and maintenance.
-
-### Adding new Datasets
+        datasetSelect.addEventListener("change", updateModelOptions); // Update on dataset change
+    </script>
+    ```
 
 If you want to add a new Dataset you can implement this in 2 ways on the folder **/nebula/core/datasets/** ***new_dataset/new_dataset.py***
 
-#### 1. Import the Dataset from Torchvision
+#### Import the Dataset from Torchvision
 
-```python
-class CIFAR10Dataset(NebulaDataset):
-    def __init__(
-        self,
-        num_classes=10,
-        partition_id=0,
-        partitions_number=1,
-        batch_size=32,
-        num_workers=4,
-        iid=True,
-        partition="dirichlet",
-        partition_parameter=0.5,
-        seed=42,
-        config=None,
-    ):
-        super().__init__(
-            num_classes=num_classes,
-            partition_id=partition_id,
-            partitions_number=partitions_number,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            iid=iid,
-            partition=partition,
-            partition_parameter=partition_parameter,
-            seed=seed,
-            config=config,
-        )
+You can use the MNIST Dataset as a code example on how to import the Dataset from torchvision, initialize it and load it's configuration
 
-    def initialize_dataset(self):
-        # Load CIFAR10 train dataset
-        if self.train_set is None:
-            self.train_set = self.load_cifar10_dataset(train=True)
-        if self.test_set is None:
-            self.test_set = self.load_cifar10_dataset(train=False)
+??? quote "MNIST Code example"
+    ```python linenums="1"
+    import os
 
-        # All nodes have the same test set (indices are the same for all nodes)
-        self.test_indices_map = list(range(len(self.test_set)))
+    from torchvision import transforms
+    from torchvision.datasets import MNIST
 
-        # Depending on the iid flag, generate a non-iid or iid map of the train set
-        if self.iid:
-            self.train_indices_map = self.generate_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
-        else:
-            self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(
-                self.test_set, self.partition, self.partition_parameter
+    from nebula.core.datasets.nebuladataset import NebulaDataset
+
+
+    class MNISTDataset(NebulaDataset):
+        def __init__(
+            self,
+            num_classes=10,
+            partition_id=0,
+            partitions_number=1,
+            batch_size=32,
+            num_workers=4,
+            iid=True,
+            partition="dirichlet",
+            partition_parameter=0.5,
+            seed=42,
+            config=None,
+        ):
+            super().__init__(
+                num_classes=num_classes,
+                partition_id=partition_id,
+                partitions_number=partitions_number,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                iid=iid,
+                partition=partition,
+                partition_parameter=partition_parameter,
+                seed=seed,
+                config=config,
+            )
+            if partition_id < 0 or partition_id >= partitions_number:
+                raise ValueError(f"partition_id {partition_id} is out of range for partitions_number {partitions_number}")
+
+        def initialize_dataset(self):
+            if self.train_set is None:
+                self.train_set = self.load_mnist_dataset(train=True)
+            if self.test_set is None:
+                self.test_set = self.load_mnist_dataset(train=False)
+
+            self.test_indices_map = list(range(len(self.test_set)))
+
+            # Depending on the iid flag, generate a non-iid or iid map of the train set
+            if self.iid:
+                self.train_indices_map = self.generate_iid_map(self.train_set, self.partition, self.partition_parameter)
+                self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
+            else:
+                self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
+                self.local_test_indices_map = self.generate_non_iid_map(
+                    self.test_set, self.partition, self.partition_parameter
+                )
+
+            print(f"Length of train indices map: {len(self.train_indices_map)}")
+            print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
+            print(f"Length of test indices map (local): {len(self.local_test_indices_map)}")
+
+        def load_mnist_dataset(self, train=True):
+            apply_transforms = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,), inplace=True),
+            ])
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+            os.makedirs(data_dir, exist_ok=True)
+            return MNIST(
+                data_dir,
+                train=train,
+                download=True,
+                transform=apply_transforms,
+            )
+    ```
+
+#### Import the Dataset from your own
+
+If you want to import a Dataset, you must create a folder named data where you must locate the image_list then create a Dataset class like in the MilitarySAR code example 
+
+??? quote "MilitarySAR Code Example"
+    ```python linenums="66"
+    class MilitarySAR(Dataset):
+    def __init__(self, name="soc", is_train=False, transform=None):
+        self.is_train = is_train
+        self.name = name
+
+        self.data = []
+        self.targets = []
+        self.serial_numbers = []
+
+        # Path to data is "data" folder in the same directory as this file
+        self.path_to_data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+        self.transform = transform
+
+        # self._load_data(self.path_to_data)
+
+        mode = "train" if self.is_train else "test"
+        self.image_list = glob.glob(os.path.join(self.path_to_data, f"{self.name}/{mode}/*/*.npy")) 
+        self.label_list = glob.glob(os.path.join(self.path_to_data, f"{self.name}/{mode}/*/*.json"))
+        self.image_list = sorted(self.image_list, key=os.path.basename)
+        self.label_list = sorted(self.label_list, key=os.path.basename)
+        assert len(self.image_list) == len(self.label_list)
+
+    def __len__(self):
+
+    def __getitem__(self, idx):
+
+    def _load_metadata(self):
+
+    def get_targets(self):
+    ```
+
+Then you must create a MilitarySARDataset in order to use it like in the example below
+
+??? quote "MilitarySARDataset Code example"
+    ```python linenums="144"
+    class MilitarySARDataset(NebulaDataset):
+        def __init__(
+            self,
+            num_classes=10,
+            partition_id=0,
+            partitions_number=1,
+            batch_size=32,
+            num_workers=4,
+            iid=True,
+            partition="dirichlet",
+            partition_parameter=0.5,
+            seed=42,
+            config=None,
+        ):
+            super().__init__(
+                num_classes=num_classes,
+                partition_id=partition_id,
+                partitions_number=partitions_number,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                iid=iid,
+                partition=partition,
+                partition_parameter=partition_parameter,
+                seed=seed,
+                config=config,
             )
 
-        print(f"Length of train indices map: {len(self.train_indices_map)}")
-        print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
-        print(f"Length of test indices map (local): {len(self.local_test_indices_map)}")
+        def initialize_dataset(self):
 
-    def load_cifar10_dataset(self, train=True):
-        mean = (0.4914, 0.4822, 0.4465)
-        std = (0.2471, 0.2435, 0.2616)
-        apply_transforms = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std, inplace=True),
-        ])
-        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-        os.makedirs(data_dir, exist_ok=True)
-        return CIFAR10(
-            data_dir,
-            train=train,
-            download=True,
-            transform=apply_transforms,
-        )
-```
+        def load_militarysar_dataset(self, train=True):
+    ```
 
-#### 2. Import the Dataset from your own
+#### Associate the Model with the new Dataset
 
+Now you must add the model that you want to use with the dataset in the **/nebula/core/models/** ***new_dataset/new_model.py***
+
+The model must extend from **NebulaModel**
+
+??? quote "MLP Code example"
+    ```python linenums="1"
+    import torch
+
+    from nebula.core.models.nebulamodel import NebulaModel
+
+
+    class MNISTModelMLP(NebulaModel):
+        def __init__(
+            self,
+            input_channels=1,
+            num_classes=10,
+            learning_rate=1e-3,
+            metrics=None,
+            confusion_matrix=None,
+            seed=None,
+        ):
+            super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
+
+            self.example_input_array = torch.zeros(1, 1, 28, 28)
+            self.learning_rate = learning_rate
+            self.criterion = torch.nn.CrossEntropyLoss()
+            self.l1 = torch.nn.Linear(28 * 28, 256)
+            self.l2 = torch.nn.Linear(256, 128)
+            self.l3 = torch.nn.Linear(128, num_classes)
+
+        def forward(self, x):
+            batch_size, channels, width, height = x.size()
+            x = x.view(batch_size, -1)
+            x = self.l1(x)
+            x = torch.relu(x)
+            x = self.l2(x)
+            x = torch.relu(x)
+            x = self.l3(x)
+            return x
+
+        def configure_optimizers(self):
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+            return optimizer
+    ```
+
+### **Adding new Aggregators**
+
+#### Adding the Aggregator in the frontend
+
+You must add the new aggregator in the deployment.html and verify that it's added correctly in the json files generated in the **/app/config folder**
+
+??? quote "deployment.html"
+    ``` html linenums="86"
+    <h5>Aggregation <i class="fa fa-calculator"></i>
+        <input type="checkbox" id="mod-aggregation" style="margin-right: 10px; float: left;">
+    </h5>
+    <div style="display: inline-block;">
+        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="mod-fedavg" value="FedAvg" style="margin-right: 10px;" checked>FedAvg
+        </label>
+        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="mod-krum" value="Krum" style="margin-right: 10px; margin-left: 10px;">Krum
+        </label>
+        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="mod-trimmed" value="TrimmedMean" style="margin-right: 10px; margin-left: 10px;">TrimmedMean
+        </label>
+        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="mod-median" value="Median" style="margin-right: 10px; margin-left: 10px;">Median
+        </label>
+        <!-- Add it here -->
+        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+            <input type="checkbox" id="mod-new_aggreagtor" value="new_aggregator" style="margin-right: 10px; margin-left: 10px;">New Aggregator
+        </label>
+    </div>
+    ```
+
+#### Adding the Aggregator file
+
+You must add the aggregator that you want to use into **/nebula/core/aggregation/** ***new_aggregator.py***
+
+The new aggregator must be extended from the Aggregator class, you can use FedAvg as an example
+
+??? quote "Aggregator class"
+    ``` python linenums="1"
+    class Aggregator(ABC):
+        def __init__(self, config=None, engine=None):
+            self.config = config
+            self.engine = engine
+            self._addr = config.participant["network_args"]["addr"]
+            logging.info(f"[{self.__class__.__name__}] Starting Aggregator")
+            self._federation_nodes = set()
+            self._waiting_global_update = False
+            self._pending_models_to_aggregate = {}
+            self._future_models_to_aggregate = {}
+            self._add_model_lock = Locker(name="add_model_lock", async_lock=True)
+            self._aggregation_done_lock = Locker(name="aggregation_done_lock", async_lock=True)
+
+        def __str__(self):
+            return self.__class__.__name__
+
+        def __repr__(self):
+            return self.__str__()
+
+        @property
+        def cm(self):
+            return self.engine.cm
+
+        @abstractmethod
+        def run_aggregation(self, models):
+            if len(models) == 0:
+                logging.error("Trying to aggregate models when there are no models")
+                return None
+
+        async def update_federation_nodes(self, federation_nodes):
+            if not self._aggregation_done_lock.locked():
+                self._federation_nodes = federation_nodes
+                self._pending_models_to_aggregate.clear()
+                await self._aggregation_done_lock.acquire_async(
+                    timeout=self.config.participant["aggregator_args"]["aggregation_timeout"]
+                )
+            else:
+                raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
+
+        def set_waiting_global_update(self):
+            self._waiting_global_update = True
+
+        async def reset(self):
+            await self._add_model_lock.acquire_async()
+            self._federation_nodes.clear()
+            self._pending_models_to_aggregate.clear()
+            try:
+                await self._aggregation_done_lock.release_async()
+            except:
+                pass
+            await self._add_model_lock.release_async()
+
+        def get_nodes_pending_models_to_aggregate(self):
+            return {node for key in self._pending_models_to_aggregate.keys() for node in key.split()}
+
+        async def _handle_global_update(self, model, source):
+            logging.info(f"🔄  _handle_global_update | source={source}")
+            logging.info(
+                f"🔄  _handle_global_update | Received a model from {source}. Overwriting __models with the aggregated model."
+            )
+            self._pending_models_to_aggregate.clear()
+            self._pending_models_to_aggregate = {source: (model, 1)}
+            self._waiting_global_update = False
+            await self._add_model_lock.release_async()
+            await self._aggregation_done_lock.release_async()
+
+        async def _add_pending_model(self, model, weight, source):
+            if len(self._federation_nodes) <= len(self.get_nodes_pending_models_to_aggregate()):
+                logging.info("🔄  _add_pending_model | Ignoring model...")
+                await self._add_model_lock.release_async()
+                return None
+
+            if source not in self._federation_nodes:
+                logging.info(f"🔄  _add_pending_model | Can't add a model from ({source}), which is not in the federation.")
+                await self._add_model_lock.release_async()
+                return None
+
+            elif source not in self.get_nodes_pending_models_to_aggregate():
+                logging.info(
+                    "🔄  _add_pending_model | Node is not in the aggregation buffer --> Include model in the aggregation buffer."
+                )
+                self._pending_models_to_aggregate.update({source: (model, weight)})
+
+            logging.info(
+                f"🔄  _add_pending_model | Model added in aggregation buffer ({len(self.get_nodes_pending_models_to_aggregate())!s}/{len(self._federation_nodes)!s}) | Pending nodes: {self._federation_nodes - self.get_nodes_pending_models_to_aggregate()}"
+            )
+
+            # Check if _future_models_to_aggregate has models in the current round to include in the aggregation buffer
+            if self.engine.get_round() in self._future_models_to_aggregate:
+                logging.info(
+                    f"🔄  _add_pending_model | Including next models in the aggregation buffer for round {self.engine.get_round()}"
+                )
+                for future_model in self._future_models_to_aggregate[self.engine.get_round()]:
+                    if future_model is None:
+                        continue
+                    future_model, future_weight, future_source = future_model
+                    if (
+                        future_source in self._federation_nodes
+                        and future_source not in self.get_nodes_pending_models_to_aggregate()
+                    ):
+                        self._pending_models_to_aggregate.update({future_source: (future_model, future_weight)})
+                        logging.info(
+                            f"🔄  _add_pending_model | Next model added in aggregation buffer ({len(self.get_nodes_pending_models_to_aggregate())!s}/{len(self._federation_nodes)!s}) | Pending nodes: {self._federation_nodes - self.get_nodes_pending_models_to_aggregate()}"
+                        )
+                del self._future_models_to_aggregate[self.engine.get_round()]
+
+                for future_round in list(self._future_models_to_aggregate.keys()):
+                    if future_round < self.engine.get_round():
+                        del self._future_models_to_aggregate[future_round]
+
+            if len(self.get_nodes_pending_models_to_aggregate()) >= len(self._federation_nodes):
+                logging.info("🔄  _add_pending_model | All models were added in the aggregation buffer. Run aggregation...")
+                await self._aggregation_done_lock.release_async()
+            await self._add_model_lock.release_async()
+            return self.get_nodes_pending_models_to_aggregate()
+
+        async def include_model_in_buffer(self, model, weight, source=None, round=None, local=False):
+            await self._add_model_lock.acquire_async()
+            logging.info(
+                f"🔄  include_model_in_buffer | source={source} | round={round} | weight={weight} |--| __models={self._pending_models_to_aggregate.keys()} | federation_nodes={self._federation_nodes} | pending_models_to_aggregate={self.get_nodes_pending_models_to_aggregate()}"
+            )
+            if model is None:
+                logging.info("🔄  include_model_in_buffer | Ignoring model bad formed...")
+                await self._add_model_lock.release_async()
+                return
+
+            if round == -1:
+                # Be sure that the model message is not from the initialization round (round = -1)
+                logging.info("🔄  include_model_in_buffer | Ignoring model with round -1")
+                await self._add_model_lock.release_async()
+                return
+
+            if self._waiting_global_update and not local:
+                await self._handle_global_update(model, source)
+                return
+
+            await self._add_pending_model(model, weight, source)
+
+            if len(self.get_nodes_pending_models_to_aggregate()) >= len(self._federation_nodes):
+                logging.info(
+                    f"🔄  include_model_in_buffer | Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
+                )
+                message = self.cm.mm.generate_federation_message(
+                    nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
+                    [self.engine.get_round()],
+                )
+                await self.cm.send_message_to_neighbors(message)
+
+            return
+
+        async def get_aggregation(self):
+            try:
+                timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
+                await self._aggregation_done_lock.acquire_async(timeout=timeout)
+            except TimeoutError:
+                logging.exception("🔄  get_aggregation | Timeout reached for aggregation")
+            except asyncio.CancelledError:
+                logging.exception("🔄  get_aggregation | Lock acquisition was cancelled")
+            except Exception as e:
+                logging.exception(f"🔄  get_aggregation | Error acquiring lock: {e}")
+            finally:
+                await self._aggregation_done_lock.release_async()
+
+            if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
+                logging.info(
+                    "🔄  get_aggregation | Received an global model. Overwriting my model with the aggregated model."
+                )
+                aggregated_model = next(iter(self._pending_models_to_aggregate.values()))[0]
+                self._pending_models_to_aggregate.clear()
+                return aggregated_model
+
+            unique_nodes_involved = set(node for key in self._pending_models_to_aggregate for node in key.split())
+
+            if len(unique_nodes_involved) != len(self._federation_nodes):
+                missing_nodes = self._federation_nodes - unique_nodes_involved
+                logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
+            else:
+                logging.info("🔄  get_aggregation | All models accounted for, proceeding with aggregation.")
+
+            aggregated_result = self.run_aggregation(self._pending_models_to_aggregate)
+            self._pending_models_to_aggregate.clear()
+            return aggregated_result
+
+        async def include_next_model_in_buffer(self, model, weight, source=None, round=None):
+            logging.info(f"🔄  include_next_model_in_buffer | source={source} | round={round} | weight={weight}")
+            if round not in self._future_models_to_aggregate:
+                self._future_models_to_aggregate[round] = []
+            decoded_model = self.engine.trainer.deserialize_model(model)
+            self._future_models_to_aggregate[round].append((decoded_model, weight, source))
+
+        def print_model_size(self, model):
+            total_params = 0
+            total_memory = 0
+
+            for _, param in model.items():
+                num_params = param.numel()
+                total_params += num_params
+
+                memory_usage = param.element_size() * num_params
+                total_memory += memory_usage
+
+            total_memory_in_mb = total_memory / (1024**2)
+            logging.info(f"print_model_size | Model size: {total_memory_in_mb} MB")
+    ```
+
+??? quote "FedAvg.py"
+    ``` python linenums="1"
+    import gc
+
+    import torch
+
+    from nebula.core.aggregation.aggregator import Aggregator
+
+
+    class FedAvg(Aggregator):
+        """
+        Aggregator: Federated Averaging (FedAvg)
+        Authors: McMahan et al.
+        Year: 2016
+        """
+
+        def __init__(self, config=None, **kwargs):
+            super().__init__(config, **kwargs)
+
+        def run_aggregation(self, models):
+            super().run_aggregation(models)
+
+            models = list(models.values())
+
+            total_samples = float(sum(weight for _, weight in models))
+
+            if total_samples == 0:
+                raise ValueError("Total number of samples must be greater than zero.")
+
+            last_model_params = models[-1][0]
+            accum = {layer: torch.zeros_like(param, dtype=torch.float32) for layer, param in last_model_params.items()}
+
+            with torch.no_grad():
+                for model_parameters, weight in models:
+                    normalized_weight = weight / total_samples
+                    for layer in accum:
+                        accum[layer].add_(
+                            model_parameters[layer].to(accum[layer].dtype),
+                            alpha=normalized_weight,
+                        )
+
+            del models
+            gc.collect()
+
+            # self.print_model_size(accum)
+            return accum
+    ```
