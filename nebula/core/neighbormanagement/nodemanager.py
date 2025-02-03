@@ -58,13 +58,8 @@ class NodeManager():
         self.synchronizing_rounds = False
         
         self._fast_reboot_status = fastreboot
-        if (fastreboot):
-            self._fastreboot = FastReboot(self)
-            
-        self._momemtum = None    
-        if (momentum):
-            self._momemtum = Momentum(self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False)
-                 
+        self._momemtum_status = momentum
+        
         #self.set_confings()
 
     @property
@@ -152,6 +147,13 @@ class NodeManager():
         )
         #self.engine.trainer.get_loss(), self.config.participant["molibity_args"]["weight_distance"], self.config.participant["molibity_args"]["weight_het"]
         #self.model_handler.set_config([self.engine.get_round(), self.engine.config.participant["training_args"]["epochs"]])
+
+        if (self._fast_reboot_status):
+            self._fastreboot = FastReboot(self)
+            
+        self._momemtum = None    
+        if (self._momemtum_status):
+            self._momemtum = Momentum(self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False)
   
 
                                                         ##############################

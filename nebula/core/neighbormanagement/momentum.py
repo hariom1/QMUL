@@ -107,6 +107,7 @@ class Momentum():
                 update,
                 similarity=True,
             )
+            logging.info(f"Model similarity for node: {addr}, sim: {sim_value}")
             await self._add_similarity_to_node(addr, sim_value)
             
     def _calculate_dispersion_penalty(self, historic: dict, updates: dict):
