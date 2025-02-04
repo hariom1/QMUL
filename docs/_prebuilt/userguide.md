@@ -7,26 +7,26 @@ In this section, we will explain how to use the NEBULA Platform
 
 To run NEBULA, you can use the following command line:
 
-    python app/main.py [PARAMS]
+<pre><code><span style="color: grey;">(nebula-dfl)</span><span style="color: blue;">user@host</span>:~$ <span style="color: green;">python app/main.py [PARAMS]</span></code></pre>
 
 The first time you run the platform, the nebula-frontend docker image
 will be built. This process can take a few minutes.
 
 You can show the PARAMS using:
 
-    python app/main.py --help
+<pre><code><span style="color: grey;">(nebula-dfl)</span><span style="color: blue;">user@host</span>:~$ <span style="color: green;">python app/main.py --help</span></code></pre> 
 
 The frontend will be available at http://127.0.0.1:6060 (by default) if the port is available
 
 To change the default port of the frontend, you can use the following
 command line:
 
-    python app/main.py --webport [PORT]
+<pre><code><span style="color: grey;">(nebula-dfl)</span><span style="color: blue;">user@host</span>:~$ <span style="color: green;">python app/main.py --webport [PORT]</span></code></pre> 
 
 To change the default port of the statistics endpoint, you can use the
 following command line:
 
-    python app/main.py --statsport [PORT]
+<pre><code><span style="color: grey;">(nebula-dfl)</span><span style="color: blue;">user@host</span>:~$ <span style="color: green;">python app/main.py --statsport [PORT]</span></code></pre> 
 
 ## **NEBULA Frontend**
 ![Frontend](static/userguide/frontend.png)
