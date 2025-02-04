@@ -45,11 +45,13 @@ Your shell prompt should look similar to:
 ### **Using NVIDIA GPU on Nodes (Optional)**
 
 For nodes equipped with **NVIDIA GPUs**, ensure the following prerequisites:
+
 - **NVIDIA Driver**: Version 525.60.13 or later.
 - **CUDA**: Version 12.1 is required. After installation, verify with <code>nvidia-smi</code>.
 - **NVIDIA Container Toolkit**: Install to enable GPU access within Docker containers.
 
 Follow these guides for proper installation:
+
 - [CUDA Installation Guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html)
 - [NVIDIA Container Toolkit Installation Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 
