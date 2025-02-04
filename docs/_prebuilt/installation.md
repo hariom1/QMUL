@@ -4,10 +4,7 @@ In this section, we will explain how to install the NEBULA platform.
 
 ## Prerequisites
 
--   Python 3.10 or higher (3.11 recommended)
--   Docker Engine 24.0.4 or higher (24.0.7 recommended, https://docs.docker.com/engine/install/)
--   Docker Compose 2.19.0 or higher (2.19.1 recommended, https://docs.docker.com/compose/install/)
--   For using NVIDIA GPUs, NVIDIA driver version >=525.60.13 (Linux) >=528.33 (Windows), and CUDA 12.1 (mandatory). More information in https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html (Windows) or https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html (Linux)
+-   For using NVIDIA GPUs, NVIDIA driver version >=525.60.13, and CUDA 12.1 (mandatory). https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
 
 ## Obtaining NEBULA platform
 
@@ -24,13 +21,16 @@ Now, you can move to the source directory:
 
 ### Installing NEBULA platform
 
-To install the NEBULA platform, you can use the following command line:
+This command will install the required dependencies and set up the Docker containers if they haven't been installed yet.
 
     make install
 
-This command will install the required dependencies for the platform and open a shell to start the platform.
 
-If the shell is not opened or you want to reopen the shell, you can use the following command line:
+To open a shell, use the following command:
+
+    user:~$ source .venv/bin/activate
+
+If you forget this command, you can simply type:
 
     make shell
 
@@ -40,32 +40,6 @@ Once the installation is finished, you can check by listing the version
 of the NEBULA with the following command line:
 
     python app/main.py --version
-
-## Building NEBULA core
-
-There are two ways to deploy the node in the federation: using Docker
-containers or isolated processes. You can choose the one that best fits
-your needs in the frontend.
-
-### 1. Using Docker containers
-
-You need to build the docker image using the following command line in
-the root directory:
-
-    docker build -t nebula-core .
-
-In case of using GPU in the docker, you have to follow the instructions
-in the following link to install nvidia-container-toolkit:
-
-https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-
-You can check the docker images using the following command line:
-
-    docker images
-
-### 2. Using isolated processes
-
-There is no need additional steps to build the core using isolated processes.
 
 ## Running NEBULA
 
@@ -80,7 +54,7 @@ You can show the PARAMS using:
 
     python app/main.py --help
 
-The frontend will be available at http://127.0.0.1:6060 (by default)
+The frontend will be available at http://127.0.0.1:6060 by default, provided the port is available. If not, another port will be assigned automatically.
 
 To change the default port of the frontend, you can use the following
 command line:
