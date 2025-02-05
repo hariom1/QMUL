@@ -451,6 +451,9 @@ class Engine:
         else:
             logging.error("Aggregation finished with no parameters")
 
+    def learning_cycle_finished(self):
+        return not (self.round < self.total_rounds)
+
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
             print_msg_box(
@@ -485,8 +488,6 @@ class Engine:
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()
-        self.round = None
-        self.total_rounds = None
         print_msg_box(
             msg="Federated Learning process has been completed.",
             indent=2,
@@ -505,10 +506,6 @@ class Engine:
             await asyncio.sleep(1)
 
         await asyncio.sleep(5)
-
-        # Enable loggin info
-        logging.getLogger().disabled = True
-        # self.cm.stop_logging()
 
         # Kill itself
         if self.config.participant["scenario_args"]["deployment"] == "docker":

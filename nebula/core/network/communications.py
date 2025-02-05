@@ -877,6 +877,9 @@ class CommunicationsManager:
     def get_ready_connections(self):
         return {addr for addr, conn in self.connections.items() if conn.get_ready()}
 
+    def learning_finished(self):
+        return self.engine.learning_cycle_finished()
+
     def check_finished_experiment(self):
         return all(
             conn.get_federated_round() == self.config.participant["scenario_args"]["rounds"] - 1
