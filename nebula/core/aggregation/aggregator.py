@@ -195,10 +195,11 @@ class Aggregator(ABC):
             logging.info(
                 f"🔄  include_model_in_buffer | Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
             )
-            message = self.cm.mm.generate_federation_message(
-                nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
-                [self.engine.get_round()],
-            )
+            # message = self.cm.mm.generate_federation_message(
+            #     nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
+            #     [self.engine.get_round()],
+            # )
+            message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]])
             await self.cm.send_message_to_neighbors(message)
 
         return
