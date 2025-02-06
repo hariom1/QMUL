@@ -158,7 +158,7 @@ class Engine:
             topology = self.config.participant["mobility_args"]["topology_type"]
             topology = topology.lower()
             model_handler = "std"  # self.config.participant["mobility_args"]["model_handler"]
-            acceleration_push = "slow"  # self.config.participant["mobility_args"]["push_strategy"]
+            acceleration_push = "fast"  # self.config.participant["mobility_args"]["push_strategy"]
             self._node_manager = NodeManager(
                 config.participant["mobility_args"]["additional_node"]["status"],
                 topology,

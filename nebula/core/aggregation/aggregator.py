@@ -147,11 +147,8 @@ class Aggregator(ABC):
                 if future_round < self.engine.get_round():
                     del self._future_models_to_aggregate[future_round]
 
-        # TODO comprobar que los q faltan no estan en futuros
-
         if len(self.get_nodes_pending_models_to_aggregate()) >= len(self._federation_nodes):
             logging.info("🔄  _add_pending_model | All models were added in the aggregation buffer. Run aggregation...")
-            # self.engine.update_sinchronized_status(True)
             await self._aggregation_done_lock.release_async()
 
         await self._add_model_lock.release_async()
@@ -183,10 +180,6 @@ class Aggregator(ABC):
             logging.info(
                 f"🔄  include_model_in_buffer | Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
             )
-            # message = self.cm.mm.generate_federation_message(
-            #    nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
-            #    [self.engine.get_round()],
-            # )
             message = self.cm.create_message(
                 "federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]]
             )
@@ -254,8 +247,23 @@ class Aggregator(ABC):
         await self._add_next_model_lock.acquire_async()
         self._future_models_to_aggregate[round].append((decoded_model, weight, source))
         await self._add_next_model_lock.release_async()
-        # await self.aggregation_push_available()
-        # asyncio.create_task(self.aggregation_push_available())
+
+        # Verify if we are waiting an update that maybe we wont received
+        if self._aggregation_done_lock.locked():
+            pending_nodes: set = self._federation_nodes - self.get_nodes_pending_models_to_aggregate()
+            if pending_nodes:
+                for f_round, future_updates in self._future_models_to_aggregate.items():
+                    for _, _, source in future_updates:
+                        logging.info(f"a ver q haya qui {source}")
+                        if source in pending_nodes:
+                            logging.info(
+                                f"Waiting update from source: {source}, but future update storaged for round: {f_round}"
+                            )
+                            pending_nodes.discard(source)
+
+                if not pending_nodes:
+                    logging.info("Received advanced updates for all sources missing this round")
+                    await self._aggregation_done_lock.release_async()
 
     def print_model_size(self, model):
         total_params = 0
@@ -367,7 +375,7 @@ class Aggregator(ABC):
                         self.engine.update_sinchronized_status(True)
                         self.engine.set_synchronizing_rounds(False)
                     else:
-                        pass
+                        logging.info("No rounds can be pushed...")
                     await self._push_strategy_lock.release_async()
             else:
                 logging.info(
