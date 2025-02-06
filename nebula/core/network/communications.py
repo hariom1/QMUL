@@ -1,12 +1,9 @@
 import asyncio
 import collections
-import hashlib
 import logging
-import os
 import subprocess
 import sys
 import traceback
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 import requests
@@ -16,10 +13,8 @@ from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
-from nebula.core.network.propagator import Propagator
-from nebula.core.pb import nebula_pb2
 from nebula.core.network.nebulamulticasting import NebulaConnectionService
-
+from nebula.core.network.propagator import Propagator
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
@@ -79,10 +74,10 @@ class CommunicationsManager:
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
-        
+
         # Connection service to communicate with external devices
         self._external_connection_service = None
-        
+
         # The line below is neccesary when mobility would be set up
         mob = self.config.participant["mobility_args"]["mobility"]
         aditional_node = self.config.participant["mobility_args"]["additional_node"]["status"]
@@ -93,7 +88,6 @@ class CommunicationsManager:
         else:
             logging.info("Deploying External Connection Service | No running")
             self._external_connection_service = NebulaConnectionService(self.addr)
-        
 
     @property
     def engine(self):
@@ -126,7 +120,7 @@ class CommunicationsManager:
     @property
     def mobility(self):
         return self._mobility
-    
+
     @property
     def ecs(self):
         return self._external_connection_service
@@ -146,51 +140,12 @@ class CommunicationsManager:
         await self.mm.process_message(data, addr_from)
 
     async def forward_message(self, data, addr_from):
+        logging.info("Forwarding message... ")
         await self.forwarder.forward(data, addr_from=addr_from)
 
     # generic point to handle messages
-    #async def handle_message(self, source, msg_type, message):
     async def handle_message(self, message_event):
-        #logging.info(
-        #    f"🔍  handle_{msg_type} | Received [Action {message.action}] from {source}"
-        #)
-        #try:
-            #await self.engine.event_manager.trigger_event(source, message)
         await self.engine.trigger_event(message_event)
-        #except Exception as e:
-        #    logging.exception(f"🔍  handle_{msg_type} | Error while processing: {e}")
-
-
-    async def handle_discovery_message(self, source, message):
-        logging.info(
-            f"🔍  handle_discovery_message | Received [Action {message.action}] from {source} (network propagation)"
-        )
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.exception(f"🔍  handle_discovery_message | Error while processing: {e}")
-
-    async def handle_control_message(self, source, message):
-        logging.info(
-            f"🔧  handle_control_message | Received [Action {message.action}] from {source} with log {message.log}"
-        )
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.exception(
-                f"🔧  handle_control_message | Error while processing: {message.action} {message.log} | {e}"
-            )
-
-    async def handle_federation_message(self, source, message):
-        logging.info(
-            f"📝  handle_federation_message | Received [Action {message.action}] from {source} with arguments {message.arguments}"
-        )
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.exception(
-                f"📝  handle_federation_message | Error while processing: {message.action} {message.arguments} | {e}"
-            )
 
     async def handle_model_message(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
@@ -257,10 +212,10 @@ class CommunicationsManager:
                             decoded_model,
                             similarity=True,
                         )
-                        #with open(
+                        # with open(
                         #    f"{self.config.participant["tracking_args"]["log_dir"]}/participant_{self.id}_similarity.csv",
                         #    "a+",
-                        #) as f:
+                        # ) as f:
                         #    if os.stat(f"{self}/participant_{self.id}_similarity.csv").st_size == 0:
                         #        f.write(
                         #            "timestamp,source_ip,nodes,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
@@ -269,7 +224,9 @@ class CommunicationsManager:
                         #        f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
                         #    )
                         logging("Similarities between self model and model recieved...")
-                        logging.info(f"{source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}")
+                        logging.info(
+                            f"{source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}"
+                        )
 
                     await self.engine.aggregator.include_model_in_buffer(
                         decoded_model,
@@ -326,36 +283,9 @@ class CommunicationsManager:
                 )
         return
 
-    async def handle_connection_message(self, source, message):
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.exception(f"🔗  handle_connection_message | Error while processing: {message.action} | {e}")
-    
-    async def handle_discover_message(self, source, message):
-        logging.info(f"🔍  handle_discover_message | Received [Action {message.action}] from {source}")
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.error(f"🔍  handle_discover_message | Error while processing: {e}")
-
-    async def handle_offer_message(self, source, message):
-        logging.info(f"🔍  handle_offer_message | Received [Action {message.action}] from {source}")
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.error(f"🔍  handle_offer_message | Error while processing: {message.action} {message.arguments} | {e}")
-
-    async def handle_link_message(self, source, message):
-        logging.info(f"🔍  handle_link_message | Received [Action {message.action}] from {source}")
-        try:
-            await self.engine.event_manager.trigger_event(source, message)
-        except Exception as e:
-            logging.error(f"🔍  handle_link_message | Error while processing: {message.action} {message.arguments} | {e}")
-
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         return self.mm.create_message(message_type, action, *args, **kwargs)
-    
+
     def get_messages_events(self):
         return self.mm.get_messages_events()
 
@@ -363,20 +293,20 @@ class CommunicationsManager:
         if self.ecs == None:
             self.ecs = NebulaConnectionService(self.addr)
         self.ecs.start()
-        
+
     def stop_external_connection_service(self):
-        self.ecs.stop()    
-        
+        self.ecs.stop()
+
     def init_external_connection_service(self):
         self.start_external_connection_service()
-        
+
     async def is_external_connection_service_running(self):
-        return self.ecs.is_running()        
-        
+        return self.ecs.is_running()
+
     async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None):
         """
-            Using ExternalConnectionService to get addrs on local network, after that
-            stablishment of TCP connection and send the message broadcasted
+        Using ExternalConnectionService to get addrs on local network, after that
+        stablishment of TCP connection and send the message broadcasted
         """
         addrs = []
         if addrs_known == None:
@@ -386,11 +316,11 @@ class CommunicationsManager:
         else:
             logging.info("Searching federation process beginning... | Using addrs previously known")
             addrs = addrs_known
-            
+
         msg = self.create_message("discover", msg_type)
-            
+
         logging.info("Starting communications with devices found")
-        #TODO filtrar para para quitar las que ya son vecinos
+        # TODO filtrar para para quitar las que ya son vecinos
         for addr in addrs:
             await self.connect(addr, direct=False)
             await asyncio.sleep(1)
@@ -402,7 +332,7 @@ class CommunicationsManager:
             logging.info(f"Sending {msg_type} to ---> {addr}")
             asyncio.create_task(self.send_message(addr, msg))
             await asyncio.sleep(1)
-                 
+
     def get_connections_lock(self):
         return self.connections_lock
 
@@ -734,7 +664,7 @@ class CommunicationsManager:
                 logging.info(
                     f"Sending model to {dest_addr} with round {round}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
                 )
-                #message = self.mm.generate_model_message(round, serialized_model, weight)
+                # message = self.mm.generate_model_message(round, serialized_model, weight)
                 parameters = serialized_model
                 message = self.create_message("model", "", round, parameters, weight)
                 await conn.send(data=message, is_compressed=True)
@@ -742,7 +672,7 @@ class CommunicationsManager:
             except Exception as e:
                 logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
                 await self.disconnect(dest_addr, mutual_disconnection=False)
-                
+
     async def send_offer_model(self, dest_addr, offer_message):
         async with self.semaphore_send_model:
             try:
@@ -750,14 +680,12 @@ class CommunicationsManager:
                 if conn is None:
                     logging.info(f"❗️  Connection with {dest_addr} not found")
                     return
-                logging.info(
-                    f"Sending offer model to {dest_addr}"
-                )
+                logging.info(f"Sending offer model to {dest_addr}")
                 await conn.send(data=offer_message, is_compressed=True)
                 logging.info(f"Offer_Model sent to {dest_addr}")
             except Exception as e:
                 logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
-                await self.disconnect(dest_addr, mutual_disconnection=False)            
+                await self.disconnect(dest_addr, mutual_disconnection=False)
 
     async def establish_connection(self, addr, direct=True, reconnect=False):
         logging.info(f"🔗  [outgoing] Establishing connection with {addr} (direct: {direct})")
@@ -776,7 +704,7 @@ class CommunicationsManager:
                         if not self.connections[addr].get_direct() and (direct == True):
                             self.connections[addr].set_direct(direct)
                             return True
-                        else:    
+                        else:
                             return False
                     if addr in self.pending_connections:
                         logging.info(f"🔗  [outgoing] Connection with {addr} is already pending")
@@ -947,7 +875,7 @@ class CommunicationsManager:
         try:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(
-                    #data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
+                    # data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
                     data=self.create_message("connection", "disconnect")
                 )
                 await asyncio.sleep(1)
@@ -961,14 +889,14 @@ class CommunicationsManager:
         current_connections = set(current_connections)
         logging.info(f"Current connections: {current_connections}")
         self.config.update_neighbors_from_config(current_connections, dest_addr)
-        
+
     async def remove_temporary_connection(self, temp_addr):
         logging.info(f"Removing temporary conneciton:{temp_addr}..")
         try:
             await self.get_connections_lock().acquire_async()
             self.connections.pop(temp_addr, None)
         finally:
-            await self.get_connections_lock().release_async()     
+            await self.get_connections_lock().release_async()
 
     async def get_all_addrs_current_connections(self, only_direct=False, only_undirected=False):
         try:

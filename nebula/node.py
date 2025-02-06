@@ -120,7 +120,7 @@ async def main(config):
             partition_parameter=partition_parameter,
             seed=42,
             config=config,
-            additional=additional_node_status
+            additional=additional_node_status,
         )
         if model_name == "MLP":
             model = MNISTModelMLP()
@@ -350,35 +350,18 @@ async def main(config):
     if additional_node_status:
         logging.info(f"Waiting for round {additional_node_round} to start")
         logging.info("Waiting time to start finding federation")
-        
-        # MNIST
-        # 385 r30
-        # 615 r50
-        # CIFAR
-        # 420 r15
-        # 600 r22
-        
-        #if config.participant["network_args"]["ip"] == "192.168.50.11":
-            #time.sleep(820)
-        
-        time.sleep(200)
-        
-        #if config.participant["network_args"]["ip"] == "192.168.51.11":
-        #    logging.info("waiting 385s")
-            
-        #elif config.participant["network_args"]["ip"] == "192.168.51.12":
-        #    logging.info("waiting 800s")
-        #    time.sleep(800)
-            
-        #time.sleep(6000)  # DEBUG purposes
-        #import requests
 
-        #url = f"http://{node.config.participant['scenario_args']['controller']}/platform/{node.config.participant['scenario_args']['name']}/round"
-        #current_round = int(requests.get(url).json()["round"])
-        #while current_round < additional_node_round:
+        time.sleep(200)
+
+        # time.sleep(6000)  # DEBUG purposes
+        # import requests
+
+        # url = f"http://{node.config.participant['scenario_args']['controller']}/platform/{node.config.participant['scenario_args']['name']}/round"
+        # current_round = int(requests.get(url).json()["round"])
+        # while current_round < additional_node_round:
         #    logging.info(f"Waiting for round {additional_node_round} to start")
         #    time.sleep(10)
-        #logging.info(f"Round {additional_node_round} started, connecting to the network")
+        # logging.info(f"Round {additional_node_round} started, connecting to the network")
 
         await node._aditional_node_start()
 
