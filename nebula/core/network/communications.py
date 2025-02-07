@@ -934,6 +934,7 @@ class CommunicationsManager:
         logging.info(f"Current connections: {current_connections}")
         self.config.update_neighbors_from_config(current_connections, dest_addr)
         if removed:
+            current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
             await self.engine.update_neighbors(dest_addr, current_connections, remove=removed)
 
     async def remove_temporary_connection(self, temp_addr):

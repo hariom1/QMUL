@@ -84,7 +84,7 @@ class Aggregator(ABC):
             nodes_removed = self._federation_nodes.symmetric_difference(federation_nodes)
             logging.info(f"Nodes removed from aggregation: {nodes_removed}")
             pending_nodes = self.get_nodes_pending_models_to_aggregate()
-            logging.info(f"Pending models to aggregato: {self.get_nodes_pending_models_to_aggregate()}")
+            logging.info(f"Pending models to aggregate: {self.get_nodes_pending_models_to_aggregate()}")
             shouldnt_waited_model = []
             shouldnt_waited_model = [source for source in nodes_removed if source in pending_nodes]
             logging.info(f"Waiting models from removed neighbors: {shouldnt_waited_model}")
