@@ -270,7 +270,6 @@ class Aggregator(ABC):
             if pending_nodes:
                 for f_round, future_updates in self._future_models_to_aggregate.items():
                     for _, _, source in future_updates:
-                        logging.info(f"a ver q haya qui {source}")
                         if source in pending_nodes:
                             logging.info(
                                 f"Waiting update from source: {source}, but future update storaged for round: {f_round}"

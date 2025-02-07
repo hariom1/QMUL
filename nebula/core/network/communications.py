@@ -74,6 +74,9 @@ class CommunicationsManager:
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
+        
+        self._blacklisted_nodes = set()
+        self._blacklisted_nodes_lock = Locker(name="_blacklisted_nodes_lock", async_lock=True)
 
         # Connection service to communicate with external devices
         self._external_connection_service = None
@@ -88,7 +91,7 @@ class CommunicationsManager:
         else:
             logging.info("Deploying External Connection Service | No running")
             self._external_connection_service = NebulaConnectionService(self.addr)
-
+            
     @property
     def engine(self):
         return self._engine
@@ -137,7 +140,11 @@ class CommunicationsManager:
         self.ready_connections.add(addr)
 
     async def handle_incoming_message(self, data, addr_from):
-        await self.mm.process_message(data, addr_from)
+        self._blacklisted_nodes_lock.acquire_async()
+        blacklist = self._blacklisted_nodes.copy()
+        self._blacklisted_nodes_lock.release_async()
+        if not addr_from in blacklist:
+            await self.mm.process_message(data, addr_from)
 
     async def forward_message(self, data, addr_from):
         logging.info("Forwarding message... ")
@@ -288,6 +295,12 @@ class CommunicationsManager:
 
     def get_messages_events(self):
         return self.mm.get_messages_events()
+
+    async def add_to_blacklist(self, addr):
+        logging.info(f"Update blackList | addr listed: {addr}")
+        self._blacklisted_nodes_lock.acquire_async()
+        self._blacklisted_nodes.add(addr)
+        self._blacklisted_nodes_lock.release_async()
 
     def start_external_connection_service(self):
         if self.ecs == None:
@@ -894,6 +907,8 @@ class CommunicationsManager:
             logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
+            #del self.connections[dest_addr]
+            self.connections[dest_addr].stop()
             del self.connections[dest_addr]
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
         current_connections = set(current_connections)

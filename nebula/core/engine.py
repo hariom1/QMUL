@@ -294,12 +294,8 @@ class Engine:
         current_connections = await self.cm.get_addrs_current_connections(myself=True)
         if source not in current_connections:
             logging.info(f"🔗  handle_connection_message | Trigger | Connecting to {source}")
-            #TODO remove conditional
-            if not source == "192.168.53.4:45003":
-                await self.cm.connect(source, direct=True)
-            else:
-                logging.info("### DEBUGGING ###")
-
+            await self.cm.connect(source, direct=True)
+            
     async def _connection_disconnect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received disconnection message from {source}")
         if self.mobility:
@@ -908,9 +904,6 @@ class Engine:
 
     async def send_reputation(self, malicious_nodes):
         logging.info(f"Sending REPUTATION to the rest of the topology: {malicious_nodes}")
-        # message = self.cm.mm.generate_federation_message(
-        #    nebula_pb2.FederationMessage.Action.REPUTATION, malicious_nodes
-        # )
         message = self.cm.create_message("federation", "reputation", arguments=[str(arg) for arg in (malicious_nodes)])
         await self.cm.send_message_to_neighbors(message)
 

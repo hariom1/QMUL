@@ -281,7 +281,6 @@ class NodeManager:
 
     async def stop_not_selected_connections(self):
         try:
-            await asyncio.sleep(20)
             with self.discarded_offers_addr_lock:
                 if len(self.discarded_offers_addr) > 0:
                     self.discarded_offers_addr = set(
@@ -364,6 +363,7 @@ class NodeManager:
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
+            asyncio.create_task(self.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -378,12 +378,11 @@ class NodeManager:
                 ##############################
 
     async def check_robustness(self):
-        # TODO añadir un cd para que no se haga continuamente
         logging.info("🔄 Analizing node network robustness...")
         if not self._restructure_process_lock.locked():
             if not self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
-                # await self.reconnect_to_federation()
+                await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
                 and self.engine.get_sinchronized_status()
@@ -427,3 +426,11 @@ class NodeManager:
             logging.info("Reestructuring | NO Addrs availables")
             await self.start_late_connection_process(connected=True, msg_type="discover_nodes")
         self._restructure_process_lock.release()
+        
+    async def stop_connections_with_federation(self):
+        asyncio.sleep(120)
+        logging.info("### DISCONNECTING FROM FEDERATON ###")
+        neighbors = self.neighbor_policy.get_nodes_known(neighbors_only=True)
+        await self.engine.cm.add_to_blacklist(neighbors)
+        for n in neighbors:
+            await self.engine.cm.disconnect(n, mutual_disconnection=False)
