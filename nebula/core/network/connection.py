@@ -195,7 +195,8 @@ class Connection:
                 logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
         logging.error(f"Failed to reconnect to {self.addr} after {max_retries} attempts. Stopping connection...")
-        await self.stop()
+        #await self.stop()
+        await self.cm.terminate_failed_reconnection(self)
 
     async def send(
         self,
@@ -292,7 +293,7 @@ class Connection:
             logging.info("Message handling cancelled")
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
-            #await self.reconnect()
+            await self.reconnect()
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
 

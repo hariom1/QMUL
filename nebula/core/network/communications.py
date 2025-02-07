@@ -467,6 +467,16 @@ class CommunicationsManager:
 
         await process_connection(reader, writer)
 
+    async def terminate_failed_reconnection(self, conn: Connection):
+        # Remove failed connection
+        connected_with = conn.addr
+        await self.get_connections_lock().acquire_async()
+        for key, val in list(self.connections.items()):  
+            if val == conn:
+                del self.connections[key]
+        await self.get_connections_lock().release_async()
+        await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
+
     async def stop(self):
         logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
         connections = list(self.connections.values())

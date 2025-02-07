@@ -294,7 +294,11 @@ class Engine:
         current_connections = await self.cm.get_addrs_current_connections(myself=True)
         if source not in current_connections:
             logging.info(f"🔗  handle_connection_message | Trigger | Connecting to {source}")
-            await self.cm.connect(source, direct=True)
+            #TODO remove conditional
+            if not source == "192.168.53.4:45003":
+                await self.cm.connect(source, direct=True)
+            else:
+                logging.info("### DEBUGGING ###")
 
     async def _connection_disconnect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received disconnection message from {source}")
@@ -565,6 +569,12 @@ class Engine:
             return pending_models
         else:
             return pending_models
+        
+    async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
+        if self.mobility:
+            self.federation_nodes = neighbors
+            await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
+            await self.aggregator.update_federation_nodes(self.federation_nodes)   
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()

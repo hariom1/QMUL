@@ -43,6 +43,7 @@ class Aggregator(ABC):
         self._federation_nodes = set()
         self._waiting_global_update = False
         self._pending_models_to_aggregate = {}
+        self._pending_models_to_aggregate_lock = Locker(name="pending_models_to_aggregate_lock", async_lock=True)
         self._future_models_to_aggregate = {}
         self._add_model_lock = Locker(name="add_model_lock", async_lock=True)
         self._add_next_model_lock = Locker(name="add_next_model_lock", async_lock=True)
@@ -74,7 +75,22 @@ class Aggregator(ABC):
                 timeout=self.config.participant["aggregator_args"]["aggregation_timeout"]
             )
         else:
-            raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
+            # Neighbor has been removed
+            if len(self._federation_nodes) - len(federation_nodes) > 0:
+                nodes_removed = self._federation_nodes - federation_nodes
+                pending_nodes = self.get_nodes_pending_models_to_aggregate()
+                shouldnt_waited_model = []
+                shouldnt_waited_model = [source for source in nodes_removed if source in pending_nodes]
+                logging.info(f"Waiting models from removed neighbors: {shouldnt_waited_model}")
+                if shouldnt_waited_model:
+                    await self._pending_models_to_aggregate_lock.acquire_async()
+                    self._pending_models_to_aggregate.difference_update(shouldnt_waited_model)
+                    await self._pending_models_to_aggregate_lock.release_async()
+                if self._aggregation_done_lock.locked():
+                    if not self._pending_models_to_aggregate:
+                        await self._aggregation_done_lock.release_async()
+            else: 
+                raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
     def set_waiting_global_update(self):
         self._waiting_global_update = True
@@ -389,7 +405,7 @@ class Aggregator(ABC):
                 elif self.engine.get_synchronizing_rounds():
                     logging.info("❗️ Cannot analize push | already pushing rounds")
             await self._push_strategy_lock.release_async()
-
+        
 
 def create_malicious_aggregator(aggregator, attack):
     # It creates a partial function aggregate that wraps the aggregate method of the original aggregator.
