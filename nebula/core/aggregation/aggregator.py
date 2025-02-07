@@ -79,6 +79,9 @@ class Aggregator(ABC):
 
     async def notify_federation_nodes_removed(self, federation_nodes: set):
         # Neighbor has been removed
+        #TODO revisar no esta bien
+        # nodes_removed tiene el valor correcto del nodo q no hay q esperar,
+        # falta actualizar federation_nodes para eliminar los que ya no se deben esperar  
         logging.info(f"Updating expected updates, current models: {self._federation_nodes}, new expectation: {federation_nodes}")
         if len(self._federation_nodes) - len(federation_nodes) > 0:
             nodes_removed = self._federation_nodes.symmetric_difference(federation_nodes)

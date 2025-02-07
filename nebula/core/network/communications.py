@@ -399,8 +399,8 @@ class CommunicationsManager:
                 blacklist = await self.get_blacklist()
                 if blacklist:
                     logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")
-                    
-                if connected_node_id in blacklist:
+                       
+                if connection_addr in blacklist:
                     logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
                     writer.close()
                     await writer.wait_closed()
