@@ -301,6 +301,13 @@ class CommunicationsManager:
         self._blacklisted_nodes_lock.acquire_async()
         self._blacklisted_nodes.add(addr)
         self._blacklisted_nodes_lock.release_async()
+        
+    async def get_blacklist(self):
+        bl = None
+        self._blacklisted_nodes_lock.acquire_async()
+        bl = self._blacklisted_nodes.copy()
+        self._blacklisted_nodes_lock.release_async()
+        return bl
 
     def start_external_connection_service(self):
         if self.ecs == None:
@@ -333,7 +340,6 @@ class CommunicationsManager:
         msg = self.create_message("discover", msg_type)
 
         logging.info("Starting communications with devices found")
-        # TODO filtrar para para quitar las que ya son vecinos
         for addr in addrs:
             await self.connect(addr, direct=False)
             await asyncio.sleep(1)
@@ -375,6 +381,17 @@ class CommunicationsManager:
         async def process_connection(reader, writer):
             try:
                 addr = writer.get_extra_info("peername")
+                
+                
+                peer_ip, peer_port = addr
+                addr_str = f"{peer_ip}:{peer_port}"
+                blacklist = await self.get_blacklist()
+                if addr_str in blacklist:
+                    logging.info(f"🔗  [incoming] Rejecting connection from {addr}, it is blacklisted.")
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+                
                 connected_node_id = await reader.readline()
                 connected_node_id = connected_node_id.decode("utf-8").strip()
                 connected_node_port = addr[1]
@@ -481,13 +498,8 @@ class CommunicationsManager:
         await process_connection(reader, writer)
 
     async def terminate_failed_reconnection(self, conn: Connection):
-        # Remove failed connection
         connected_with = conn.addr
-        await self.get_connections_lock().acquire_async()
-        for key, val in list(self.connections.items()):  
-            if val == conn:
-                del self.connections[key]
-        await self.get_connections_lock().release_async()
+        await self.disconnect(connected_with, mutual_disconnection=False)
         await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
 
     async def stop(self):
@@ -890,7 +902,12 @@ class CommunicationsManager:
                 logging.info("Waiting for controller signal...")
             await asyncio.sleep(1)
 
-    async def disconnect(self, dest_addr, mutual_disconnection=True):
+    async def disconnect(self, dest_addr, mutual_disconnection=True, forced=False):
+        removed = False
+        
+        if forced:
+            self.add_to_blacklist(dest_addr)
+            
         logging.info(f"Trying to disconnect {dest_addr}")
         if dest_addr not in self.connections:
             logging.info(f"Connection {dest_addr} not found")
@@ -910,10 +927,13 @@ class CommunicationsManager:
             #del self.connections[dest_addr]
             self.connections[dest_addr].stop()
             del self.connections[dest_addr]
+            removed = True
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
         current_connections = set(current_connections)
         logging.info(f"Current connections: {current_connections}")
         self.config.update_neighbors_from_config(current_connections, dest_addr)
+        if removed:
+            await self.engine.update_neighbors(dest_addr, current_connections, remove=removed)
 
     async def remove_temporary_connection(self, temp_addr):
         logging.info(f"Removing temporary conneciton:{temp_addr}..")

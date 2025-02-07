@@ -51,7 +51,7 @@ class EventManager:
 
         for callback in self._subscribers[event_type]:
             try:
-                logging.info(f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}")
+                #logging.info(f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}")
                 await callback(message_event.source, message_event.message)
             except Exception as e:
                 logging.error(f"EventManager | Error in callback for event {event_type}: {e}")    

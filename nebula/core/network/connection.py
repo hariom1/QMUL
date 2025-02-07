@@ -23,10 +23,11 @@ class MessageChunk:
     data: bytes
     is_last: bool
 
+MAX_INCOMPLETED_RECONNECTIONS = 3
 
 class Connection:
     DEFAULT_FEDERATED_ROUND = -1
-
+    
     def __init__(
         self,
         cm: "CommunicationsManager",
@@ -75,6 +76,8 @@ class Connection:
         self.HEADER_SIZE = 21
         self.MAX_CHUNK_SIZE = 1024  # 1 KB
         self.BUFFER_SIZE = 1024  # 1 KB
+        
+        self.incompleted_reconnections = 0
 
         logging.info(
             f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})"
@@ -177,10 +180,16 @@ class Connection:
             await self.writer.wait_closed()
 
     async def reconnect(self, max_retries: int = 5, delay: int = 5) -> None:
+        if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
+            logging.info(f"Reconnection failed...")
+            await self.cm.terminate_failed_reconnection(self)
+            return
         for attempt in range(max_retries):
             try:
                 logging.info(f"Attempting to reconnect to {self.addr} (attempt {attempt + 1}/{max_retries})")
                 await self.cm.connect(self.addr)
+                await asyncio.sleep(1)
+                
                 self.read_task = asyncio.create_task(
                     self.handle_incoming_message(),
                     name=f"Connection {self.addr} reader",
@@ -286,13 +295,15 @@ class Connection:
                 chunk_data = await self._read_chunk(reusable_buffer)
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
                 # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
-
+                # Active connection without fails
+                self.incompleted_reconnections = 0
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
         except asyncio.CancelledError:
             logging.info("Message handling cancelled")
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
+            self.incompleted_reconnections += 1
             await self.reconnect()
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")

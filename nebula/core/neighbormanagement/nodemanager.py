@@ -382,7 +382,7 @@ class NodeManager:
         if not self._restructure_process_lock.locked():
             if not self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
-                await self.reconnect_to_federation()
+                #await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
                 and self.engine.get_sinchronized_status()
@@ -428,9 +428,10 @@ class NodeManager:
         self._restructure_process_lock.release()
         
     async def stop_connections_with_federation(self):
-        asyncio.sleep(120)
+        asyncio.sleep(150)
         logging.info("### DISCONNECTING FROM FEDERATON ###")
         neighbors = self.neighbor_policy.get_nodes_known(neighbors_only=True)
-        await self.engine.cm.add_to_blacklist(neighbors)
+        for n in neighbors: 
+            await self.engine.cm.add_to_blacklist(n)
         for n in neighbors:
-            await self.engine.cm.disconnect(n, mutual_disconnection=False)
+            await self.engine.cm.disconnect(n, mutual_disconnection=False, forced=True)

@@ -570,7 +570,7 @@ class Engine:
         if self.mobility:
             self.federation_nodes = neighbors
             await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
-            await self.aggregator.update_federation_nodes(self.federation_nodes)   
+            await self.aggregator.notify_federation_nodes_removed(self.federation_nodes)   
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()
