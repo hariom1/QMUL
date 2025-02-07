@@ -428,7 +428,7 @@ class NodeManager:
         self._restructure_process_lock.release()
         
     async def stop_connections_with_federation(self):
-        asyncio.sleep(150)
+        asyncio.sleep(400)
         logging.info("### DISCONNECTING FROM FEDERATON ###")
         neighbors = self.neighbor_policy.get_nodes_known(neighbors_only=True)
         for n in neighbors: 

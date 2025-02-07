@@ -296,6 +296,7 @@ class CommunicationsManager:
     def get_messages_events(self):
         return self.mm.get_messages_events()
 
+    #TODO limpiar la blacklist periodicamente
     async def add_to_blacklist(self, addr):
         logging.info(f"Update blackList | addr listed: {addr}")
         self._blacklisted_nodes_lock.acquire_async()
@@ -381,17 +382,7 @@ class CommunicationsManager:
         async def process_connection(reader, writer):
             try:
                 addr = writer.get_extra_info("peername")
-                
-                
-                peer_ip, peer_port = addr
-                addr_str = f"{peer_ip}:{peer_port}"
-                blacklist = await self.get_blacklist()
-                if addr_str in blacklist:
-                    logging.info(f"🔗  [incoming] Rejecting connection from {addr}, it is blacklisted.")
-                    writer.close()
-                    await writer.wait_closed()
-                    return
-                
+                          
                 connected_node_id = await reader.readline()
                 connected_node_id = connected_node_id.decode("utf-8").strip()
                 connected_node_port = addr[1]
@@ -404,6 +395,16 @@ class CommunicationsManager:
                 logging.info(
                     f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
                 )
+                
+                blacklist = await self.get_blacklist()
+                if blacklist:
+                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")
+                    
+                if connected_node_id in blacklist:
+                    logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
+                    writer.close()
+                    await writer.wait_closed()
+                    return
 
                 if self.id == connected_node_id:
                     logging.info("🔗  [incoming] Connection with yourself is not allowed")
@@ -500,7 +501,7 @@ class CommunicationsManager:
     async def terminate_failed_reconnection(self, conn: Connection):
         connected_with = conn.addr
         await self.disconnect(connected_with, mutual_disconnection=False)
-        await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
+        #await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
 
     async def stop(self):
         logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")

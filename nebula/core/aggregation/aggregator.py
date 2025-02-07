@@ -90,7 +90,8 @@ class Aggregator(ABC):
             logging.info(f"Waiting models from removed neighbors: {shouldnt_waited_model}")
             if shouldnt_waited_model:
                 await self._pending_models_to_aggregate_lock.acquire_async()
-                self._pending_models_to_aggregate.difference_update(shouldnt_waited_model)
+                for swm in shouldnt_waited_model:
+                    self._pending_models_to_aggregate.pop(swm)
                 await self._pending_models_to_aggregate_lock.release_async()
             if self._aggregation_done_lock.locked():
                 if not self._pending_models_to_aggregate:
