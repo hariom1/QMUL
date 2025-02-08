@@ -150,7 +150,6 @@ class CommunicationsManager:
         logging.info("Forwarding message... ")
         await self.forwarder.forward(data, addr_from=addr_from)
 
-    # generic point to handle messages
     async def handle_message(self, message_event):
         await self.engine.trigger_event(message_event)
 
@@ -916,7 +915,6 @@ class CommunicationsManager:
         try:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(
-                    # data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
                     data=self.create_message("connection", "disconnect")
                 )
                 await asyncio.sleep(1)
@@ -926,9 +924,12 @@ class CommunicationsManager:
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
             #del self.connections[dest_addr]
-            self.connections[dest_addr].stop()
-            del self.connections[dest_addr]
-            removed = True
+            try:
+                removed = True
+                await self.connections[dest_addr].stop()
+                del self.connections[dest_addr]
+            except Exception as e:
+                 logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
         current_connections = set(current_connections)
         logging.info(f"Current connections: {current_connections}")

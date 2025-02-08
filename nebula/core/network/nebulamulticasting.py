@@ -165,7 +165,7 @@ class NebulaConnectionService(ExternalConnectionService):
         self.server.start()
         
     def stop(self):
-        self.server.stop
+        self.server.stop()
         
     def is_running(self):
         if self.server:

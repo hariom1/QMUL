@@ -78,6 +78,7 @@ class Connection:
         self.BUFFER_SIZE = 1024  # 1 KB
         
         self.incompleted_reconnections = 0
+        self.forced_disconnection = False
 
         logging.info(
             f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})"
@@ -166,6 +167,7 @@ class Connection:
 
     async def stop(self):
         logging.info(f"❗️  Connection [stopped]: {self.addr} (id: {self.id})")
+        self.forced_disconnection = True
         tasks = [self.read_task, self.process_task]
         for task in tasks:
             if task is not None:
@@ -176,14 +178,23 @@ class Connection:
                     logging.exception(f"❗️  {self} cancelled...")
 
         if self.writer is not None:
-            self.writer.close()
-            await self.writer.wait_closed()
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception as e:
+                logging.exception(f"❗️  Error ocurred when closing pipe: {e}")
 
     async def reconnect(self, max_retries: int = 5, delay: int = 5) -> None:
+        if self.forced_disconnection:
+            return
+        
+        self.incompleted_reconnections += 1
         if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
-            logging.info(f"Reconnection failed...")
+            logging.info(f"Reconnection with {self.addr} failed...")
+            self.forced_disconnection = True
             await self.cm.terminate_failed_reconnection(self)
             return
+        
         for attempt in range(max_retries):
             try:
                 logging.info(f"Attempting to reconnect to {self.addr} (attempt {attempt + 1}/{max_retries})")
@@ -198,7 +209,8 @@ class Connection:
                     self.process_message_queue(),
                     name=f"Connection {self.addr} processor",
                 )
-                logging.info(f"Reconnected to {self.addr}")
+                if not self.forced_disconnection:
+                    logging.info(f"Reconnected to {self.addr}")
                 return
             except Exception as e:
                 logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
@@ -303,10 +315,12 @@ class Connection:
             logging.info("Message handling cancelled")
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
-            self.incompleted_reconnections += 1
-            await self.reconnect()
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
+        except BrokenPipeError:
+            logging.exception(f"Error handling incoming message: {e}")       
+        finally:
+            await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
         data = b""
@@ -324,6 +338,9 @@ class Connection:
                 if _ == max_retries - 1:
                     raise
                 logging.warning(f"Retrying read after IncompleteReadError: {e}")
+            except BrokenPipeError as e:
+                if not self.forced_disconnection:
+                    logging.exception(f"Broken PIPE while reading: {e}")
         raise RuntimeError("Max retries reached in _read_exactly")
 
     def _parse_header(self, header: bytes) -> tuple[bytes, int, bool]:

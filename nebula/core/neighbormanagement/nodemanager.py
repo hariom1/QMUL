@@ -49,7 +49,7 @@ class NodeManager:
         self.recieve_offer_timer = 5
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self.restructure = False
-        self._restructure_cooldown = RESTRUCTURE_COOLDOWN
+        self._restructure_cooldown = 0
         self.discarded_offers_addr_lock = Locker(name="discarded_offers_addr_lock")
         self.discarded_offers_addr = []
         self._push_acceleration = push_acceleration
@@ -379,9 +379,12 @@ class NodeManager:
 
     async def check_robustness(self):
         logging.info("🔄 Analizing node network robustness...")
+        logging.info(f"Synchronization status: {self.engine.get_sinchronized_status()} | got neighbors: {await self.neighbors_left()}")
         if not self._restructure_process_lock.locked():
-            if not self.neighbors_left():
+            if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
+                #TODO comprobar q funcione correctamente
+                #TODO actualizar estado a desincronizado
                 #await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
@@ -390,7 +393,8 @@ class NodeManager:
             ):
                 logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()
-                asyncio.create_task(self.upgrade_connection_robustness())
+                #TODO comprobar q los posibles vecinos no sean nodos de los que recientemente te has desconectado
+                #asyncio.create_task(self.upgrade_connection_robustness())
             else:
                 if not self.engine.get_sinchronized_status():
                     logging.info("Device not synchronized with federation")
@@ -428,7 +432,7 @@ class NodeManager:
         self._restructure_process_lock.release()
         
     async def stop_connections_with_federation(self):
-        asyncio.sleep(400)
+        await asyncio.sleep(100)
         logging.info("### DISCONNECTING FROM FEDERATON ###")
         neighbors = self.neighbor_policy.get_nodes_known(neighbors_only=True)
         for n in neighbors: 

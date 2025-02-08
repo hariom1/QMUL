@@ -78,27 +78,26 @@ class Aggregator(ABC):
             raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
     async def notify_federation_nodes_removed(self, federation_nodes: set):
-        # Neighbor has been removed
-        #TODO revisar no esta bien
-        # nodes_removed tiene el valor correcto del nodo q no hay q esperar,
-        # falta actualizar federation_nodes para eliminar los que ya no se deben esperar  
-        logging.info(f"Updating expected updates, current models: {self._federation_nodes}, new expectation: {federation_nodes}")
+        # Neighbor has been removed  
         if len(self._federation_nodes) - len(federation_nodes) > 0:
             nodes_removed = self._federation_nodes.symmetric_difference(federation_nodes)
             logging.info(f"Nodes removed from aggregation: {nodes_removed}")
-            pending_nodes = self.get_nodes_pending_models_to_aggregate()
-            logging.info(f"Pending models to aggregate: {self.get_nodes_pending_models_to_aggregate()}")
+            pending_nodes = (self._federation_nodes - self.get_nodes_pending_models_to_aggregate())
+            #logging.info(f"Pending models to aggregate: {pending_nodes}")
             shouldnt_waited_model = []
             shouldnt_waited_model = [source for source in nodes_removed if source in pending_nodes]
             logging.info(f"Waiting models from removed neighbors: {shouldnt_waited_model}")
             if shouldnt_waited_model:
-                await self._pending_models_to_aggregate_lock.acquire_async()
                 for swm in shouldnt_waited_model:
-                    self._pending_models_to_aggregate.pop(swm)
-                await self._pending_models_to_aggregate_lock.release_async()
+                    logging.info(f"Removing model from waiting: {swm}")
+                    pending_nodes.discard(swm)
             if self._aggregation_done_lock.locked():
-                if not self._pending_models_to_aggregate:
+                if not pending_nodes:
+                    logging.info("No model updates required left | releasing aggregation lock...")
+                    self._federation_nodes = federation_nodes
                     await self._aggregation_done_lock.release_async()
+
+            self._federation_nodes = federation_nodes
 
     def set_waiting_global_update(self):
         self._waiting_global_update = True
@@ -279,9 +278,7 @@ class Aggregator(ABC):
                 for f_round, future_updates in self._future_models_to_aggregate.items():
                     for _, _, source in future_updates:
                         if source in pending_nodes:
-                            logging.info(
-                                f"Waiting update from source: {source}, but future update storaged for round: {f_round}"
-                            )
+                            #logging.info(f"Waiting update from source: {source}, but future update storaged for round: {f_round}")
                             pending_nodes.discard(source)
 
                 if not pending_nodes:

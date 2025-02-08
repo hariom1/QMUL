@@ -540,7 +540,6 @@ class Engine:
                 self.event_manager.subscribe((event_type, action), method)
 
     async def trigger_event(self, message_event):
-        logging.info(f"Publishing MessageEvent: {message_event.message_type}")
         await self.event_manager.publish(message_event)
 
     async def _aditional_node_start(self):

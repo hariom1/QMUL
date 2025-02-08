@@ -44,6 +44,7 @@ class EventManager:
 
     async def publish(self, message_event: MessageEvent):
         """Trigger all callbacks registered for a specific event type."""
+        #logging.info(f"Publishing MessageEvent: {message_event.message_type}")
         event_type = message_event.message_type
         if event_type not in self._subscribers:
             logging.error(f"EventManager | No subscribers for event: {event_type}")
