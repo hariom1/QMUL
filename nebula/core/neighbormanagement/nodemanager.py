@@ -91,6 +91,8 @@ class NodeManager:
             self._restructure_cooldown = (self._restructure_cooldown + 1) % RESTRUCTURE_COOLDOWN
 
     def _restructure_available(self):
+        if self._restructure_cooldown:
+            logging.info("Reestructure on cooldown")
         return self._restructure_cooldown == 0
 
     def get_push_acceleration(self):
@@ -156,7 +158,7 @@ class NodeManager:
             )
 
             ##############################
-            #         FAST REBOOT        #
+            #      WEIGHT STRATEGIES     #
             ##############################
 
     async def update_learning_rate(self, new_lr):
@@ -384,8 +386,9 @@ class NodeManager:
             if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
                 #TODO comprobar q funcione correctamente
-                #TODO actualizar estado a desincronizado
-                #await self.reconnect_to_federation()
+                self.engine.update_sinchronized_status(False)
+                await asyncio.sleep(120)
+                await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
                 and self.engine.get_sinchronized_status()
@@ -393,11 +396,14 @@ class NodeManager:
             ):
                 logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()
-                #TODO comprobar q los posibles vecinos no sean nodos de los que recientemente te has desconectado
-                #asyncio.create_task(self.upgrade_connection_robustness())
+                possible_neighbors = self.neighbor_policy.get_nodes_known(neighbors_too=False)
+                possible_neighbors = await self.engine.cm.apply_restrictions(possible_neighbors)
+                if not possible_neighbors:
+                    logging.info("All possible neighbors using nodes known are restricted...")                                
+                    #asyncio.create_task(self.upgrade_connection_robustness(possible_neighbors)) 
             else:
                 if not self.engine.get_sinchronized_status():
-                    logging.info("Device not synchronized with federation")
+                    logging.info("Device not synchronized with federation")  
                 else:
                     logging.info("Sufficient Robustness | no actions required")
         else:
@@ -406,26 +412,22 @@ class NodeManager:
     async def reconnect_to_federation(self):
         # If we got some refs, try to reconnect to them
         self._restructure_process_lock.acquire()
-        if self.neighbor_policy.get_nodes_known() > 0:
+        await self.engine.cm.clear_restrictions()                   
+        if len(self.neighbor_policy.get_nodes_known()) > 0:
             logging.info("Reconnecting | Addrs availables")
-            await self.start_late_connection_process(
-                connected=False, msg_type="discover_nodes", addrs_known=self.neighbor_policy.get_nodes_known()
-            )
-        # Otherwise stablish connection to federation sending discover nodes instead of join
+            await self.start_late_connection_process(connected=False, msg_type="discover_nodes", addrs_known=self.neighbor_policy.get_nodes_known())
         else:
             logging.info("Reconnecting | NO Addrs availables")
             await self.start_late_connection_process(connected=False, msg_type="discover_nodes")
         self._restructure_process_lock.release()
 
-    async def upgrade_connection_robustness(self):
+    async def upgrade_connection_robustness(self, possible_neighbors):
         self._restructure_process_lock.acquire()
-        addrs_to_connect = self.neighbor_policy.get_nodes_known(neighbors_too=False)
+        #addrs_to_connect = self.neighbor_policy.get_nodes_known(neighbors_too=False)
         # If we got some refs, try to connect to them
-        if len(addrs_to_connect) > 0:
-            logging.info(f"Reestructuring | Addrs availables | addr list: {addrs_to_connect}")
-            await self.start_late_connection_process(
-                connected=True, msg_type="discover_nodes", addrs_known=addrs_to_connect
-            )
+        if len(possible_neighbors) > 0:
+            logging.info(f"Reestructuring | Addrs availables | addr list: {possible_neighbors}")
+            await self.start_late_connection_process(connected=True, msg_type="discover_nodes", addrs_known=possible_neighbors)
         else:
             logging.info("Reestructuring | NO Addrs availables")
             await self.start_late_connection_process(connected=True, msg_type="discover_nodes")

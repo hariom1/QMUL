@@ -4,6 +4,7 @@ import logging
 import subprocess
 import sys
 import traceback
+import time
 from typing import TYPE_CHECKING
 
 import requests
@@ -25,11 +26,15 @@ from nebula.core.utils.helper import (
 )
 from nebula.core.utils.locker import Locker
 
+from nebula.core.network.blacklist import BlackList
+
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
+BLACKLIST_EXPIRATION_TIME = 60
 
 class CommunicationsManager:
+    
     def __init__(self, engine: "Engine"):
         logging.info("🌐  Initializing Communications Manager")
         self._engine = engine
@@ -75,8 +80,7 @@ class CommunicationsManager:
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
         
-        self._blacklisted_nodes = set()
-        self._blacklisted_nodes_lock = Locker(name="_blacklisted_nodes_lock", async_lock=True)
+        self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
         self._external_connection_service = None
@@ -127,6 +131,10 @@ class CommunicationsManager:
     @property
     def ecs(self):
         return self._external_connection_service
+    
+    @property
+    def bl(self):
+        return self._blacklist
 
     async def check_federation_ready(self):
         # Check if all my connections are in ready_connections
@@ -140,10 +148,7 @@ class CommunicationsManager:
         self.ready_connections.add(addr)
 
     async def handle_incoming_message(self, data, addr_from):
-        self._blacklisted_nodes_lock.acquire_async()
-        blacklist = self._blacklisted_nodes.copy()
-        self._blacklisted_nodes_lock.release_async()
-        if not addr_from in blacklist:
+        if not await self.bl.node_in_blacklist(addr_from):
             await self.mm.process_message(data, addr_from)
 
     async def forward_message(self, data, addr_from):
@@ -295,19 +300,31 @@ class CommunicationsManager:
     def get_messages_events(self):
         return self.mm.get_messages_events()
 
-    #TODO limpiar la blacklist periodicamente
+    """                                                     ##############################
+                                                            #          BLACKLIST         #
+                                                            ##############################
+    """
+
+    async def add_to_recently_disconnected(self, addr):
+        await self.bl.add_recently_disconnected(addr)
+
     async def add_to_blacklist(self, addr):
-        logging.info(f"Update blackList | addr listed: {addr}")
-        self._blacklisted_nodes_lock.acquire_async()
-        self._blacklisted_nodes.add(addr)
-        self._blacklisted_nodes_lock.release_async()
+        await self.bl.add_to_blacklist(addr)
         
     async def get_blacklist(self):
-        bl = None
-        self._blacklisted_nodes_lock.acquire_async()
-        bl = self._blacklisted_nodes.copy()
-        self._blacklisted_nodes_lock.release_async()
-        return bl
+        return await self.bl.get_blacklist()
+    
+    async def apply_restrictions(self, nodes):
+        return await self.bl.apply_restrictions(nodes)
+    
+    async def clear_restrictions(self):
+        await self.bl.clear_restrictions()
+    
+          
+    """                                                     ###############################
+                                                            # EXTERNAL CONNECTION SERVICE #
+                                                            ###############################
+    """
 
     def start_external_connection_service(self):
         if self.ecs == None:
@@ -352,6 +369,12 @@ class CommunicationsManager:
             asyncio.create_task(self.send_message(addr, msg))
             await asyncio.sleep(1)
 
+
+    """                                                     ##############################
+                                                            #    OTHER FUNCTIONALITIES   #
+                                                            ##############################
+    """
+
     def get_connections_lock(self):
         return self.connections_lock
 
@@ -395,15 +418,14 @@ class CommunicationsManager:
                     f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
                 )
                 
-                blacklist = await self.get_blacklist()
+                blacklist = await self.bl.get_blacklist()
                 if blacklist:
-                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")
-                       
-                if connection_addr in blacklist:
-                    logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
-                    writer.close()
-                    await writer.wait_closed()
-                    return
+                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")              
+                    if connection_addr in blacklist:
+                        logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
+                        writer.close()
+                        await writer.wait_closed()
+                        return
 
                 if self.id == connected_node_id:
                     logging.info("🔗  [incoming] Connection with yourself is not allowed")
@@ -499,6 +521,7 @@ class CommunicationsManager:
 
     async def terminate_failed_reconnection(self, conn: Connection):
         connected_with = conn.addr
+        await self.bl.add_recently_disconnected(connected_with)
         await self.disconnect(connected_with, mutual_disconnection=False)
         #await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
 
