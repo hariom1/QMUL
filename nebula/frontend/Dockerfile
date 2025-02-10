@@ -12,14 +12,15 @@ ENV TZ=Europe/Madrid
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:deadsnakes/ppa
 RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3.11-distutils python3.11-venv
-RUN apt-get install -y nginx
 
 # Install curl and network tools
-RUN apt-get install -y curl net-tools
+RUN apt-get install -y curl net-tools iproute2 iputils-ping
 
-# Install pip
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3.11 get-pip.py
+# Update alternatives to make Python 3.11 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+
+RUN apt-get install -y nginx
 
 # Install gcc and git
 RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake g++-aarch64-linux-gnu dos2unix
@@ -37,18 +38,23 @@ RUN apt-get update
 
 RUN apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
-COPY requirements.txt .
+RUN sh /uv-installer.sh && rm /uv-installer.sh
 
-# Install the required packages
-RUN python3.11 -m pip install --ignore-installed -r requirements.txt
+ENV PATH="/root/.local/bin/:$PATH"
 
-# Configure Nginx
-# RUN rm /etc/nginx/sites-enabled/default
-# COPY /config/nebula /etc/nginx/sites-available/
-# RUN ln -s /etc/nginx/sites-available/nebula /etc/nginx/sites-enabled/
+COPY pyproject.toml .
 
-COPY start_services.sh .
+RUN uv python install 3.11.7
+
+RUN uv python pin 3.11.7
+
+RUN uv sync --group frontend
+
+ENV PATH="/.venv/bin:$PATH"
+
+COPY /nebula/frontend/start_services.sh .
 
 RUN dos2unix start_services.sh
 

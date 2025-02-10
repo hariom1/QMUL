@@ -111,7 +111,7 @@ class Engine:
 
         #Trust
         if self.config.participant["trust_args"]["with_trustworthiness"]:
-            self.trust_dir_files = f"app/logs/{self.experiment_name}/trustworthiness"
+            self.trust_dir_files = f"/nebula/app/logs/{self.experiment_name}/trustworthiness"
             self.emissions_file = 'emissions.csv'
             
             # Start EmissionsTracker from codecarbon to measure the emissions during the aggregation step in the server
@@ -482,7 +482,7 @@ class Engine:
         
         if self.config.participant["trust_args"]["with_trustworthiness"] == True:
             scenario_name = self.config.participant["scenario_args"]["name"]
-            model_file = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
+            model_file = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
             
             # Save model in trustworthy dir
             with open(model_file, 'wb') as f:
@@ -642,7 +642,7 @@ class ServerNode(Engine):
         
         # if self.config.participant["trust_args"]["with_trustworthiness"]:
         #     scenario_name = self.config.participant["scenario_args"]["name"]
-        #     model_file = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
+        #     model_file = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
             
         #     # Save model in trustworthy dir
         #     with open(model_file, 'wb') as f:
@@ -657,7 +657,7 @@ class ServerNode(Engine):
 
         # if self.config.participant["trust_args"]["with_trustworthiness"]:
         #     scenario_name = self.config.participant["scenario_args"]["name"]
-        #     model_file = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
+        #     model_file = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_final_model.pk"
             
         #     # Save model in trustworthy dir
         #     with open(model_file, 'wb') as f:
@@ -687,7 +687,7 @@ class TrainerNode(Engine):
             await self.trainer.train()
             
             scenario_name = self.config.participant["scenario_args"]["name"]
-            train_model = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_model.pk"
+            train_model = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_model.pk"
             # Save the train model in trustworthy dir
             with open(train_model, 'wb') as f:
                 pickle.dump(self.trainer.model, f)       

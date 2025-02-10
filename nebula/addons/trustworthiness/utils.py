@@ -51,7 +51,7 @@ def count_class_samples(scenario_name, dataloaders_files):
     try:
         name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "count_class.json")
     except:
-        name_file = os.path.join("app", "logs", scenario_name, "trustworthiness", "count_class.json")
+        name_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "count_class.json")
         
     with open(name_file, "w") as f:
         json.dump(result, f)
@@ -73,7 +73,7 @@ def get_entropy(client_id, scenario_name, dataloader):
     try:
         name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "entropy.json")
     except:
-        name_file = os.path.join("app", "logs", scenario_name, "trustworthiness", "entropy.json")
+        name_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "entropy.json")
         
     if os.path.exists(name_file):
         with open(name_file, "r") as f:
@@ -217,7 +217,7 @@ def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: i
     try:
         data_results_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
     except:
-        data_results_file = os.path.join("app", "logs", scenario_name, "trustworthiness", "data_results.csv")
+        data_results_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "data_results.csv")
         
     if exists(data_results_file):
         df = pd.read_csv(data_results_file)

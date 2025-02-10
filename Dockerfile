@@ -16,8 +16,15 @@ RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3.11-di
 # Install curl and network tools
 RUN apt-get install -y curl net-tools iproute2 iputils-ping
 
+# Update alternatives to make Python 3.11 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+
+# Install gcc and git
+RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake
+
 # Install docker
-RUN apt-get install -y ca-certificates curl gnupg
+RUN apt-get update && apt-get install -y ca-certificates curl gnupg
 RUN install -m 0755 -d /etc/apt/keyrings
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 RUN chmod a+r /etc/apt/keyrings/docker.gpg
@@ -29,17 +36,18 @@ RUN apt-get update
 
 RUN apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Install pip
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3.11 get-pip.py
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
-# Upgrade pip
-RUN python3.11 -m pip install --upgrade pip
+RUN sh /uv-installer.sh && rm /uv-installer.sh
 
-# Install gcc and git
-RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake
+ENV PATH="/root/.local/bin/:$PATH"
 
-WORKDIR /nebula
-COPY nebula/requirements.txt .
-# Install the required packages
-RUN python3.11 -m pip install --ignore-installed -r requirements.txt
+COPY pyproject.toml .
+
+RUN uv python install 3.11.7
+
+RUN uv python pin 3.11.7
+
+RUN uv sync --group core
+
+ENV PATH=".venv/bin:$PATH"

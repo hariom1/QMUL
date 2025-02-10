@@ -1,4 +1,5 @@
 import logging
+import os
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, random_split, RandomSampler
 from nebula.core.datasets.changeablesubset import ChangeableSubset
@@ -139,8 +140,8 @@ class DataModule(LightningDataModule):
         
         if trust:
             # Save data to local files to calculate the trustworthyness
-            train_loader_filename = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_loader.pk"
-            test_loader_filename = f"app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_test_loader.pk"
+            train_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_loader.pk"
+            test_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_test_loader.pk"
 
             with open(train_loader_filename, 'wb') as f:
                 pk.dump(self.train_loader, f)

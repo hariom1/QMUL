@@ -1,11 +1,10 @@
-import datetime
-import hashlib
-import sqlite3
-import datetime
-import hashlib
-import sqlite3
 import asyncio
+from datetime import datetime
+import logging
+import sqlite3
+
 import aiosqlite
+from argon2 import PasswordHasher
 
 user_db_file_location = "databases/users.db"
 node_db_file_location = "databases/nodes.db"
@@ -20,90 +19,136 @@ PRAGMA_SETTINGS = [
     "PRAGMA journal_size_limit=1048576;",
     "PRAGMA cache_size=10000;",
     "PRAGMA temp_store=MEMORY;",
-    "PRAGMA cache_spill=0;"
+    "PRAGMA cache_spill=0;",
 ]
 
+
 async def setup_database(db_file_location):
-    async with aiosqlite.connect(db_file_location) as db:
-        for pragma in PRAGMA_SETTINGS:
-            await db.execute(pragma)
-        await db.commit()
+    try:
+        async with aiosqlite.connect(db_file_location) as db:
+            for pragma in PRAGMA_SETTINGS:
+                await db.execute(pragma)
+            await db.commit()
+    except PermissionError:
+        logging.info("No permission to create the databases. Change the default databases directory")
+    except Exception as e:
+        logging.exception(f"An error has ocurred during setup_database: {e}")
+
+
+async def ensure_columns(conn, table_name, desired_columns):
+    _c = await conn.execute(f"PRAGMA table_info({table_name});")
+    existing_columns = [row[1] for row in await _c.fetchall()]
+    for column_name, column_definition in desired_columns.items():
+        if column_name not in existing_columns:
+            await conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition};")
+    await conn.commit()
+
 
 async def initialize_databases():
     await setup_database(user_db_file_location)
     await setup_database(node_db_file_location)
     await setup_database(scenario_db_file_location)
     await setup_database(notes_db_file_location)
-    
+
     async with aiosqlite.connect(user_db_file_location) as conn:
-        _c = await conn.cursor()
-        await _c.execute(
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
                 user TEXT PRIMARY KEY,
-                password TEXT NOT NULL,
-                role TEXT NOT NULL
+                password TEXT,
+                role TEXT
             );
             """
         )
-        await conn.commit()
-        
+        desired_columns = {"user": "TEXT PRIMARY KEY", "password": "TEXT", "role": "TEXT"}
+        await ensure_columns(conn, "users", desired_columns)
+
     async with aiosqlite.connect(node_db_file_location) as conn:
-        _c = await conn.cursor()
-        await _c.execute(
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS nodes (
                 uid TEXT PRIMARY KEY,
-                idx TEXT NOT NULL,
-                ip TEXT NOT NULL,
-                port TEXT NOT NULL,
-                role TEXT NOT NULL,
-                neighbors TEXT NOT NULL,
-                latitude TEXT NOT NULL,
-                longitude TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                federation TEXT NOT NULL,
-                round TEXT NOT NULL,
-                scenario TEXT NOT NULL,
-                hash TEXT NOT NULL
+                idx TEXT,
+                ip TEXT,
+                port TEXT,
+                role TEXT,
+                neighbors TEXT,
+                latitude TEXT,
+                longitude TEXT,
+                timestamp TEXT,
+                federation TEXT,
+                round TEXT,
+                scenario TEXT,
+                hash TEXT
             );
             """
         )
-        await conn.commit()
-        
+        desired_columns = {
+            "uid": "TEXT PRIMARY KEY",
+            "idx": "TEXT",
+            "ip": "TEXT",
+            "port": "TEXT",
+            "role": "TEXT",
+            "neighbors": "TEXT",
+            "latitude": "TEXT",
+            "longitude": "TEXT",
+            "timestamp": "TEXT",
+            "federation": "TEXT",
+            "round": "TEXT",
+            "scenario": "TEXT",
+            "hash": "TEXT",
+        }
+        await ensure_columns(conn, "nodes", desired_columns)
+
     async with aiosqlite.connect(scenario_db_file_location) as conn:
-        _c = await conn.cursor()
-        await _c.execute(
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS scenarios (
                 name TEXT PRIMARY KEY,
-                start_time TEXT NOT NULL,
-                completed_time TEXT NOT NULL,
-                end_time TEXT NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                status TEXT NOT NULL,
-                network_subnet TEXT NOT NULL,
-                model TEXT NOT NULL,
-                dataset TEXT NOT NULL,
-                rounds TEXT NOT NULL,
-                role TEXT NOT NULL
+                start_time TEXT,
+                end_time TEXT,
+                title TEXT,
+                description TEXT,
+                status TEXT,
+                network_subnet TEXT,
+                model TEXT,
+                dataset TEXT,
+                rounds TEXT,
+                role TEXT,
+                username TEXT,
+                gpu_id TEXT
             );
             """
         )
-        await conn.commit()
-        
+        desired_columns = {
+            "name": "TEXT PRIMARY KEY",
+            "start_time": "TEXT",
+            "end_time": "TEXT",
+            "title": "TEXT",
+            "description": "TEXT",
+            "status": "TEXT",
+            "network_subnet": "TEXT",
+            "model": "TEXT",
+            "dataset": "TEXT",
+            "rounds": "TEXT",
+            "role": "TEXT",
+            "username": "TEXT",
+            "gpu_id": "TEXT",
+        }
+        await ensure_columns(conn, "scenarios", desired_columns)
+
     async with aiosqlite.connect(notes_db_file_location) as conn:
-        _c = await conn.cursor()
-        await _c.execute(
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS notes (
                 scenario TEXT PRIMARY KEY,
-                scenario_notes TEXT NOT NULL
+                scenario_notes TEXT
             );
             """
         )
-        await conn.commit()
+        desired_columns = {"scenario": "TEXT PRIMARY KEY", "scenario_notes": "TEXT"}
+        await ensure_columns(conn, "notes", desired_columns)
+
 
 def list_users(all_info=False):
     with sqlite3.connect(user_db_file_location) as conn:
@@ -131,13 +176,32 @@ def get_user_info(user):
 
 
 def verify(user, password):
+    ph = PasswordHasher()
     with sqlite3.connect(user_db_file_location) as conn:
         c = conn.cursor()
 
         c.execute("SELECT password FROM users WHERE user = ?", (user,))
         result = c.fetchone()
         if result:
-            return result[0] == hashlib.sha256(password.encode()).hexdigest()
+            try:
+                return ph.verify(result[0], password)
+            except:
+                return False
+    return False
+
+
+def verify_hash_algorithm(user):
+    user = user.upper()
+    argon2_prefixes = ("$argon2i$", "$argon2id$")
+
+    with sqlite3.connect(user_db_file_location) as conn:
+        c = conn.cursor()
+
+        c.execute("SELECT password FROM users WHERE user = ?", (user,))
+        result = c.fetchone()
+        if result:
+            password_hash = result[0]
+            return password_hash.startswith(argon2_prefixes)
 
     return False
 
@@ -149,16 +213,23 @@ def delete_user_from_db(user):
 
 
 def add_user(user, password, role):
+    ph = PasswordHasher()
     with sqlite3.connect(user_db_file_location) as conn:
         c = conn.cursor()
-        c.execute("INSERT INTO users VALUES (?, ?, ?)", (user.upper(), hashlib.sha256(password.encode()).hexdigest(), role))
+        c.execute(
+            "INSERT INTO users VALUES (?, ?, ?)",
+            (user.upper(), ph.hash(password), role),
+        )
 
 
 def update_user(user, password, role):
+    ph = PasswordHasher()
     with sqlite3.connect(user_db_file_location) as conn:
         c = conn.cursor()
-        print(f"UPDATE users SET password = {hashlib.sha256(password.encode()).hexdigest()}, role = {role} WHERE user = {user.upper()}")
-        c.execute("UPDATE users SET password = ?, role = ? WHERE user = ?", (hashlib.sha256(password.encode()).hexdigest(), role, user.upper()))
+        c.execute(
+            "UPDATE users SET password = ?, role = ? WHERE user = ?",
+            (ph.hash(password), role, user.upper()),
+        )
 
 
 def list_nodes(scenario_name=None, sort_by="idx"):
@@ -197,7 +268,21 @@ def list_nodes_by_scenario_name(scenario_name):
         return None
 
 
-async def update_node_record(node_uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, federation_round, scenario, run_hash):
+async def update_node_record(
+    node_uid,
+    idx,
+    ip,
+    port,
+    role,
+    neighbors,
+    latitude,
+    longitude,
+    timestamp,
+    federation,
+    federation_round,
+    scenario,
+    run_hash,
+):
     # Check if the node record with node_uid and scenario already exists in the database
     # If it does, update the record
     # If it does not, create a new record
@@ -213,12 +298,46 @@ async def update_node_record(node_uid, idx, ip, port, role, neighbors, latitude,
 
             if result is None:
                 # Create a new record
-                await _c.execute("INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (node_uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, federation_round, scenario, run_hash))
+                await _c.execute(
+                    "INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        node_uid,
+                        idx,
+                        ip,
+                        port,
+                        role,
+                        neighbors,
+                        latitude,
+                        longitude,
+                        timestamp,
+                        federation,
+                        federation_round,
+                        scenario,
+                        run_hash,
+                    ),
+                )
             else:
                 # Update the record
                 command = "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ? WHERE uid = ? AND scenario = ?;"
-                await _c.execute(command, (idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, federation_round, run_hash, node_uid, scenario))
-            
+                await _c.execute(
+                    command,
+                    (
+                        idx,
+                        ip,
+                        port,
+                        role,
+                        neighbors,
+                        latitude,
+                        longitude,
+                        timestamp,
+                        federation,
+                        federation_round,
+                        run_hash,
+                        node_uid,
+                        scenario,
+                    ),
+                )
+
             await conn.commit()
 
 
@@ -247,50 +366,103 @@ def get_run_hashes_scenario(scenario_name):
         return result_hashes
 
 
-def get_all_scenarios(sort_by="start_time"):
+def get_all_scenarios(username, role, sort_by="start_time"):
     with sqlite3.connect(scenario_db_file_location) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        if sort_by == "start_time":
-            command = """
-            SELECT * FROM scenarios
-            ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
-            """
-            c.execute(command)
+        if role == "admin":
+            if sort_by == "start_time":
+                command = """
+                SELECT * FROM scenarios
+                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
+                """
+                c.execute(command)
+            else:
+                command = "SELECT * FROM scenarios ORDER BY ?;"
+                c.execute(command, (sort_by,))
         else:
-            command = "SELECT * FROM scenarios ORDER BY ?;"
-            c.execute(command, (sort_by,))
+            if sort_by == "start_time":
+                command = """
+                SELECT * FROM scenarios
+                WHERE username = ?
+                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
+                """
+                c.execute(command, (username,))
+            else:
+                command = "SELECT * FROM scenarios WHERE username = ? ORDER BY ?;"
+                c.execute(
+                    command,
+                    (
+                        username,
+                        sort_by,
+                    ),
+                )
         result = c.fetchall()
 
     return result
 
 
-def get_all_scenarios_and_check_completed(sort_by="start_time"):
+def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
     with sqlite3.connect(scenario_db_file_location) as _conn:
         _conn.row_factory = sqlite3.Row
         _c = _conn.cursor()
-        if sort_by == "start_time":
-            command = """
-            SELECT * FROM scenarios
-            ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
-            """
-            _c.execute(command)
+
+        if role == "admin":
+            if sort_by == "start_time":
+                command = """
+                SELECT * FROM scenarios
+                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
+                """
+                _c.execute(command)
+            else:
+                command = "SELECT * FROM scenarios ORDER BY ?;"
+                _c.execute(command, (sort_by,))
+            # _c.execute(command)
+            result = _c.fetchall()
         else:
-            command = "SELECT * FROM scenarios ORDER BY ?;"
-            _c.execute(command, (sort_by,))
-        _c.execute(command)
-        result = _c.fetchall()
+            if sort_by == "start_time":
+                command = """
+                SELECT * FROM scenarios
+                WHERE username = ?
+                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
+                """
+                _c.execute(command, (username,))
+            else:
+                command = "SELECT * FROM scenarios WHERE username = ? ORDER BY ?;"
+                _c.execute(
+                    command,
+                    (
+                        username,
+                        sort_by,
+                    ),
+                )
+            # _c.execute(command)
+            result = _c.fetchall()
 
         for scenario in result:
             if scenario["status"] == "running":
                 if check_scenario_federation_completed(scenario["name"]):
                     scenario_set_status_to_completed(scenario["name"])
-                    result = get_all_scenarios()
+                    result = get_all_scenarios(username, role)
 
     return result
 
 
-def scenario_update_record(scenario_name, start_time, completed_time, end_time, title, description, status, network_subnet, model, dataset, rounds, role):
+def scenario_update_record(
+    scenario_name,
+    username,
+    start_time,
+    end_time,
+    title,
+    description,
+    status,
+    network_subnet,
+    model,
+    dataset,
+    rounds,
+    role,
+    gpu_id,
+):
     _conn = sqlite3.connect(scenario_db_file_location)
     _c = _conn.cursor()
 
@@ -300,11 +472,43 @@ def scenario_update_record(scenario_name, start_time, completed_time, end_time, 
 
     if result is None:
         # Create a new record
-        _c.execute("INSERT INTO scenarios VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (scenario_name, start_time, completed_time, end_time, title, description, status, network_subnet, model, dataset, rounds, role))
+        _c.execute(
+            "INSERT INTO scenarios VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                scenario_name,
+                start_time,
+                end_time,
+                title,
+                description,
+                status,
+                network_subnet,
+                model,
+                dataset,
+                rounds,
+                role,
+                username,
+                gpu_id,
+            ),
+        )
     else:
         # Update the record
         command = "UPDATE scenarios SET start_time = ?, end_time = ?, title = ?, description = ?, status = ?, network_subnet = ?, model = ?, dataset = ?, rounds = ?, role = ? WHERE name = ?;"
-        _c.execute(command, (start_time, completed_time, end_time, title, description, status, network_subnet, model, dataset, rounds, role, scenario_name))
+        _c.execute(
+            command,
+            (
+                start_time,
+                end_time,
+                title,
+                description,
+                status,
+                network_subnet,
+                model,
+                dataset,
+                rounds,
+                role,
+                scenario_name,
+            ),
+        )
 
     _conn.commit()
     _conn.close()
@@ -316,7 +520,7 @@ def scenario_set_all_status_to_finished():
     _c = _conn.cursor()
 
     command = "UPDATE scenarios SET status = 'finished', end_time = ? WHERE status = 'running';"
-    current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     _c.execute(command, (current_time,))
 
     _conn.commit()
@@ -328,7 +532,7 @@ def scenario_set_status_to_finished(scenario_name):
     _c = _conn.cursor()
 
     command = "UPDATE scenarios SET status = 'finished', end_time = ? WHERE name = ?;"
-    current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     _c.execute(command, (current_time, scenario_name))
 
     _conn.commit()
@@ -339,22 +543,34 @@ def scenario_set_status_to_completed(scenario_name):
     try:
         with sqlite3.connect(scenario_db_file_location) as _conn:
             _c = _conn.cursor()
-            command = "UPDATE scenarios SET status = 'completed', completed_time = ? WHERE name = ?;"
-            current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            _c.execute(command, (current_time, scenario_name))
+            command = "UPDATE scenarios SET status = 'completed' WHERE name = ?;"
+            _c.execute(command, (scenario_name,))
             _conn.commit()
             _conn.close()
     except sqlite3.Error as e:
         print(f"Database error: {e}")
 
 
-def get_running_scenario():
+def get_running_scenario(username=None, get_all=False):
     with sqlite3.connect(scenario_db_file_location) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        command = "SELECT * FROM scenarios WHERE status = ? OR status = ?;"
-        c.execute(command, ("running", "completed"))
-        result = c.fetchone()
+
+        if username:
+            command = """
+                SELECT * FROM scenarios
+                WHERE (status = ? OR status = ?) AND username = ?;
+            """
+            c.execute(command, ("running", "completed", username))
+
+            result = c.fetchone()
+        else:
+            command = "SELECT * FROM scenarios WHERE status = ? OR status = ?;"
+            c.execute(command, ("running", "completed"))
+            if get_all:
+                result = c.fetchall()
+            else:
+                result = c.fetchone()
 
     return result
 
@@ -381,6 +597,19 @@ def get_scenario_by_name(scenario_name):
     _conn.close()
 
     return result
+
+
+def get_user_by_scenario_name(scenario_name):
+    _conn = sqlite3.connect(scenario_db_file_location)
+    _c = _conn.cursor()
+    command = "SELECT username FROM scenarios WHERE name = ?;"
+    _c.execute(command, (scenario_name,))
+    result = _c.fetchone()
+
+    _conn.commit()
+    _conn.close()
+
+    return result[0] if result else None
 
 
 def remove_scenario_by_name(scenario_name):
