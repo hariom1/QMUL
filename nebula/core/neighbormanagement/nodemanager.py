@@ -252,8 +252,9 @@ class NodeManager:
         return len(await self.engine.cm.get_addrs_current_connections(only_direct=True, myself=False)) > 0
 
     def meet_node(self, node):
-        logging.info(f"Update nodes known | addr: {node}")
-        self.neighbor_policy.meet_node(node)
+        if node != self.engine.addr:
+            logging.info(f"Update nodes known | addr: {node}")
+            self.neighbor_policy.meet_node(node)
 
     def get_nodes_known(self, neighbors_too=False):
         return self.neighbor_policy.get_nodes_known(neighbors_too)
@@ -387,6 +388,7 @@ class NodeManager:
                 logging.info("No Neighbors left | reconnecting with Federation")
                 #TODO comprobar q funcione correctamente
                 self.engine.update_sinchronized_status(False)
+                self.set_synchronizing_rounds(True)
                 await asyncio.sleep(120)
                 await self.reconnect_to_federation()
             elif (

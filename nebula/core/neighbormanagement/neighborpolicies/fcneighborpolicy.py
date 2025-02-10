@@ -7,6 +7,7 @@ class FCNeighborPolicy(NeighborPolicy):
         self.max_neighbors = None
         self.nodes_known = set()
         self.neighbors = set()
+        self.addr = None
         self.neighbors_lock = Locker(name="neighbors_lock")
         self.nodes_known_lock = Locker(name="nodes_known_lock")
         
@@ -33,6 +34,7 @@ class FCNeighborPolicy(NeighborPolicy):
         self.neighbors_lock.release()
         for addr in config[1]:
                 self.nodes_known.add(addr)
+        self.addr
             
     def accept_connection(self, source, joining=False):
         """
@@ -48,7 +50,8 @@ class FCNeighborPolicy(NeighborPolicy):
             Update the list of nodes known on federation
         """
         self.nodes_known_lock.acquire()
-        self.nodes_known.add(node)
+        if node != self.addr:
+            self.nodes_known.add(node)
         self.nodes_known_lock.release()
         
     def get_nodes_known(self, neighbors_too=False, neighbors_only=False):     
@@ -95,6 +98,8 @@ class FCNeighborPolicy(NeighborPolicy):
         return ct
     
     def update_neighbors(self, node, remove=False):
+        if node == self.addr:
+            return
         self.neighbors_lock.acquire()
         if remove:
             try:

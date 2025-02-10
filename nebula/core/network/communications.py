@@ -351,7 +351,7 @@ class CommunicationsManager:
             addrs = self.ecs.find_federation()
             logging.info(f"Found federation devices | addrs {addrs}")
         else:
-            logging.info("Searching federation process beginning... | Using addrs previously known")
+            logging.info(f"Searching federation process beginning... | Using addrs previously known {addrs_known}")
             addrs = addrs_known
 
         msg = self.create_message("discover", msg_type)

@@ -306,6 +306,8 @@ class Aggregator(ABC):
         """
 
         # TODO verify if an already sinchronized node gets desinchronized
+        # TODO sinc -> disconnect -> sinc no funciona
+        # TODO comprobar que se pare el proceso a mitad
         await self._push_strategy_lock.acquire_async()
 
         logging.info(
