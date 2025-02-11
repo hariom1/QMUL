@@ -74,17 +74,17 @@ class Aggregator(ABC):
             self._pending_models_to_aggregate.clear()
             await self._aggregation_done_lock.acquire_async(
                 timeout=self.config.participant["aggregator_args"]["aggregation_timeout"]
-            )  
+            )
         else:
             raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
     async def notify_federation_nodes_removed(self, federation_nodes: set):
-        # Neighbor has been removed  
+        # Neighbor has been removed
         if len(self._federation_nodes) - len(federation_nodes) > 0:
             nodes_removed = self._federation_nodes.symmetric_difference(federation_nodes)
             logging.info(f"Nodes removed from aggregation: {nodes_removed}")
-            pending_nodes = (self._federation_nodes - self.get_nodes_pending_models_to_aggregate())
-            #logging.info(f"Pending models to aggregate: {pending_nodes}")
+            pending_nodes = self._federation_nodes - self.get_nodes_pending_models_to_aggregate()
+            # logging.info(f"Pending models to aggregate: {pending_nodes}")
             shouldnt_waited_model = []
             shouldnt_waited_model = [source for source in nodes_removed if source in pending_nodes]
             logging.info(f"Waiting models from removed neighbors: {shouldnt_waited_model}")
@@ -279,7 +279,7 @@ class Aggregator(ABC):
                 for f_round, future_updates in self._future_models_to_aggregate.items():
                     for _, _, source in future_updates:
                         if source in pending_nodes:
-                            #logging.info(f"Waiting update from source: {source}, but future update storaged for round: {f_round}")
+                            # logging.info(f"Waiting update from source: {source}, but future update storaged for round: {f_round}")
                             pending_nodes.discard(source)
 
                 if not pending_nodes:
@@ -309,8 +309,8 @@ class Aggregator(ABC):
                 self.engine.set_synchronizing_rounds(False)
                 self._end_round_push = 0
                 if len(self._future_models_to_aggregate.items()) < 2:
-                        logging.info("Device is sinchronized")
-                        self.engine.update_sinchronized_status(True)
+                    logging.info("Device is sinchronized")
+                    self.engine.update_sinchronized_status(True)
                 else:
                     logging.info("Device is not sinchronized yet | more actions required...")
 
@@ -325,7 +325,9 @@ class Aggregator(ABC):
 
         await self._push_strategy_lock.acquire_async()
 
-        logging.info(f"❗️ synchronized status: {self.engine.get_sinchronized_status()} | Analizing if an aggregation push is available...")
+        logging.info(
+            f"❗️ synchronized status: {self.engine.get_sinchronized_status()} | Analizing if an aggregation push is available..."
+        )
         if (
             not self.engine.get_sinchronized_status()
             and not self.engine.get_trainning_in_progress_lock().locked()
@@ -426,7 +428,7 @@ class Aggregator(ABC):
                 elif self.engine.get_synchronizing_rounds():
                     logging.info("❗️ Cannot analize push | Already pushing rounds")
             await self._push_strategy_lock.release_async()
-        
+
 
 def create_malicious_aggregator(aggregator, attack):
     # It creates a partial function aggregate that wraps the aggregate method of the original aggregator.

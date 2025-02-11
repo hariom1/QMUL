@@ -334,15 +334,15 @@ class Controller:
         self.start_date_scenario = None
         self.federation = args.federation if hasattr(args, "federation") else None
         self.topology = args.topology if hasattr(args, "topology") else None
-        self.controller_port = args.controllerport if hasattr(args, "controllerport") else 5000
-        self.waf_port = args.wafport if hasattr(args, "wafport") else 6000
-        self.frontend_port = args.webport if hasattr(args, "webport") else 6060
-        self.grafana_port = args.grafanaport if hasattr(args, "grafanaport") else 6040
-        self.loki_port = args.lokiport if hasattr(args, "lokiport") else 6010
-        self.statistics_port = args.statsport if hasattr(args, "statsport") else 8080
+        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5000
+        self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
+        self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
+        self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
+        self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
+        self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
         self.simulation = args.simulation
         self.config_dir = args.config
-        self.db_dir = args.databases if hasattr(args, "databases") else "/opt/nebula"
+        self.databases_dir = args.databases if hasattr(args, "databases") else "/opt/nebula"
         self.test = args.test if hasattr(args, "test") else False
         self.log_dir = args.logs
         self.cert_dir = args.certs
@@ -457,7 +457,7 @@ class Controller:
         else:
             self.run_frontend()
             logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
-            logging.info(f"NEBULA Databases created in {self.db_dir}")
+            logging.info(f"NEBULA Databases created in {self.databases_dir}")
 
         # Watchdog for running additional scripts in the host machine (i.e. during the execution of a federation)
         event_handler = NebulaEventHandler()
@@ -686,7 +686,7 @@ class Controller:
                 f"{self.root_path}:/nebula",
                 "/var/run/docker.sock:/var/run/docker.sock",
                 f"{self.root_path}/nebula/frontend/config/nebula:/etc/nginx/sites-available/default",
-                f"{self.db_dir}/databases:/nebula/nebula/frontend/databases",
+                f"{self.databases_dir}:/nebula/nebula/frontend/databases",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={80: self.frontend_port, 8080: self.statistics_port},

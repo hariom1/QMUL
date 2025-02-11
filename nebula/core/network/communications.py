@@ -4,12 +4,12 @@ import logging
 import subprocess
 import sys
 import traceback
-import time
 from typing import TYPE_CHECKING
 
 import requests
 
 from nebula.addons.mobility import Mobility
+from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
@@ -26,15 +26,13 @@ from nebula.core.utils.helper import (
 )
 from nebula.core.utils.locker import Locker
 
-from nebula.core.network.blacklist import BlackList
-
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
 BLACKLIST_EXPIRATION_TIME = 60
 
+
 class CommunicationsManager:
-    
     def __init__(self, engine: "Engine"):
         logging.info("🌐  Initializing Communications Manager")
         self._engine = engine
@@ -79,7 +77,7 @@ class CommunicationsManager:
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
-        
+
         self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
@@ -95,7 +93,7 @@ class CommunicationsManager:
         else:
             logging.info("Deploying External Connection Service | No running")
             self._external_connection_service = NebulaConnectionService(self.addr)
-            
+
     @property
     def engine(self):
         return self._engine
@@ -131,7 +129,7 @@ class CommunicationsManager:
     @property
     def ecs(self):
         return self._external_connection_service
-    
+
     @property
     def bl(self):
         return self._blacklist
@@ -310,17 +308,16 @@ class CommunicationsManager:
 
     async def add_to_blacklist(self, addr):
         await self.bl.add_to_blacklist(addr)
-        
+
     async def get_blacklist(self):
         return await self.bl.get_blacklist()
-    
+
     async def apply_restrictions(self, nodes):
         return await self.bl.apply_restrictions(nodes)
-    
+
     async def clear_restrictions(self):
         await self.bl.clear_restrictions()
-    
-          
+
     """                                                     ###############################
                                                             # EXTERNAL CONNECTION SERVICE #
                                                             ###############################
@@ -369,7 +366,6 @@ class CommunicationsManager:
             asyncio.create_task(self.send_message(addr, msg))
             await asyncio.sleep(1)
 
-
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
@@ -400,11 +396,14 @@ class CommunicationsManager:
     async def handle_connection_wrapper(self, reader, writer):
         asyncio.create_task(self.handle_connection(reader, writer))
 
+    def create_message(self, message_type: str, action: str = "", *args, **kwargs):
+        return self.mm.create_message(message_type, action, *args, **kwargs)
+
     async def handle_connection(self, reader, writer):
         async def process_connection(reader, writer):
             try:
                 addr = writer.get_extra_info("peername")
-                          
+
                 connected_node_id = await reader.readline()
                 connected_node_id = connected_node_id.decode("utf-8").strip()
                 connected_node_port = addr[1]
@@ -417,10 +416,10 @@ class CommunicationsManager:
                 logging.info(
                     f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
                 )
-                
+
                 blacklist = await self.bl.get_blacklist()
                 if blacklist:
-                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")              
+                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")
                     if connection_addr in blacklist:
                         logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
                         writer.close()
@@ -556,7 +555,8 @@ class CommunicationsManager:
         logging.info("🌐  Deploying additional services...")
         self._generate_network_conditions()
         await self._forwarder.start()
-        # await self._discoverer.start()
+        if self.config.participant["mobility_args"]["mobility"]:
+            await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
@@ -926,32 +926,30 @@ class CommunicationsManager:
 
     async def disconnect(self, dest_addr, mutual_disconnection=True, forced=False):
         removed = False
-        
+
         if forced:
             self.add_to_blacklist(dest_addr)
-            
+
         logging.info(f"Trying to disconnect {dest_addr}")
         if dest_addr not in self.connections:
             logging.info(f"Connection {dest_addr} not found")
             return
         try:
             if mutual_disconnection:
-                await self.connections[dest_addr].send(
-                    data=self.create_message("connection", "disconnect")
-                )
+                await self.connections[dest_addr].send(data=self.create_message("connection", "disconnect"))
                 await asyncio.sleep(1)
                 self.connections[dest_addr].stop()
         except Exception as e:
             logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
-            #del self.connections[dest_addr]
+            # del self.connections[dest_addr]
             try:
                 removed = True
                 await self.connections[dest_addr].stop()
                 del self.connections[dest_addr]
             except Exception as e:
-                 logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
+                logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
         current_connections = set(current_connections)
         logging.info(f"Current connections: {current_connections}")
@@ -1034,6 +1032,9 @@ class CommunicationsManager:
 
     def get_ready_connections(self):
         return {addr for addr, conn in self.connections.items() if conn.get_ready()}
+
+    def learning_finished(self):
+        return self.engine.learning_cycle_finished()
 
     def check_finished_experiment(self):
         return all(

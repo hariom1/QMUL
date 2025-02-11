@@ -88,7 +88,7 @@ class MessagesManager:
             if not message_type:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
-            #logging.info(f"Message type received: {message_type}")
+            # logging.info(f"Message type received: {message_type}")
 
             message_data = getattr(message_wrapper, message_type)
 

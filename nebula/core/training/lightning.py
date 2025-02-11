@@ -121,10 +121,10 @@ class Lightning:
     DEFAULT_MODEL_WEIGHT = 1
     BYPASS_MODEL_WEIGHT = 0
 
-    def __init__(self, model, data, config=None):
+    def __init__(self, model, datamodule, config=None):
         # self.model = torch.compile(model, mode="reduce-overhead")
         self.model = model
-        self.data = data
+        self.datamodule = datamodule
         self.config = config
         self._trainer = None
         self.epochs = 1
@@ -146,8 +146,8 @@ class Lightning:
     def set_model(self, model):
         self.model = model
 
-    def set_data(self, data):
-        self.data = data
+    def set_datamodule(self, datamodule):
+        self.datamodule = datamodule
 
     def create_logger(self):
         if self.config.participant["tracking_args"]["local_tracking"] == "csv":
@@ -209,7 +209,7 @@ class Lightning:
     def validate_neighbour_model(self, neighbour_model_param):
         avg_loss = 0
         running_loss = 0
-        bootstrap_dataloader = self.data.bootstrap_dataloader()
+        bootstrap_dataloader = self.datamodule.bootstrap_dataloader()
         num_samples = 0
         neighbour_model = copy.deepcopy(self.model)
         neighbour_model.load_state_dict(neighbour_model_param)
@@ -244,12 +244,12 @@ class Lightning:
 
     def set_epochs(self, epochs):
         self.epochs = epochs
-    
+
     def set_current_round(self, round):
         logging.info(f"Update | current round = {round}")
         self.round = round
         self.model.set_updated_round(round)
-        
+
     def get_current_loss(self):
         return self.model.get_loss()
 
@@ -301,7 +301,7 @@ class Lightning:
 
     def _train_sync(self):
         try:
-            self._trainer.fit(self.model, self.data)
+            self._trainer.fit(self.model, self.datamodule)
         except Exception as e:
             logging_training.error(f"Error in _train_sync: {e}")
             tb = traceback.format_exc()
@@ -320,7 +320,7 @@ class Lightning:
 
     def _test_sync(self):
         try:
-            self._trainer.test(self.model, self.data, verbose=True)
+            self._trainer.test(self.model, self.datamodule, verbose=True)
         except Exception as e:
             logging_training.error(f"Error in _test_sync: {e}")
             tb = traceback.format_exc()
@@ -331,19 +331,19 @@ class Lightning:
         if self._trainer is not None:
             self._trainer._teardown()
             del self._trainer
-        if self.data is not None:
-            self.data.teardown()
+        if self.datamodule is not None:
+            self.datamodule.teardown()
         gc.collect()
         torch.cuda.empty_cache()
 
     def get_model_weight(self):
-        weight = self.data.model_weight
+        weight = self.datamodule.model_weight
         if weight is None:
             raise ValueError("Model weight not set. Please call setup('fit') before requesting model weight.")
         return weight
 
     def on_round_start(self):
-        self.data.setup()
+        self.datamodule.setup()
         self._logger.log_data({"A-Round": self.round})
         # self.reporter.enqueue_data("Round", self.round)
 
@@ -358,9 +358,9 @@ class Lightning:
     def on_learning_cycle_end(self):
         self._logger.log_data({"A-Round": self.round})
         # self.reporter.enqueue_data("Round", self.round)
-        
+
     def update_model_learning_rate(self, new_lr):
         self.model.modify_learning_rate(new_lr)
-    
+
     def show_current_learning_rate(self):
         self.model.show_current_learning_rate()

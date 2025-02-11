@@ -23,11 +23,13 @@ class MessageChunk:
     data: bytes
     is_last: bool
 
+
 MAX_INCOMPLETED_RECONNECTIONS = 3
+
 
 class Connection:
     DEFAULT_FEDERATED_ROUND = -1
-    
+
     def __init__(
         self,
         cm: "CommunicationsManager",
@@ -40,7 +42,7 @@ class Connection:
         active=True,
         compression="zlib",
         config=None,
-        prio="MEDIUM"
+        prio="MEDIUM",
     ):
         self.cm = cm
         self.reader = reader
@@ -76,7 +78,7 @@ class Connection:
         self.HEADER_SIZE = 21
         self.MAX_CHUNK_SIZE = 1024  # 1 KB
         self.BUFFER_SIZE = 1024  # 1 KB
-        
+
         self.incompleted_reconnections = 0
         self.forced_disconnection = False
 
@@ -95,7 +97,7 @@ class Connection:
 
     def get_addr(self):
         return self.addr
-    
+
     def get_prio(self):
         return self._prio
 
@@ -187,20 +189,20 @@ class Connection:
     async def reconnect(self, max_retries: int = 5, delay: int = 5) -> None:
         if self.forced_disconnection:
             return
-        
+
         self.incompleted_reconnections += 1
         if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
             logging.info(f"Reconnection with {self.addr} failed...")
             self.forced_disconnection = True
             await self.cm.terminate_failed_reconnection(self)
             return
-        
+
         for attempt in range(max_retries):
             try:
                 logging.info(f"Attempting to reconnect to {self.addr} (attempt {attempt + 1}/{max_retries})")
                 await self.cm.connect(self.addr)
                 await asyncio.sleep(1)
-                
+
                 self.read_task = asyncio.create_task(
                     self.handle_incoming_message(),
                     name=f"Connection {self.addr} reader",
@@ -216,7 +218,7 @@ class Connection:
                 logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
         logging.error(f"Failed to reconnect to {self.addr} after {max_retries} attempts. Stopping connection...")
-        #await self.stop()
+        # await self.stop()
         await self.cm.terminate_failed_reconnection(self)
 
     async def send(
@@ -318,7 +320,7 @@ class Connection:
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
         except BrokenPipeError:
-            logging.exception(f"Error handling incoming message: {e}")       
+            logging.exception(f"Error handling incoming message: {e}")
         finally:
             await self.reconnect()
 
@@ -329,7 +331,7 @@ class Connection:
             try:
                 while remaining > 0:
                     chunk = await self.reader.read(min(remaining, self.BUFFER_SIZE))
-                    if not chunk:
+                    if not chunk and not self.cm.learning_finished():
                         raise ConnectionError("Connection closed while reading")
                     data += chunk
                     remaining -= len(chunk)
