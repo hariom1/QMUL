@@ -50,6 +50,7 @@ class Aggregator(ABC):
         self._aggregation_done_lock = Locker(name="aggregation_done_lock", async_lock=True)
         self._aggregation_waiting_skip = asyncio.Event()
         self._push_strategy_lock = Locker(name="push_strategy_lock", async_lock=True)
+        self._end_round_push = 0
 
     def __str__(self):
         return self.__class__.__name__
@@ -299,27 +300,42 @@ class Aggregator(ABC):
         total_memory_in_mb = total_memory / (1024**2)
         logging.info(f"print_model_size | Model size: {total_memory_in_mb} MB")
 
+    def verify_push_done(self, current_round):
+        logging.info("Verifying if round push is done")
+        current_round = self.engine.get_round()
+        if self.engine.get_synchronizing_rounds():
+            logging.info(f"end round push: {self._end_round_push}, current round: {current_round}")
+            if self._end_round_push <= current_round:
+                logging.info("Push done...")
+                self.engine.set_synchronizing_rounds(False)
+                self._end_round_push = 0
+                if len(self._future_models_to_aggregate.items()) < 2:
+                        logging.info("Device is sinchronized")
+                        self.engine.update_sinchronized_status(True)
+                else:
+                    logging.info("Device is not sinchronized yet | more actions required...")
+
     async def aggregation_push_available(self):
         """
         If the node is not sinchronized with the federation, it may be possible to make a push
         and try to catch the federation asap.
         """
-
         # TODO verify if an already sinchronized node gets desinchronized
         # TODO sinc -> disconnect -> sinc no funciona
         # TODO comprobar que se pare el proceso a mitad
+        current_round = self.engine.get_round()
+        if self.engine.get_synchronizing_rounds():
+            self.verify_push_done(current_round)
+
         await self._push_strategy_lock.acquire_async()
 
-        logging.info(
-            f"❗️ synchronized status: {self.engine.get_sinchronized_status()} | Analizing if an aggregation push is available..."
-        )
+        logging.info(f"❗️ synchronized status: {self.engine.get_sinchronized_status()} | Analizing if an aggregation push is available...")
         if (
             not self.engine.get_sinchronized_status()
             and not self.engine.get_trainning_in_progress_lock().locked()
             and not self.engine.get_synchronizing_rounds()
         ):
             n_fed_nodes = len(self._federation_nodes)
-            current_round = self.engine.get_round()
             further_round = current_round
             logging.info(
                 f" Pending models: {len(self.get_nodes_pending_models_to_aggregate())} | federation: {n_fed_nodes}"
@@ -339,6 +355,7 @@ class Aggregator(ABC):
                             await self.engine.set_pushed_done(further_round - current_round)
                             self.engine.update_sinchronized_status(False)
                             self.engine.set_synchronizing_rounds(True)
+                            self._end_round_push = further_round
                             self._aggregation_waiting_skip.set()
                             await self._push_strategy_lock.release_async()
                             return
@@ -352,6 +369,7 @@ class Aggregator(ABC):
                         await self.engine.set_pushed_done(further_round - current_round)
                         self.engine.update_sinchronized_status(False)
                         self.engine.set_synchronizing_rounds(True)
+                        self._end_round_push = further_round
                         self._aggregation_waiting_skip.set()
                         await self._push_strategy_lock.release_async()
                         return
@@ -384,6 +402,7 @@ class Aggregator(ABC):
                     self.engine.update_sinchronized_status(False)
                     self.engine.set_synchronizing_rounds(True)
                     await self.engine.set_pushed_done(further_round - current_round)
+                    self._end_round_push = further_round
                     self.engine.set_round(further_round)
                     await self._add_model_lock.release_async()
                     await self._add_next_model_lock.release_async()
@@ -406,10 +425,10 @@ class Aggregator(ABC):
                 await self._push_strategy_lock.release_async()
         else:
             if not self.engine.get_sinchronized_status():
-                if self.engine.get_sinchronized_status():
+                if self.engine.get_trainning_in_progress_lock().locked():
                     logging.info("❗️ Cannot analize push | Trainning in progress")
                 elif self.engine.get_synchronizing_rounds():
-                    logging.info("❗️ Cannot analize push | already pushing rounds")
+                    logging.info("❗️ Cannot analize push | Already pushing rounds")
             await self._push_strategy_lock.release_async()
         
 

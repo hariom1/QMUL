@@ -59,6 +59,8 @@ class NodeManager:
         self._fast_reboot_status = fastreboot
         self._momemtum_status = momentum
 
+        self._desc_done = False #TODO remove
+
     @property
     def engine(self):
         return self._engine
@@ -366,7 +368,9 @@ class NodeManager:
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
-            asyncio.create_task(self.stop_connections_with_federation())
+            if not self._desc_done: #TODO remove
+                self._desc_done = True
+                asyncio.create_task(self.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -388,7 +392,6 @@ class NodeManager:
                 logging.info("No Neighbors left | reconnecting with Federation")
                 #TODO comprobar q funcione correctamente
                 self.engine.update_sinchronized_status(False)
-                self.set_synchronizing_rounds(True)
                 await asyncio.sleep(120)
                 await self.reconnect_to_federation()
             elif (
@@ -412,9 +415,11 @@ class NodeManager:
             logging.info("❗️ Reestructure/Reconnecting process already running...")
 
     async def reconnect_to_federation(self):
-        # If we got some refs, try to reconnect to them
         self._restructure_process_lock.acquire()
-        await self.engine.cm.clear_restrictions()                   
+        await self.engine.cm.clear_restrictions()
+        if await self.engine.cm.is_external_connection_service_running():
+            self.engine.cm.stop_external_connection_service()  
+        # If we got some refs, try to reconnect to them                 
         if len(self.neighbor_policy.get_nodes_known()) > 0:
             logging.info("Reconnecting | Addrs availables")
             await self.start_late_connection_process(connected=False, msg_type="discover_nodes", addrs_known=self.neighbor_policy.get_nodes_known())

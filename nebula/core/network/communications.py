@@ -523,7 +523,6 @@ class CommunicationsManager:
         connected_with = conn.addr
         await self.bl.add_recently_disconnected(connected_with)
         await self.disconnect(connected_with, mutual_disconnection=False)
-        #await self.engine.update_neighbors(connected_with, await self.get_addrs_current_connections(only_direct=True, myself=True), remove=True)
 
     async def stop(self):
         logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
