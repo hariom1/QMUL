@@ -101,7 +101,6 @@
             }
         });
     </script>
-
     <script>
         // Check if WebSocket is supported by the browser
         if ("WebSocket" in window) {
@@ -114,9 +113,7 @@
         var port = window.location.port ? ':' + window.location.port : '';
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         var socket = new WebSocket(protocol + '//' + host + port + '/nebula/ws/' + client_id);
-        console.log(protocol + '//' + host + port + '/nebula/ws/' + client_id)
     </script>
-
 </head>
 
 <body>
