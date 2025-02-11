@@ -426,7 +426,6 @@ class Engine:
 
     async def _discover_discover_join_callback(self, source, message):
         logging.info(f"🔍  handle_discover_message | Trigger | Received discover_join message from {source} ")
-        # TODO caso para el starter recibir antes de iniciar federacion
         if len(self.get_federation_nodes()) > 0:
             await self.trainning_in_progress_lock.acquire_async()
             model, rounds, round = (

@@ -301,10 +301,9 @@ class Aggregator(ABC):
         logging.info(f"print_model_size | Model size: {total_memory_in_mb} MB")
 
     def verify_push_done(self, current_round):
-        logging.info("Verifying if round push is done")
         current_round = self.engine.get_round()
         if self.engine.get_synchronizing_rounds():
-            logging.info(f"end round push: {self._end_round_push}, current round: {current_round}")
+            logging.info("Verifying if round push is done")
             if self._end_round_push <= current_round:
                 logging.info("Push done...")
                 self.engine.set_synchronizing_rounds(False)
@@ -321,11 +320,8 @@ class Aggregator(ABC):
         and try to catch the federation asap.
         """
         # TODO verify if an already sinchronized node gets desinchronized
-        # TODO sinc -> disconnect -> sinc no funciona
-        # TODO comprobar que se pare el proceso a mitad
         current_round = self.engine.get_round()
-        if self.engine.get_synchronizing_rounds():
-            self.verify_push_done(current_round)
+        self.verify_push_done(current_round)
 
         await self._push_strategy_lock.acquire_async()
 
