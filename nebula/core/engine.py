@@ -8,9 +8,8 @@ from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
-from nebula.core.eventmanager import EventManager, event_handler
+from nebula.core.eventmanager import EventManager
 from nebula.core.network.communications import CommunicationsManager
-from nebula.core.pb import nebula_pb2
 from nebula.core.utils.locker import Locker
 
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -202,10 +201,14 @@ class Engine:
 
     def get_round_lock(self):
         return self.round_lock
-    
+
     def register_message_events_callbacks(self):
         me_dict = self.cm.get_messages_events()
-        message_events = [(message_name, message_action) for (message_name, message_actions) in me_dict.items() for message_action in message_actions]
+        message_events = [
+            (message_name, message_action)
+            for (message_name, message_actions) in me_dict.items()
+            for message_action in message_actions
+        ]
         logging.info(f"{message_events}")
         for event_type, action in message_events:
             callback_name = f"_{event_type}_{action}_callback"
@@ -216,8 +219,8 @@ class Engine:
                 self.event_manager.subscribe((event_type, action), method)
 
     async def trigger_event(self, message_event):
-            logging.info(f"Publishing MessageEvent: {message_event.message_type}")
-            await self.event_manager.publish(message_event)
+        logging.info(f"Publishing MessageEvent: {message_event.message_type}")
+        await self.event_manager.publish(message_event)
 
     async def _discovery_discover_callback(self, source, message):
         logging.info(
@@ -564,7 +567,7 @@ class Engine:
         # message = self.cm.mm.generate_federation_message(
         #     nebula_pb2.FederationMessage.Action.REPUTATION, malicious_nodes
         # )
-        message = self.cm.create_message("federation","reputation", arguments=[str(arg) for arg in (malicious_nodes)])
+        message = self.cm.create_message("federation", "reputation", arguments=[str(arg) for arg in (malicious_nodes)])
         await self.cm.send_message_to_neighbors(message)
 
 

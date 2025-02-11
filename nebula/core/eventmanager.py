@@ -3,6 +3,7 @@ import inspect
 import logging
 from collections import defaultdict
 from functools import wraps
+
 from nebula.core.network.messages import MessageEvent
 
 
@@ -34,9 +35,9 @@ class EventManager:
     def __init__(self, default_callbacks=None):
         self._event_callbacks = defaultdict(list)
         self._register_default_callbacks(default_callbacks or [])
-        self._subscribers: dict[tuple[str,str], list] = {}
+        self._subscribers: dict[tuple[str, str], list] = {}
 
-    def subscribe(self, event_type: tuple[str,str], callback: callable):
+    def subscribe(self, event_type: tuple[str, str], callback: callable):
         """Register a callback for a specific event type."""
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
@@ -52,10 +53,12 @@ class EventManager:
 
         for callback in self._subscribers[event_type]:
             try:
-                logging.info(f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}")
+                logging.info(
+                    f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}"
+                )
                 await callback(message_event.source, message_event.message)
             except Exception as e:
-                logging.error(f"EventManager | Error in callback for event {event_type}: {e}") 
+                logging.exception(f"EventManager | Error in callback for event {event_type}: {e}")
 
     def _register_default_callbacks(self, default_callbacks):
         """Registers default callbacks for events."""

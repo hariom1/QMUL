@@ -1,6 +1,5 @@
 import asyncio
 import collections
-import hashlib
 import logging
 import os
 import subprocess
@@ -17,7 +16,6 @@ from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
 from nebula.core.network.propagator import Propagator
-from nebula.core.pb import nebula_pb2
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
@@ -123,7 +121,7 @@ class CommunicationsManager:
 
     def get_messages_events(self):
         return self.mm.get_messages_events()
-    
+
     # def stop_logging(self):
     #     logging.getLogger().disabled = True
 
@@ -797,7 +795,7 @@ class CommunicationsManager:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(
                     # data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
-                    data = self.create_message("connection", "disconnect")
+                    data=self.create_message("connection", "disconnect")
                 )
                 await asyncio.sleep(1)
                 self.connections[dest_addr].stop()

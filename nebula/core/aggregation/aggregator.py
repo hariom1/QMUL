@@ -3,7 +3,6 @@ import logging
 from abc import ABC, abstractmethod
 from functools import partial
 
-from nebula.core.pb import nebula_pb2
 from nebula.core.utils.locker import Locker
 
 
@@ -199,7 +198,9 @@ class Aggregator(ABC):
             #     nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
             #     [self.engine.get_round()],
             # )
-            message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]])
+            message = self.cm.create_message(
+                "federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]]
+            )
             await self.cm.send_message_to_neighbors(message)
 
         return

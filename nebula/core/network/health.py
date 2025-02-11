@@ -4,7 +4,6 @@ import time
 from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
-from nebula.core.pb import nebula_pb2
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
