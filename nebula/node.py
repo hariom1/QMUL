@@ -39,6 +39,9 @@ from nebula.core.models.cifar10.cnnV2 import CIFAR10ModelCNN_V2
 from nebula.core.models.cifar10.cnnV3 import CIFAR10ModelCNN_V3
 from nebula.core.models.militarysar.cnn import MilitarySARModelCNN
 from nebula.core.models.syscall.svm import SyscallModelSGDOneClassSVM
+from nebula.core.datasets.tep.tep import TEPDataset
+from nebula.core.models.tep.lstm import TEPLSTM
+from nebula.core.models.tep.mlp import TEPMLP
 from nebula.core.engine import MaliciousNode, AggregatorNode, TrainerNode, ServerNode, IdleNode
 from nebula.core.role import Role
 
@@ -102,6 +105,7 @@ async def main():
     dataset = None
     dataset_str = config.participant["data_args"]["dataset"]
     num_workers = config.participant["data_args"]["num_workers"]
+    time_series = config.participant["data_args"]["time_series"]
     model = None
     if dataset_str == "MNIST":
         dataset = MNISTDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
@@ -150,6 +154,12 @@ async def main():
     elif dataset_str == "MilitarySAR":
         dataset = MilitarySARDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
         model = MilitarySARModelCNN()
+    elif dataset_str == "TEP":
+        dataset = TEPDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config, time_series=time_series)
+        if model_name == "MLP":
+            model = TEPMLP()
+        elif model_name == "LSTM":
+            model = TEPLSTM()
     else:
         raise ValueError(f"Dataset {dataset_str} not supported")
 

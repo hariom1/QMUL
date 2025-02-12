@@ -329,6 +329,10 @@
                             <i id="parameterSettingHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                         </small>
                     </div>
+                    <h5 class="step-title" id="time-series-title" style="display: none;">Time series</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="time-series-switch" style="display: none; width: 80px; height: 30px;">
+                    </div>
                 </div>
                 <div class="form-group row container-shadow tiny grey">
                     <h5 class="step-number">Training <i class="fa fa-cogs"></i>
@@ -1184,12 +1188,21 @@
             "FashionMNIST": ["MLP", "CNN"],
             "CIFAR10": ["CNN", "CNNv2", "CNNv3"],
             "MilitarySAR": ["Custom"],
+            "TEP": ["MLP", "LSTM"],
         }
         var datasetSelect = document.getElementById("datasetSelect");
         var modelSelect = document.getElementById("modelSelect");
 
         function updateModelOptions() {
             var selected = datasetSelect.value;
+            if (selected == "TEP") {
+                document.getElementById("time-series-title").style.display = "block";
+                document.getElementById("time-series-switch").style.display = "block";
+            }
+            else {
+                document.getElementById("time-series-title").style.display = "none";
+                document.getElementById("time-series-switch").style.display = "none";
+            }
             var options = datasets[selected];
             modelSelect.innerHTML = ''; // Clear all options
             for (var i = 0; i < options.length; i++) {
@@ -1263,6 +1276,7 @@
             data["iid"] = document.getElementById("iidSelect").value === "true"
             data["partition_selection"] = document.getElementById("partitionSelect").value
             data["partition_parameter"] = document.getElementById("partitionParameter").value
+            data["time_series"] = document.getElementById("time-series-switch").checked ? true : false
             // Step 6
             data["model"] = document.getElementById("modelSelect").value
             // Step 7
@@ -1384,6 +1398,7 @@
                 document.getElementById("iidSelect").value = data["iid"];
                 document.getElementById("partitionSelect").value = data["partition_selection"];
                 document.getElementById("partitionParameter").value = data["partition_parameter"];
+                document.getElementById("time-series-switch").checked = data["time_series"];
                 // Step 6
                 document.getElementById("modelSelect").value = data["model"];
                 // Step 7

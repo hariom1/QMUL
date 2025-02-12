@@ -124,6 +124,7 @@ class Scenario:
         iid,
         partition_selection,
         partition_parameter,
+        time_series,
         model,
         agg_algorithm,
         rounds,
@@ -191,6 +192,7 @@ class Scenario:
         self.iid = iid
         self.partition_selection = partition_selection
         self.partition_parameter = partition_parameter
+        self.time_series = time_series
         self.model = model
         self.agg_algorithm = agg_algorithm
         self.rounds = rounds
@@ -427,6 +429,7 @@ class ScenarioManagement:
             participant_config["data_args"]["iid"] = self.scenario.iid
             participant_config["data_args"]["partition_selection"] = self.scenario.partition_selection
             participant_config["data_args"]["partition_parameter"] = self.scenario.partition_parameter
+            participant_config["data_args"]["time_series"] = self.scenario.time_series
             participant_config["model_args"]["model"] = self.scenario.model
             participant_config["training_args"]["epochs"] = int(self.scenario.epochs)
             participant_config["device_args"]["accelerator"] = self.scenario.accelerator
