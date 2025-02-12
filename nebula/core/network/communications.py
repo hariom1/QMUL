@@ -556,7 +556,8 @@ class CommunicationsManager:
         self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
-            await self._discoverer.start()
+            pass
+            #await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
