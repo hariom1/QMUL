@@ -24,6 +24,7 @@ from nebula import __version__
 from nebula.scenarios import ScenarioManagement
 from nebula.tests import main as deploy_tests
 from nebula.utils import DockerUtils
+from nebula.utils import SocketUtils
 
 
 # Setup controller logger
@@ -351,6 +352,16 @@ class Controller:
         # Network configuration (nodes deployment in a network)
         self.network_subnet = args.network_subnet if hasattr(args, "network_subnet") else None
         self.network_gateway = args.network_gateway if hasattr(args, "network_gateway") else None
+
+        # Check ports available
+        if not SocketUtils.is_port_open(self.controller_port):
+            self.controller_port = SocketUtils.find_free_port()
+
+        if not SocketUtils.is_port_open(self.frontend_port):
+            self.frontend_port = SocketUtils.find_free_port(self.controller_port + 1)
+
+        if not SocketUtils.is_port_open(self.statistics_port):
+            self.statistics_port = SocketUtils.find_free_port(self.frontend_port + 1)
 
         self.config = Config(entity="controller")
         self.topologymanager = None
