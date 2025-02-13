@@ -23,6 +23,7 @@ class TEPMLP(NebulaModel):
         self.l2 = torch.nn.Linear(128, 64)
         self.l3 = torch.nn.Linear(64, 16)
         self.l4 = torch.nn.Linear(16, num_classes)
+        self.criterion = torch.nn.CrossEntropyLoss()
 
     def forward(self, x):
         """ """

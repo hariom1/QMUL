@@ -155,7 +155,7 @@ async def main():
         dataset = MilitarySARDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
         model = MilitarySARModelCNN()
     elif dataset_str == "TEP":
-        dataset = TEPDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config, time_series=time_series)
+        dataset = TEPDataset(num_classes=2, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config, time_series=time_series)
         if model_name == "MLP":
             model = TEPMLP()
         elif model_name == "LSTM":
@@ -163,28 +163,55 @@ async def main():
     else:
         raise ValueError(f"Dataset {dataset_str} not supported")
 
-    dataset = DataModule(
-        train_set=dataset.train_set,
-        train_set_indices=dataset.train_indices_map,
-        test_set=dataset.test_set,
-        test_set_indices=dataset.test_indices_map,
-        local_test_set_indices=dataset.local_test_indices_map,
-        num_workers=num_workers,
-        partition_id=idx,
-        partitions_number=n_nodes,
-        batch_size=dataset.batch_size,
-        label_flipping=label_flipping,
-        data_poisoning=data_poisoning,
-        poisoned_persent=poisoned_persent,
-        poisoned_ratio=poisoned_ratio,
-        targeted=targeted,
-        target_label=target_label,
-        target_changed_label=target_changed_label,
-        noise_type=noise_type,
-        trust = config.participant["trust_args"]["with_trustworthiness"],
-        scenario_name = config.participant["scenario_args"]["name"],
-        idx = config.participant["device_args"]["idx"]
-    )
+    if dataset_str == "TEP":
+        dataset = DataModule(
+            train_set=dataset.train_set,
+            train_set_indices=dataset.train_indices_map,
+            test_set=dataset.test_set,
+            test_set_indices=dataset.test_indices_map,
+            local_test_set_indices=dataset.local_test_indices_map,
+            val_set=dataset.val_set,
+            num_workers=num_workers,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            batch_size=dataset.batch_size,
+            label_flipping=label_flipping,
+            data_poisoning=data_poisoning,
+            poisoned_persent=poisoned_persent,
+            poisoned_ratio=poisoned_ratio,
+            targeted=targeted,
+            target_label=target_label,
+            target_changed_label=target_changed_label,
+            noise_type=noise_type,
+            trust = config.participant["trust_args"]["with_trustworthiness"],
+            scenario_name = config.participant["scenario_args"]["name"],
+            idx = config.participant["device_args"]["idx"],
+            tep = True,
+            time_series = config.participant["data_args"]["time_series"]
+        )
+    else:
+        dataset = DataModule(
+            train_set=dataset.train_set,
+            train_set_indices=dataset.train_indices_map,
+            test_set=dataset.test_set,
+            test_set_indices=dataset.test_indices_map,
+            local_test_set_indices=dataset.local_test_indices_map,
+            num_workers=num_workers,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            batch_size=dataset.batch_size,
+            label_flipping=label_flipping,
+            data_poisoning=data_poisoning,
+            poisoned_persent=poisoned_persent,
+            poisoned_ratio=poisoned_ratio,
+            targeted=targeted,
+            target_label=target_label,
+            target_changed_label=target_changed_label,
+            noise_type=noise_type,
+            trust = config.participant["trust_args"]["with_trustworthiness"],
+            scenario_name = config.participant["scenario_args"]["name"],
+            idx = config.participant["device_args"]["idx"],
+        )
 
     # - Import MNISTDatasetScikit (not torch component)
     # - Import scikit-learn model

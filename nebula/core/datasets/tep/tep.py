@@ -20,9 +20,14 @@ from nebula.core.datasets.nebuladataset import NebulaDataset
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
 class TEP(Dataset):
-    def __init__(self, is_train=False, time_series=False):
-        self.is_train = is_train
+    def __init__(self, train, time_series=False):
+        self.train = train
         self.time_series = time_series
+
+        self.classes = [
+        "0 - zero",
+        "1 - one",
+        ]
 
         self.download_link = 'http://perception.inf.um.es/tep/'
         # Path to data is "data" folder in the same directory as this file
@@ -47,19 +52,26 @@ class TEP(Dataset):
         self.targets = []
         self.serial_numbers = []
 
-        if is_train:
+        if train == 0:
             aux = np.load(os.path.join(self.path_to_data, self.files[1]))
             logging.info(len(np.where(aux == 1)[0]))
             self.data, self.targets = torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[0]))), torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[1])))
             self.data = self.data.to(torch.float32)
-            self.targets = self.targets.to(torch.float32)
+            self.targets = self.targets.tolist()
+            logging.info(f"Training {self.data.size()}")
+        elif train == 1:
+            aux = np.load(os.path.join(self.path_to_data, self.files[3]))
+            logging.info(len(np.where(aux == 1)[0]))
+            self.data, self.targets = torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[2]))), torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[3])))
+            self.data = self.data.to(torch.float32)
+            self.targets = self.targets.tolist()
             logging.info(f"Training {self.data.size()}")
         else:
             aux = np.load(os.path.join(self.path_to_data, self.files[5]))
             logging.info(len(np.where(aux == 1)[0]))
             self.data, self.targets = torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[4]))), torch.from_numpy(np.load(os.path.join(self.path_to_data, self.files[5])))
             self.data = self.data.to(torch.float32)
-            self.targets = self.targets.to(torch.float32)
+            self.targets = self.targets.tolist()
             logging.info(f"Dataset {self.data.size()}")
 
     def __len__(self):
@@ -110,9 +122,10 @@ class TEPDataset(NebulaDataset):
 
     def initialize_dataset(self):
         if self.train_set is None:
-            self.train_set = self.load_tep_dataset(train=True)
+            self.train_set = self.load_tep_dataset(train=0)
+            self.val_set = self.load_tep_dataset(train=1)
         if self.test_set is None:
-            self.test_set = self.load_tep_dataset(train=False)
+            self.test_set = self.load_tep_dataset(train=2)
 
         self.test_indices_map = list(range(len(self.test_set)))
 
@@ -126,7 +139,9 @@ class TEPDataset(NebulaDataset):
                 self.test_set, self.partition, self.partition_parameter
             )
         
-    def load_tep_dataset(self, train=True):
+        logging.info("Dataset Initialized")
+        
+    def load_tep_dataset(self, train):
         return TEP(train, self.time_series)
     
     def generate_non_iid_map(self, dataset, partition="dirichlet", partition_parameter=0.5):

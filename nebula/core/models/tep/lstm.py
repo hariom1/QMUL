@@ -2,7 +2,7 @@
 import torch
 
 from nebula.core.models.nebulamodel import NebulaModel
-# from torch.nn import functional as F
+from torch.nn import functional as F
 # from torchmetrics.classification import BinaryConfusionMatrix, BinaryAccuracy, BinaryF1Score, BinaryPrecision, BinaryRecall
 
 
@@ -21,6 +21,13 @@ class TEPLSTM(NebulaModel):
         self.lstm1 = torch.nn.LSTM(52, self.hidden_layers1, batch_first=True)
         self.lstm2 = torch.nn.LSTM(self.hidden_layers1, self.hidden_layers2, batch_first=True)
         self.linear = torch.nn.Linear(self.hidden_layers2, 1)
+        self.criterion = torch.nn.CrossEntropyLoss()
+        
+        self.epoch_num_steps = {"Train": 0, "Validation": 0, "Test": 0}
+        self.epoch_loss_sum = {"Train": 0.0, "Validation": 0.0, "Test": 0.0}
+
+        self.epoch_output = {"Train": [], "Validation": [], "Test": []}
+        self.epoch_real = {"Train": [], "Validation": [], "Test": []}
     
     def forward(self, x):
         """ """
@@ -40,6 +47,53 @@ class TEPLSTM(NebulaModel):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
     
+    # def step(self, batch, phase):
+    #     x, y = batch
+    #     logits = self(x)
+    #     y_pred = self.forward(x)
+    #     loss = F.binary_cross_entropy(logits, y.unsqueeze(1).float())
+
+    #     # Get metrics for each batch and log them
+    #     self.process_metrics(phase, y_pred, y, loss)
+
+    #     # Avoid memory leak when logging loss values
+    #     self.epoch_loss_sum[phase] += loss
+    #     self.epoch_num_steps[phase] += 1
+
+    #     return loss
+    
+    # def training_step(self, batch, batch_id):
+    #     """
+    #     Training step for the model.
+    #     Args:
+    #         batch:
+    #         batch_id:
+
+    #     Returns:
+    #     """
+    #     return self.step(batch, "Train")
+    
+    # def validation_step(self, batch, batch_idx):
+    #     """
+    #     Validation step for the model.
+    #     Args:
+    #         batch:
+    #         batch_idx:
+
+    #     Returns:
+    #     """
+    #     return self.step(batch, "Validation")
+    
+    # def test_step(self, batch, batch_idx):
+#         """
+#         Test step for the model.
+#         Args:
+#             batch:
+#             batch_idx:
+
+#         Returns:
+#         """
+#         return self.step(batch, "Test")
 
 
 # class TEPLSTM(pl.LightningModule):
@@ -159,7 +213,7 @@ class TEPLSTM(NebulaModel):
 #                 metric_name = metric.__class__.__name__.replace("Binary", "")
 #                 metric_value = metric(y_pred, y)
 #                 self.log(f"{phase}/{metric_name}", metric_value, prog_bar=True, logger=True)
-
+    #TODO: puede ser necesario, sobreescribir el step de nebulamodel, meter binarycrossentropy
 #     def step(self, batch, phase):
 #         x, y = batch
 #         logits = self(x)

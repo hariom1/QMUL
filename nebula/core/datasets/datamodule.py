@@ -1,16 +1,16 @@
 import logging
 import os
 from lightning import LightningDataModule
+from math import floor
 from torch.utils.data import DataLoader, random_split, RandomSampler
 from nebula.core.datasets.changeablesubset import ChangeableSubset
 
 from nebula.config.config import TRAINING_LOGGER
+from nebula.core.datasets.tep.tep import TEP
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
 import pickle as pk
-
-
 
 class DataModule(LightningDataModule):
     def __init__(
@@ -20,6 +20,7 @@ class DataModule(LightningDataModule):
         test_set,
         test_set_indices,
         local_test_set_indices,
+        val_set = None,
         partition_id=0,
         partitions_number=1,
         batch_size=32,
@@ -36,12 +37,15 @@ class DataModule(LightningDataModule):
         trust = False,
         scenario_name="",
         idx = 0,
+        tep = False,
+        time_series = False
     ):
         super().__init__()
         self.train_set = train_set
         self.train_set_indices = train_set_indices
         self.test_set = test_set
         self.test_set_indices = test_set_indices
+        self.val_set = val_set
         self.local_test_set_indices = local_test_set_indices
         self.partition_id = partition_id
         self.partitions_number = partitions_number
@@ -59,6 +63,8 @@ class DataModule(LightningDataModule):
         self.trust = trust
         self.scenario_name = scenario_name
         self.idx = idx
+        self.tep = tep
+        self.time_series = time_series
 
         # logging_training.debug(f"Train set indices: {train_set_indices}")
         # logging_training.debug(f"Test set indices: {test_set_indices}")
@@ -66,89 +72,170 @@ class DataModule(LightningDataModule):
 
         # Training / validation set
         # rows_by_sub = floor(len(train_set) / self.partitions_number)
-        tr_subset = ChangeableSubset(
-            train_set,
-            train_set_indices,
-            label_flipping=self.label_flipping,
-            data_poisoning=self.data_poisoning,
-            poisoned_persent=self.poisoned_percent,
-            poisoned_ratio=self.poisoned_ratio,
-            targeted=self.targeted,
-            target_label=self.target_label,
-            target_changed_label=self.target_changed_label,
-            noise_type=self.noise_type,
-        )
-
-        train_size = round(len(tr_subset) * (1 - self.val_percent))
-        val_size = len(tr_subset) - train_size
-
-        data_train, data_val = random_split(
-            tr_subset,
-            [
-                train_size,
-                val_size,
-            ],
-        )
-
-        # Test set
-        # rows_by_sub = floor(len(test_set) / self.partitions_number)
-        global_te_subset = ChangeableSubset(test_set, test_set_indices)
-
-        # Local test set
-        local_te_subset = ChangeableSubset(test_set, local_test_set_indices)
-
-        if len(test_set) < self.partitions_number:
-            raise "Too much partitions"
-
-        # DataLoaders
-        self.train_loader = DataLoader(
-            data_train,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            drop_last=True,
-            pin_memory=False,
-        )
-        self.val_loader = DataLoader(
-            data_val,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=True,
-            pin_memory=False,
-        )
-        self.test_loader = DataLoader(
-            local_te_subset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=True,
-            pin_memory=False,
-        )
-        self.global_test_loader = DataLoader(
-            global_te_subset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=True,
-            pin_memory=False,
-        )
-        random_sampler = RandomSampler(data_source=data_val, replacement=False, num_samples=max(int(len(data_val) / 3), 300))
-        self.bootstrap_loader = DataLoader(data_train, batch_size=self.batch_size, shuffle=False, sampler=random_sampler)
-
-        logging_training.info("Train samples: {} Val samples:{} Test samples:{} Global Test samples:{}".format(len(data_train), len(data_val), len(local_te_subset), len(global_te_subset)))
         
-        if trust:
-            # Save data to local files to calculate the trustworthyness
-            train_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_loader.pk"
-            test_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_test_loader.pk"
+        if self.tep:
+            self.train_set = TEP(train=0, time_series=self.time_series)
+            self.val_set = TEP(train=1, time_series=self.time_series)
+            self.test_set = TEP(train=2, time_series=self.time_series)
+                
+            no_simulations = 10
+            # The total number of simulations in the dataset is 100
+            if self.partitions_number > 100:
+                raise ("Too much partitions")
+            # 1 training simulation are 6840 samples: 380 * 18 classes (17 anomalies + normal class)
+            rows_train = no_simulations*380*18
+            # 1 training simulation are 1440 samples: 80 * 18 classes (17 anomalies + normal class)
+            rows_val = no_simulations*80*18
+            # 1 training simulation are 1800 samples: 100 * 18 classes (17 anomalies + normal class)
+            rows_test = no_simulations*100*18
+            
+            # train set
+            tr_subset = ChangeableSubset(self.train_set, range(self.partition_id * rows_train, (self.partition_id + 1) * rows_train))
+            
+            val_subset = ChangeableSubset(self.val_set, range(self.partition_id * rows_val, (self.partition_id + 1) * rows_val))
+            
+            # test set
+            local_te_subset = ChangeableSubset(self.test_set, range(self.partition_id * rows_test, (self.partition_id + 1) * rows_test))
+            
+            subset_size = len(tr_subset)
+            total_size = rows_train + rows_val
+            train_ratio = rows_train / total_size
+            
+            real_train_size = int(subset_size * train_ratio)
+            real_val_size = subset_size - real_train_size
+            
+            data_train, data_val = random_split(tr_subset, [real_train_size, real_val_size])
+            
+            global_te_subset = ChangeableSubset(self.test_set, self.test_set_indices)            
+                    
+            # DataLoaders
+            self.train_loader = DataLoader(
+                tr_subset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+            )
+            self.val_loader = DataLoader(
+                val_subset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+            )
+            self.test_loader = DataLoader(
+                local_te_subset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+            )
+            self.global_test_loader = DataLoader(
+                global_te_subset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=True,
+                pin_memory=False,
+            )
+            
+            random_sampler = RandomSampler(data_source=data_val, replacement=False, num_samples=max(int(len(data_val) / 3), 300))
+            self.bootstrap_loader = DataLoader(data_train, batch_size=self.batch_size, shuffle=False, sampler=random_sampler)
+            
+            logging_training.info("Train samples: {} Val samples:{} Test samples:{} Global Test samples:{}".format(len(data_train), len(data_val), len(local_te_subset), len(global_te_subset)))
 
-            with open(train_loader_filename, 'wb') as f:
-                pk.dump(self.train_loader, f)
-                f.close()
-            with open(test_loader_filename, 'wb') as f:
-                pk.dump(self.test_loader, f)
-                f.close()
+            if trust:
+                # Save data to local files to calculate the trustworthyness
+                train_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_loader.pk"
+                test_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_test_loader.pk"
+
+                with open(train_loader_filename, 'wb') as f:
+                    pk.dump(self.train_loader, f)
+                    f.close()
+                with open(test_loader_filename, 'wb') as f:
+                    pk.dump(self.test_loader, f)
+                    f.close()
+        else:        
+            tr_subset = ChangeableSubset(
+                train_set,
+                train_set_indices,
+                label_flipping=self.label_flipping,
+                data_poisoning=self.data_poisoning,
+                poisoned_persent=self.poisoned_percent,
+                poisoned_ratio=self.poisoned_ratio,
+                targeted=self.targeted,
+                target_label=self.target_label,
+                target_changed_label=self.target_changed_label,
+                noise_type=self.noise_type,
+            )
+
+            train_size = round(len(tr_subset) * (1 - self.val_percent))
+            val_size = len(tr_subset) - train_size
+
+            data_train, data_val = random_split(
+                tr_subset,
+                [
+                    train_size,
+                    val_size,
+                ],
+            )
+
+            # Test set
+            # rows_by_sub = floor(len(test_set) / self.partitions_number)
+            global_te_subset = ChangeableSubset(test_set, test_set_indices)
+
+            # Local test set
+            local_te_subset = ChangeableSubset(test_set, local_test_set_indices)
+
+            if len(test_set) < self.partitions_number:
+                raise "Too much partitions"
+
+            # DataLoaders
+            self.train_loader = DataLoader(
+                data_train,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                drop_last=True,
+                pin_memory=False,
+            )
+            self.val_loader = DataLoader(
+                data_val,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=True,
+                pin_memory=False,
+            )
+            self.test_loader = DataLoader(
+                local_te_subset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=True,
+                pin_memory=False,
+            )
+            self.global_test_loader = DataLoader(
+                global_te_subset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=True,
+                pin_memory=False,
+            )
+            random_sampler = RandomSampler(data_source=data_val, replacement=False, num_samples=max(int(len(data_val) / 3), 300))
+            self.bootstrap_loader = DataLoader(data_train, batch_size=self.batch_size, shuffle=False, sampler=random_sampler)
+
+            logging_training.info("Train samples: {} Val samples:{} Test samples:{} Global Test samples:{}".format(len(data_train), len(data_val), len(local_te_subset), len(global_te_subset)))
+
+            if trust:
+                # Save data to local files to calculate the trustworthyness
+                train_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_train_loader.pk"
+                test_loader_filename = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self.idx}_test_loader.pk"
+
+                with open(train_loader_filename, 'wb') as f:
+                    pk.dump(self.train_loader, f)
+                    f.close()
+                with open(test_loader_filename, 'wb') as f:
+                    pk.dump(self.test_loader, f)
+                    f.close()
 
 
     def train_dataloader(self):
