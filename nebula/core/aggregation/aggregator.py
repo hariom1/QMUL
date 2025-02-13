@@ -2,10 +2,10 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import TYPE_CHECKING
-
 from nebula.core.utils.locker import Locker
+from nebula.core.aggregation.updatestorage import UpdateStorage
 
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
@@ -51,6 +51,7 @@ class Aggregator(ABC):
         self._aggregation_waiting_skip = asyncio.Event()
         self._push_strategy_lock = Locker(name="push_strategy_lock", async_lock=True)
         self._end_round_push = 0
+        self._update_storage = UpdateStorage(aggregator=self, addr=self._addr)
 
     def __str__(self):
         return self.__class__.__name__
@@ -429,23 +430,8 @@ class Aggregator(ABC):
                     logging.info("❗️ Cannot analize push | Already pushing rounds")
             await self._push_strategy_lock.release_async()
 
-
-def create_malicious_aggregator(aggregator, attack):
-    # It creates a partial function aggregate that wraps the aggregate method of the original aggregator.
-    run_aggregation = partial(aggregator.run_aggregation)  # None is the self (not used)
-
-    # This function will replace the original aggregate method of the aggregator.
-    def malicious_aggregate(self, models):
-        accum = run_aggregation(models)
-        logging.info(f"malicious_aggregate | original aggregation result={accum}")
-        if models is not None:
-            accum = attack(accum)
-            logging.info(f"malicious_aggregate | attack aggregation result={accum}")
-        return accum
-
-    aggregator.run_aggregation = partial(malicious_aggregate, aggregator)
-    return aggregator
-
+    def notify_all_updates_received(self):
+        self._aggregation_waiting_skip.set()
 
 def create_aggregator(config, engine) -> Aggregator:
     from nebula.core.aggregation.blockchainReputation import BlockchainReputation
