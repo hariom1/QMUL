@@ -38,13 +38,24 @@ class CommunicationAttack(Attack):
         pass
     
     async def select_targets(self):
-        if not self.selection_interval and not self.targets:
-            self.targets = await self.engine.cm.get_addrs_current_connections(only_direct=True)       
-        elif self.last_selection_round % self.selection_interval == 0:
-            all_nodes = await self.engine.cm.get_addrs_current_connections(only_direct=True)
-            num_targets = max(1, int(len(all_nodes) * (self.selectivity_percentage / 100)))
-            self.selected_targets = set(random.sample(all_nodes, num_targets))
-            logging.info(f"Selected targets: {self.selected_targets}")
+        if self.selectivity_percentage != 100:
+            if self.selection_interval:       
+                if self.last_selection_round % self.selection_interval == 0:
+                    logging.info("Recalculating targets...")
+                    all_nodes = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+                    num_targets = max(1, int(len(all_nodes) * (self.selectivity_percentage / 100)))
+                    self.targets = set(random.sample(list(all_nodes), num_targets))
+            elif not self.targets:
+                logging.info("Calculating targets...")
+                all_nodes = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+                num_targets = max(1, int(len(all_nodes) * (self.selectivity_percentage / 100)))
+                self.targets = set(random.sample(list(all_nodes), num_targets))
+        else:
+            logging.info("All neighbors selected as targets")
+            self.targets = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+
+        logging.info(f"Selected {self.selectivity_percentage}% targets from neighbors: {self.targets}")
+        self.last_selection_round+=1
         
     async def _inject_malicious_behaviour(self):
         """Inject malicious behavior into the target method."""
@@ -69,5 +80,6 @@ class CommunicationAttack(Attack):
             logging.info(f"[{self.__class__.__name__}] Restoring original behavior")
             await self._restore_original_behaviour()
         elif self.engine.round == self.round_start_attack:
+            await self.select_targets()
             logging.info(f"[{self.__class__.__name__}] Injecting malicious behavior")
             await self._inject_malicious_behaviour()

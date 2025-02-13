@@ -22,8 +22,8 @@ class DelayerAttack(CommunicationAttack):
             self.delay = int(attack_params["delay"])
             round_start = int(attack_params["round_start_attack"])
             round_stop = int(attack_params["round_stop_attack"])
-            self.target_percentage = int(attack_params["target_percentage"])
-            self.selection_interval = int(attack_params["selection_interval"])
+            self.target_percentage = 50#int(attack_params["target_percentage"])
+            self.selection_interval = 1#int(attack_params["selection_interval"])
         except KeyError as e:
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
@@ -31,17 +31,14 @@ class DelayerAttack(CommunicationAttack):
 
         super().__init__(
             engine,
-            engine._cm._propagator, #TODO modificar por send_model de communciations
-            "propagate",
+            engine._cm, 
+            "send_model",
             round_start,
             round_stop,
             self.delay,
+            self.target_percentage,
+            self.selection_interval,
         )
-
-    @abstractmethod
-    async def is_attack_selective(self):
-        """Obliga a todas las subclases de CommunicationAttack a implementarlo"""
-        return True
 
     def decorator(self, delay: int):
         """
@@ -57,9 +54,13 @@ class DelayerAttack(CommunicationAttack):
         def decorator(func):
             @wraps(func)
             async def wrapper(*args, **kwargs):
-                await self.select_targets()
-                logging.info(f"[DelayerAttack] Adding delay of {delay} seconds to {func.__name__}")
-                await asyncio.sleep(delay)
+                if len(args) > 1:  
+                    dest_addr = args[1]
+                    if dest_addr in self.targets:  
+                        logging.info(f"[DelayerAttack] Delaying model propagation to {dest_addr} by {delay} seconds")
+                        await asyncio.sleep(delay)
+                #logging.info(f"[DelayerAttack] Adding delay of {delay} seconds to {func.__name__}")
+                #await asyncio.sleep(delay)
                 _, *new_args = args  # Exclude self argument
                 return await func(*new_args)
 
