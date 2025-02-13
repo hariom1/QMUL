@@ -28,7 +28,7 @@ class NodeManager:
         momentum=False,
     ):
         self._aditional_participant = aditional_participant
-        self.topology = "fully"  # topology
+        self.topology = topology
         print_msg_box(
             msg=f"Starting NodeManager module...\nTopology: {self.topology}", indent=2, title="NodeManager module"
         )
@@ -264,8 +264,6 @@ class NodeManager:
     def accept_model_offer(self, source, decoded_model, rounds, round, epochs, n_neighbors, loss):
         if not self.accept_candidates_lock.locked():
             logging.info(f"🔄 Processing offer from {source}...")
-            # model_accepted = True#self.model_handler.accept_model(decoded_model)
-            # if source == "192.168.50.8:45007":
             model_accepted = self.model_handler.accept_model(decoded_model)
             self.model_handler.set_config(config=(rounds, round, epochs, self))
             if model_accepted:
@@ -368,9 +366,9 @@ class NodeManager:
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
-            if not self._desc_done: #TODO remove
-                self._desc_done = True
-                asyncio.create_task(self.stop_connections_with_federation())
+            #if not self._desc_done: #TODO remove
+            #    self._desc_done = True
+            #    asyncio.create_task(self.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -390,9 +388,7 @@ class NodeManager:
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
-                #TODO comprobar q funcione correctamente
                 self.engine.update_sinchronized_status(False)
-                await asyncio.sleep(120)
                 await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
