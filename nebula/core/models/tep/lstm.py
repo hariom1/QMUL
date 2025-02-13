@@ -10,7 +10,7 @@ from torch.nn import functional as F
 #    Multilayer Perceptron    #
 ###############################
 class TEPLSTM(NebulaModel):
-    def __init__(self, input_channels=1, num_classes=10, learning_rate=0.001, metrics=None, confusion_matrix=None, seed=None):
+    def __init__(self, input_channels=1, num_classes=2, learning_rate=0.001, metrics=None, confusion_matrix=None, seed=None):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
 
         self.example_input_array = torch.zeros(1, 5, 52)
@@ -21,7 +21,7 @@ class TEPLSTM(NebulaModel):
         self.lstm1 = torch.nn.LSTM(52, self.hidden_layers1, batch_first=True)
         self.lstm2 = torch.nn.LSTM(self.hidden_layers1, self.hidden_layers2, batch_first=True)
         self.linear = torch.nn.Linear(self.hidden_layers2, 1)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
         
         self.epoch_num_steps = {"Train": 0, "Validation": 0, "Test": 0}
         self.epoch_loss_sum = {"Train": 0.0, "Validation": 0.0, "Test": 0.0}
@@ -46,6 +46,56 @@ class TEPLSTM(NebulaModel):
         """ """
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
+    
+    def step(self, batch, batch_idx, phase):
+        x, y = batch
+        
+        # logging.info(f"{phase}/x shape: {x.shape}")
+        # logging.info(f"{phase}/y shape: {y.shape}")
+        
+        y_pred = self(x)
+        y_one_hot = torch.nn.functional.one_hot(y, num_classes=2).float()
+        
+        # logging.info(f"{phase}/y_pred shape: {y_pred.shape}")
+        # logging.info(f"{phase}/y_one_hot shape: {y_one_hot.shape}")
+        
+        loss = self.criterion(y_pred, y_one_hot)
+        
+        # self.process_metrics(phase, y_pred, y_one_hot, loss)
+
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        """
+        Training step for the model.
+        Args:
+            batch:
+            batch_idx:
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Train")
+    
+    def validation_step(self, batch, batch_idx):
+        """
+        Validation step for the model.
+        Args:
+            batch:
+            batch_idx:
+
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Validation")
+    
+    def test_step(self, batch, batch_idx, dataloader_idx=None):
+        """
+        Test step for the model.
+        Args:
+            batch:
+            batch_idx:
+
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Test")
     
     # def step(self, batch, phase):
     #     x, y = batch

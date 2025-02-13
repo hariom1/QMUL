@@ -92,6 +92,7 @@ class DataModule(LightningDataModule):
             # train set
             tr_subset = ChangeableSubset(self.train_set, range(self.partition_id * rows_train, (self.partition_id + 1) * rows_train))
             
+            # validation set
             val_subset = ChangeableSubset(self.val_set, range(self.partition_id * rows_val, (self.partition_id + 1) * rows_val))
             
             # test set

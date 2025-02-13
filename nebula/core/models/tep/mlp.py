@@ -1,4 +1,5 @@
 # import lightning as pl
+import logging
 import torch
 # from torch.nn import functional as F
 # from torchmetrics.classification import BinaryConfusionMatrix, BinaryAccuracy, BinaryF1Score, BinaryPrecision, BinaryRecall
@@ -14,7 +15,7 @@ class TEPMLP(NebulaModel):
     Multilayer Perceptron (MLP) to solve WADI with PyTorch Lightning.
     """
 
-    def __init__(self, input_channels=1, num_classes=10, learning_rate=0.001, metrics=None, confusion_matrix=None, seed=None):
+    def __init__(self, input_channels=1, num_classes=2, learning_rate=0.001, metrics=None, confusion_matrix=None, seed=None):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
         
         self.example_input_array = torch.zeros(1, 52)
@@ -23,7 +24,7 @@ class TEPMLP(NebulaModel):
         self.l2 = torch.nn.Linear(128, 64)
         self.l3 = torch.nn.Linear(64, 16)
         self.l4 = torch.nn.Linear(16, num_classes)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, x):
         """ """
@@ -41,7 +42,56 @@ class TEPMLP(NebulaModel):
         """ """
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
+    
+    def step(self, batch, batch_idx, phase):
+        x, y = batch
+        
+        # logging.info(f"{phase}/x shape: {x.shape}")
+        # logging.info(f"{phase}/y shape: {y.shape}")
+        
+        y_pred = self(x)
+        y_one_hot = torch.nn.functional.one_hot(y, num_classes=2).float()
+        
+        # logging.info(f"{phase}/y_pred shape: {y_pred.shape}")
+        # logging.info(f"{phase}/y_one_hot shape: {y_one_hot.shape}")
+        
+        loss = self.criterion(y_pred, y_one_hot)
+        
+        # self.process_metrics(phase, y_pred, y_one_hot, loss)
 
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        """
+        Training step for the model.
+        Args:
+            batch:
+            batch_idx:
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Train")
+    
+    def validation_step(self, batch, batch_idx):
+        """
+        Validation step for the model.
+        Args:
+            batch:
+            batch_idx:
+
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Validation")
+    
+    def test_step(self, batch, batch_idx, dataloader_idx=None):
+        """
+        Test step for the model.
+        Args:
+            batch:
+            batch_idx:
+
+        Returns:
+        """
+        return self.step(batch, batch_idx=batch_idx, phase="Test")
 
 # class TEPMLP(pl.LightningModule):
 #     """
