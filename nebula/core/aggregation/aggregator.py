@@ -216,6 +216,7 @@ class Aggregator(ABC):
         try:
             timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
             logging.info(f"Aggregation timeout: {timeout} starts...")
+            #TODO notificar a updatestorage
             lock_task = asyncio.create_task(self._aggregation_done_lock.acquire_async(timeout=timeout))
             skip_task = asyncio.create_task(self._aggregation_waiting_skip.wait())
             done, pending = await asyncio.wait(
@@ -430,7 +431,7 @@ class Aggregator(ABC):
                     logging.info("❗️ Cannot analize push | Already pushing rounds")
             await self._push_strategy_lock.release_async()
 
-    def notify_all_updates_received(self):
+    async def notify_all_updates_received(self):
         self._aggregation_waiting_skip.set()
 
 def create_aggregator(config, engine) -> Aggregator:
