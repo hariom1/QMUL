@@ -4,7 +4,10 @@ from collections import deque
 from typing import Dict, Tuple, Deque
 from nebula.core.utils.locker import Locker
 import time
-from nebula.core.aggregation.aggregator import Aggregator 
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nebula.core.aggregation.aggregator import Aggregator
 
 class Update():
     def __init__(self, model, weight, source, round, time_received):
@@ -22,12 +25,12 @@ MAX_UPDATE_BUFFER_SIZE = 1 # Modify to create an historic
 class UpdateStorage():
     def __init__(
         self,
-        aggregator: Aggregator,
+        aggregator,
         addr, 
         buffersize=MAX_UPDATE_BUFFER_SIZE
     ):
        self._addr = addr 
-       self._aggregator = aggregator
+       self._aggregator: Aggregator = aggregator
        self._buffersize = buffersize 
        self._updates_storage: Dict[str, Tuple[Update, Deque[Update]]] = {}
        self._updates_storage_lock = Locker(name="updates_storage_lock", async_lock=True)
@@ -69,12 +72,22 @@ class UpdateStorage():
         for rn in removed_nodes:
             del self._updates_storage[rn]
         
+        # Check already received updates
+        await self._check_updates_already_received()
+
         await self._updates_storage_lock.release_async()
         await self._update_federation_lock.release_async()
         
         # Lock to check if all updates received
         if self._round_updates_lock.locked():
             self._round_updates_lock.release_async()
+
+    async def _check_updates_already_received(self):
+        for se in self._sources_expected:
+            (_,node_storage) = self._updates_storage[se]
+            if len(node_storage):
+                logging.info(f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received")
+                self._sources_received.add(se)
         
     async def storage_update(self, model, weight, source, round):
         """
@@ -102,12 +115,12 @@ class UpdateStorage():
                 logging.info(f"Discard | Alerady received update from source: {source} for round: {round}")
             else:    
                 self.us[source][1].append(updt)
-                self.us[source][0] = updt
+                self.us[source] = (updt, self.us[source][1])
                 logging.info(f"Storage Update | source={source} | round={round} | weight={weight} | federation nodes: {self._sources_expected}")
                 
                 self._sources_received.add(source)
                 updates_left = self._sources_expected.difference(self._sources_received)
-                logging.info(f"Updates received ({self._sources_received}/{self._sources_expected}) | Missing nodes: {updates_left}")
+                logging.info(f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}")
                 if self._round_updates_lock.locked() and not updates_left:
                     await self.all_updates_received()
             await self._updates_storage_lock.release_async()
@@ -139,8 +152,8 @@ class UpdateStorage():
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
-            if source_historic:
-                updt = source_historic[-1]
+            if len(source_historic):
+                updt = source_historic.pop() # [-1] last update received from this node
             elif last_updt_received:
                 logging.info(f"Missing update source: {sr}, using last update received..")
                 updt = last_updt_received
@@ -153,17 +166,11 @@ class UpdateStorage():
             if self._round_updates_lock.locked():
                 logging.info(f"Source: {source} will be count next round")
             else:
-                self._update_source(source, remove)
-        # si se quita
+                await self._update_source(source, remove)
         else:
-            pass
-        # comprobar si he recibido la updt
-            # si no la he recibido se descarta de los esperados
-            # si la he recibido
-                # si antes de la agregacion de esta ronda la uso
-    
-    async def _clear_removed_sources(self):
-        pass
+            # Not received update from this source yet
+            if not source in self._sources_received:
+                await self._update_source(source, remove=True)
             
     async def _update_source(self, source, remove=False):
         logging.info(f"🔄 Update | remove: {remove} | source: {source}")
@@ -183,11 +190,18 @@ class UpdateStorage():
         return updates_left
     
     async def notify_if_all_updates_received(self):
+        logging.info("Set notification when all expected updates received")
         await self._round_updates_lock.acquire_async()
+
+    async def stop_notifying_updates(self):
+        logging.info("Stop notifications updates")
+        if self._round_updates_lock.locked():
+            await self._round_updates_lock.release_async()
     
     async def all_updates_received(self):
         updates_left = self._sources_expected.difference(self._sources_received)
         if len(updates_left) == 0:
+            logging.info("All updates have been received this round | releasing aggregation lock")
             await self._round_updates_lock.release_async()
-            await self.agg.notify_all_updates_received()
+            #await self.agg.notify_all_updates_received()
        

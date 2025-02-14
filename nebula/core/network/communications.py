@@ -16,6 +16,7 @@ from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
 from nebula.core.network.nebulamulticasting import NebulaConnectionService
 from nebula.core.network.propagator import Propagator
+from nebula.core.network.messages import MessageEvent
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
@@ -189,54 +190,8 @@ class CommunicationsManager:
                 if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
                     decoded_model = self.engine.trainer.deserialize_model(message.parameters)
                     if False and self.config.participant["adaptive_args"]["model_similarity"]:
-                        logging.info("🤖  handle_model_message | Checking model similarity")
-                        cosine_value = cosine_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            similarity=True,
-                        )
-                        euclidean_value = euclidean_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            similarity=True,
-                        )
-                        minkowski_value = minkowski_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            p=2,
-                            similarity=True,
-                        )
-                        manhattan_value = manhattan_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            similarity=True,
-                        )
-                        pearson_correlation_value = pearson_correlation_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            similarity=True,
-                        )
-                        jaccard_value = jaccard_metric(
-                            self.engine.trainer.get_model_parameters(),
-                            decoded_model,
-                            similarity=True,
-                        )
-                        # with open(
-                        #    f"{self.config.participant["tracking_args"]["log_dir"]}/participant_{self.id}_similarity.csv",
-                        #    "a+",
-                        # ) as f:
-                        #    if os.stat(f"{self}/participant_{self.id}_similarity.csv").st_size == 0:
-                        #        f.write(
-                        #            "timestamp,source_ip,nodes,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
-                        #        )
-                        #    f.write(
-                        #        f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
-                        #    )
-                        logging("Similarities between self model and model recieved...")
-                        logging.info(
-                            f"{source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}"
-                        )
-
+                        pass
+                    
                     await self.engine.aggregator.include_model_in_buffer(
                         decoded_model,
                         message.weight,
@@ -258,22 +213,24 @@ class CommunicationsManager:
                         )
                         return
                     logging.info(f"🤖  handle_model_message | Initializing model (executed by {source})")
-                    try:
-                        model = self.engine.trainer.deserialize_model(message.parameters)
-                        self.engine.trainer.set_model_parameters(model, initialize=True)
-                        logging.info("🤖  handle_model_message | Model Parameters Initialized")
-                        self.engine.set_initialization_status(True)
-                        await (
-                            self.engine.get_federation_ready_lock().release_async()
-                        )  # Enable learning cycle once the initialization is done
-                        try:
-                            await (
-                                self.engine.get_federation_ready_lock().release_async()
-                            )  # Release the lock acquired at the beginning of the engine
-                        except RuntimeError:
-                            pass
-                    except RuntimeError:
-                        pass
+                    model_init_event = MessageEvent(("model","initialization"), source, message)
+                    await self.engine.trigger_event(model_init_event)
+                    #try:
+#                        model = self.engine.trainer.deserialize_model(message.parameters)
+#                        self.engine.trainer.set_model_parameters(model, initialize=True)
+#                        logging.info("🤖  handle_model_message | Model Parameters Initialized")
+#                        self.engine.set_initialization_status(True)
+#                        await (
+#                            self.engine.get_federation_ready_lock().release_async()
+#                        )  # Enable learning cycle once the initialization is done
+#                        try:
+#                            await (
+#                                self.engine.get_federation_ready_lock().release_async()
+#                            )  # Release the lock acquired at the beginning of the engine
+#                        except RuntimeError:
+#                            pass
+#                    except RuntimeError:
+#                        pass
 
             except Exception as e:
                 logging.exception(f"🤖  handle_model_message | Unknown error adding model: {e}")

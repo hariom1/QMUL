@@ -166,6 +166,9 @@ class Engine:
         logging.info("Registering callbacks for MessageEvents...")
         self.register_message_events_callbacks()
 
+        # Additional callbacks not registered automatically
+        self.register_message_callback(("model","initialization"), "model_initialization_callback")
+
     @property
     def cm(self):
         return self._cm
@@ -244,6 +247,33 @@ class Engine:
         logging.info(f"🤖  Update round count | from: {self.round} | to round: {new_round}")
         self.round = new_round
         self.trainer.set_current_round(new_round)
+
+    """                                                     ##############################
+                                                            #       MODEL CALLBACKS      #
+                                                            ##############################
+    """
+
+    async def model_initialization_callback(self, source, message):
+        try:
+            model = self.trainer.deserialize_model(message.parameters)
+            self.trainer.set_model_parameters(model, initialize=True)
+            logging.info("🤖  Init Model | Model Parameters Initialized")
+            self.set_initialization_status(True)
+            await (
+                self.get_federation_ready_lock().release_async()
+            )  # Enable learning cycle once the initialization is done
+            try:
+                await (
+                    self.get_federation_ready_lock().release_async()
+                )  # Release the lock acquired at the beginning of the engine
+            except RuntimeError:
+                pass
+        except RuntimeError:
+            pass
+
+    async def model_update_callback(self, source, message):
+        pass
+
 
     """                                                     ##############################
                                                             #      General callbacks     #
@@ -512,6 +542,9 @@ class Engine:
             await self.cm.disconnect(source, mutual_disconnection=False)
             await self.nm.update_neighbors(addr, remove=True)
 
+
+
+
     """                                                     ##############################
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ##############################
@@ -531,6 +564,12 @@ class Engine:
             method = getattr(self, callback_name, None)
 
             if callable(method):
+                self.event_manager.subscribe((event_type, action), method)
+
+    def register_message_callback(self, message_event: tuple[str, str], callback: str):
+        event_type, action = message_event
+        method = getattr(self, callback, None)
+        if callable(method):
                 self.event_manager.subscribe((event_type, action), method)
 
     async def trigger_event(self, message_event):
@@ -563,7 +602,7 @@ class Engine:
         if self.mobility:
             self.federation_nodes = neighbors
             await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
-            await self.aggregator.notify_federation_nodes_removed(self.federation_nodes)
+            await self.aggregator.notify_federation_nodes_removed(removed_neighbor_addr, remove=remove)
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()
@@ -759,7 +798,7 @@ class Engine:
     async def _waiting_model_updates(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         if self.mobility:
-            await self.aggregator.aggregation_push_available()
+            await self.aggregator.aggregation_push_available() #TODO
         params = await self.aggregator.get_aggregation()
         if params is not None:
             logging.info(

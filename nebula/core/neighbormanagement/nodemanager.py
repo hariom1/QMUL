@@ -366,9 +366,9 @@ class NodeManager:
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
-            #if not self._desc_done: #TODO remove
-            #    self._desc_done = True
-            #    asyncio.create_task(self.stop_connections_with_federation())
+            if not self._desc_done: #TODO remove
+                self._desc_done = True
+                asyncio.create_task(self.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -413,6 +413,7 @@ class NodeManager:
     async def reconnect_to_federation(self):
         self._restructure_process_lock.acquire()
         await self.engine.cm.clear_restrictions()
+        await asyncio.sleep(120)
         if await self.engine.cm.is_external_connection_service_running():
             self.engine.cm.stop_external_connection_service()  
         # If we got some refs, try to reconnect to them                 
