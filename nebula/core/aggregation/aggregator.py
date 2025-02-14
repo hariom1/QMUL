@@ -86,8 +86,7 @@ class Aggregator(ABC):
             raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
     async def update_received_from_source(self, model, weight, source, round):
-        pass
-
+        await self.us.storage_update(model, weight, source, round)
 
     async def notify_federation_nodes_removed(self, federation_node, remove=False):
         # Neighbor has been removed

@@ -146,6 +146,11 @@ class CommunicationsManager:
     async def add_ready_connection(self, addr):
         self.ready_connections.add(addr)
 
+    """                                                     ##############################
+                                                            #    PROCESSING MESSAGES     #
+                                                            ##############################
+    """
+
     async def handle_incoming_message(self, data, addr_from):
         if not await self.bl.node_in_blacklist(addr_from):
             await self.mm.process_message(data, addr_from)
@@ -158,6 +163,7 @@ class CommunicationsManager:
         await self.engine.trigger_event(message_event)
 
     async def handle_model_message(self, source, message):
+        #TODO modificar para generar eventos y gestionar en engine
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
         if self.get_round() is not None:
             await self.engine.get_round_lock().acquire_async()
@@ -172,6 +178,7 @@ class CommunicationsManager:
                     logging.info(
                         f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
                     )
+                    logging.info("### ENTRO 1 ###")
                     await self.engine.aggregator.include_next_model_in_buffer(
                         message.parameters,
                         message.weight,
@@ -192,6 +199,7 @@ class CommunicationsManager:
                     if False and self.config.participant["adaptive_args"]["model_similarity"]:
                         pass
                     
+                    logging.info("### ENTRO 2 ###")
                     await self.engine.aggregator.include_model_in_buffer(
                         decoded_model,
                         message.weight,
@@ -205,6 +213,7 @@ class CommunicationsManager:
                         logging.info(
                             f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
                         )
+                        logging.info("### ENTRO 3 ###")
                         await self.engine.aggregator.include_next_model_in_buffer(
                             message.parameters,
                             message.weight,
@@ -215,22 +224,7 @@ class CommunicationsManager:
                     logging.info(f"🤖  handle_model_message | Initializing model (executed by {source})")
                     model_init_event = MessageEvent(("model","initialization"), source, message)
                     await self.engine.trigger_event(model_init_event)
-                    #try:
-#                        model = self.engine.trainer.deserialize_model(message.parameters)
-#                        self.engine.trainer.set_model_parameters(model, initialize=True)
-#                        logging.info("🤖  handle_model_message | Model Parameters Initialized")
-#                        self.engine.set_initialization_status(True)
-#                        await (
-#                            self.engine.get_federation_ready_lock().release_async()
-#                        )  # Enable learning cycle once the initialization is done
-#                        try:
-#                            await (
-#                                self.engine.get_federation_ready_lock().release_async()
-#                            )  # Release the lock acquired at the beginning of the engine
-#                        except RuntimeError:
-#                            pass
-#                    except RuntimeError:
-#                        pass
+
 
             except Exception as e:
                 logging.exception(f"🤖  handle_model_message | Unknown error adding model: {e}")
@@ -274,6 +268,7 @@ class CommunicationsManager:
 
     async def clear_restrictions(self):
         await self.bl.clear_restrictions()
+
 
     """                                                     ###############################
                                                             # EXTERNAL CONNECTION SERVICE #
@@ -322,6 +317,7 @@ class CommunicationsManager:
             logging.info(f"Sending {msg_type} to ---> {addr}")
             asyncio.create_task(self.send_message(addr, msg))
             await asyncio.sleep(1)
+
 
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #

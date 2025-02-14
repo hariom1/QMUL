@@ -16,6 +16,7 @@ class Update():
         self.source = source
         self.round = round
         self.time_received = time_received
+        self.used = False
         
     def __eq__(self, other):
         return self.round == other.round
@@ -84,10 +85,11 @@ class UpdateStorage():
 
     async def _check_updates_already_received(self):
         for se in self._sources_expected:
-            (_,node_storage) = self._updates_storage[se]
+            (last_updt, node_storage) = self._updates_storage[se]
             if len(node_storage):
-                logging.info(f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received")
-                self._sources_received.add(se)
+                if last_updt != node_storage[-1]: 
+                    logging.info(f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received")
+                    self._sources_received.add(se)
         
     async def storage_update(self, model, weight, source, round):
         """
@@ -113,9 +115,10 @@ class UpdateStorage():
             await self._updates_storage_lock.acquire_async()
             if updt in self.us[source][1]:
                 logging.info(f"Discard | Alerady received update from source: {source} for round: {round}")
-            else:    
+            else: 
+                last_update_used = self.us[source][0]   
                 self.us[source][1].append(updt)
-                self.us[source] = (updt, self.us[source][1])
+                self.us[source] = (last_update_used, self.us[source][1])
                 logging.info(f"Storage Update | source={source} | round={round} | weight={weight} | federation nodes: {self._sources_expected}")
                 
                 self._sources_received.add(source)
@@ -125,7 +128,7 @@ class UpdateStorage():
                     await self.all_updates_received()
             await self._updates_storage_lock.release_async()
         else:
-            logging.info(f"source: {source} not in expected updates for this Round")
+            logging.info(f"Discard update | source: {source} not in expected updates for this Round")
             
     async def get_round_updates(self):
         """
@@ -152,12 +155,14 @@ class UpdateStorage():
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
-            if len(source_historic):
-                updt = source_historic.pop() # [-1] last update received from this node
-            elif last_updt_received:
+            updt = source_historic[-1] # Get last update received
+            if last_updt_received == updt:
                 logging.info(f"Missing update source: {sr}, using last update received..")
-                updt = last_updt_received
+            else:
+                last_updt_received = updt
+                self.us[sr] = (last_updt_received, source_historic) # Update storage with new last update used
             updates[sr] = (updt.model, updt.weight)
+
         await self._updates_storage_lock.release_async()
         return updates
        

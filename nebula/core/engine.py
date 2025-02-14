@@ -168,6 +168,7 @@ class Engine:
 
         # Additional callbacks not registered automatically
         self.register_message_callback(("model","initialization"), "model_initialization_callback")
+        self.register_message_callback(("model","update"), "model_update_callback")
 
     @property
     def cm(self):
@@ -272,7 +273,12 @@ class Engine:
             pass
 
     async def model_update_callback(self, source, message):
-        pass
+        #TODO gestionar situaciones aqui
+        logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
+        if not self.get_federation_ready_lock().locked() and len(self.get_federation_nodes()) == 0:
+                logging.info("🤖  handle_model_message | There are no defined federation nodes")
+                return
+        await self.aggregator.update_received_from_source(message.parameters, message.weight, source, message.round)
 
 
     """                                                     ##############################
