@@ -4,6 +4,7 @@ from collections import deque
 from typing import Dict, Tuple, Deque
 from nebula.core.utils.locker import Locker
 import time
+from nebula.core.aggregation.updatehandlers.updatehandler import UpdateHandler
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ class Update():
 
 MAX_UPDATE_BUFFER_SIZE = 1 # Modify to create an historic
 
-class UpdateStorage():
+class DFLUpdateHandler(UpdateHandler):
     def __init__(
         self,
         aggregator,
@@ -125,7 +126,7 @@ class UpdateStorage():
                 updates_left = self._sources_expected.difference(self._sources_received)
                 logging.info(f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}")
                 if self._round_updates_lock.locked() and not updates_left:
-                    await self.all_updates_received()
+                    await self._all_updates_received()
             await self._updates_storage_lock.release_async()
         else:
             logging.info(f"Discard update | source: {source} not in expected updates for this Round")
@@ -203,7 +204,7 @@ class UpdateStorage():
         if self._round_updates_lock.locked():
             await self._round_updates_lock.release_async()
     
-    async def all_updates_received(self):
+    async def _all_updates_received(self):
         updates_left = self._sources_expected.difference(self._sources_received)
         if len(updates_left) == 0:
             logging.info("All updates have been received this round | releasing aggregation lock")

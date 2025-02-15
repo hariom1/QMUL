@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from functools import partial
 from nebula.core.utils.locker import Locker
-from nebula.core.aggregation.updatestorage import UpdateStorage
+from nebula.core.aggregation.updatehandlers.updatehandler import factory_update_handler
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class Aggregator(ABC):
         self._aggregation_waiting_skip = asyncio.Event()
         self._push_strategy_lock = Locker(name="push_strategy_lock", async_lock=True)
         self._end_round_push = 0
-        self._update_storage = UpdateStorage(aggregator=self, addr=self._addr)
+        self._update_storage = factory_update_handler("dfl", self, self._addr)
 
     def __str__(self):
         return self.__class__.__name__
