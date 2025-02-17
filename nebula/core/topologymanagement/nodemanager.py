@@ -159,9 +159,11 @@ class NodeManager:
                 self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False
             )
 
-            ##############################
-            #      WEIGHT STRATEGIES     #
-            ##############################
+    """
+                ##############################
+                #      WEIGHT STRATEGIES     #
+                ##############################
+    """
 
     async def update_learning_rate(self, new_lr):
         await self.engine.update_model_learning_rate(new_lr)
@@ -182,9 +184,11 @@ class NodeManager:
         if self._momemtum:
             await self._momemtum.calculate_momentum_weights(updates)
 
-            ##############################
-            #        CONNECTIONS         #
-            ##############################
+    """
+                ##############################
+                #        CONNECTIONS         #
+                ##############################
+    """
 
     def accept_connection(self, source, joining=False):
         return self.neighbor_policy.accept_connection(source, joining)
@@ -299,6 +303,7 @@ class NodeManager:
         except asyncio.CancelledError:
             pass
 
+    #TODO todo esto es innecesario
     async def check_external_connection_service_status(self):
         logging.info("🔄 Checking external connection service status...")
         n = await self.neighbors_left()
@@ -338,6 +343,7 @@ class NodeManager:
         await self.engine.cm.stablish_connection_to_federation(msg_type, addrs_known)
 
         # wait offer
+        #TODO actualizar con la informacion de latencias
         logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
         await asyncio.sleep(self.recieve_offer_timer)
 
@@ -377,10 +383,12 @@ class NodeManager:
             if not connected:
                 logging.info("❗️  repeating process...")
                 await self.start_late_connection_process(connected, msg_type, addrs_known)
-
-                ##############################
-                #         ROBUSTNESS         #
-                ##############################
+                
+    """
+                    ##############################
+                    #         ROBUSTNESS         #
+                    ##############################
+    """
 
     async def check_robustness(self):
         logging.info("🔄 Analizing node network robustness...")

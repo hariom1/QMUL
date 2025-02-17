@@ -229,9 +229,11 @@ class Engine:
 
     def get_sinchronized_status(self):
         with self.sinchronized_status_lock:
+            return True
             return self._sinchronized_status
 
     def get_synchronizing_rounds(self):
+        return False
         return self.nm.get_syncrhonizing_rounds()
 
     def update_sinchronized_status(self, status):
@@ -799,8 +801,6 @@ class Engine:
 
     async def _waiting_model_updates(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
-        # if self.mobility:
-        #     await self.aggregator.aggregation_push_available() #TODO
         params = await self.aggregator.get_aggregation()
         if params is not None:
             logging.info(

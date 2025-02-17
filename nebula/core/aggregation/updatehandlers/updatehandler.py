@@ -99,9 +99,11 @@ class UpdateHandler(ABC):
       
 def factory_update_handler(updt_handler, aggregator, addr) -> UpdateHandler:
     from nebula.core.aggregation.updatehandlers.dflupdatehandler import DFLUpdateHandler
+    from nebula.core.aggregation.updatehandlers.cflupdatehandler import CFLUpdateHandler
     
     UPDATE_HANDLERS = {
-        "dfl": DFLUpdateHandler
+        "DFL": DFLUpdateHandler,
+        "CFL": CFLUpdateHandler,
     }
     
     update_handler = UPDATE_HANDLERS.get(updt_handler, None)

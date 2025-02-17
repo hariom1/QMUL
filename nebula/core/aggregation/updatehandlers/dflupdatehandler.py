@@ -17,7 +17,6 @@ class Update():
         self.source = source
         self.round = round
         self.time_received = time_received
-        self.used = False
         
     def __eq__(self, other):
         return self.round == other.round
@@ -120,6 +119,7 @@ class DFLUpdateHandler(UpdateHandler):
         if updates_missing:
             self._missing_ones = updates_missing
             logging.info(f"Missing updates from sources: {updates_missing}")
+        self._nodes_using_historic.clear()    
         updates = {}
         for sr in self._sources_received:
             source_historic = self.us[sr][1]
@@ -127,7 +127,8 @@ class DFLUpdateHandler(UpdateHandler):
             updt: Update = None
             updt = source_historic[-1] # Get last update received
             if last_updt_received and last_updt_received == updt:
-                logging.info(f"Missing update source: {sr}, using last update received..")
+                logging.info(f"Missing update from source: {sr}, using last update received..")
+                self._nodes_using_historic.add(sr)
             else:
                 last_updt_received = updt
                 self.us[sr] = (last_updt_received, source_historic) # Update storage with new last update used
@@ -159,9 +160,6 @@ class DFLUpdateHandler(UpdateHandler):
         await self._updates_storage_lock.release_async()
                   
     async def get_round_missing_nodes(self):
-        # await self._updates_storage_lock.acquire_async()
-        # updates_left = self._sources_expected.difference(self._sources_received)
-        # await self._updates_storage_lock.release_async()
         return self._missing_ones
     
     async def notify_if_all_updates_received(self):
@@ -172,8 +170,7 @@ class DFLUpdateHandler(UpdateHandler):
         await self._updates_storage_lock.release_async()
         if all_received:
             await self._notify()
-            
-            
+                   
     async def stop_notifying_updates(self):
         if self._round_updates_lock.locked():
             logging.info("Stop notification updates")
@@ -189,8 +186,7 @@ class DFLUpdateHandler(UpdateHandler):
         await self._notification_sent_lock.release_async()
         logging.info("🔄 Notifying aggregator to release aggregation")
         await self.agg.notify_all_updates_received()
-        
-    
+         
     async def _all_updates_received(self):
         updates_left = self._sources_expected.difference(self._sources_received)
         all_received = False
