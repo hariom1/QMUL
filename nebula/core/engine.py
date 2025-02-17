@@ -9,7 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.neighbormanagement.nodemanager import NodeManager
+from nebula.core.topologymanagement.nodemanager import NodeManager
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
 
@@ -255,6 +255,7 @@ class Engine:
     """
 
     async def model_initialization_callback(self, source, message):
+        logging.info(f"🤖  handle_model_message | Received model initialization from {source}")
         try:
             model = self.trainer.deserialize_model(message.parameters)
             self.trainer.set_model_parameters(model, initialize=True)
@@ -273,12 +274,12 @@ class Engine:
             pass
 
     async def model_update_callback(self, source, message):
-        #TODO gestionar situaciones aqui
-        logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
+        logging.info(f"🤖  handle_model_message | Received model update from {source} with round {message.round}")
         if not self.get_federation_ready_lock().locked() and len(self.get_federation_nodes()) == 0:
                 logging.info("🤖  handle_model_message | There are no defined federation nodes")
                 return
-        await self.aggregator.update_received_from_source(message.parameters, message.weight, source, message.round)
+        decoded_model = self.trainer.deserialize_model(message.parameters)
+        await self.aggregator.update_received_from_source(decoded_model, message.weight, source, message.round)
 
 
     """                                                     ##############################
@@ -405,12 +406,10 @@ class Engine:
 
             ct_actions, df_actions = self.nm.get_actions()
             if len(ct_actions):
-                # for addr in ct_actions.split():
                 cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
 
             if len(df_actions):
-                # for addr in df_actions.split():
                 df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 await self.cm.send_message(source, df_msg)
 
@@ -432,19 +431,16 @@ class Engine:
             logging.info(f"🔗  handle_connection_message | Trigger | restructure connection accepted from {source}")
             await self.cm.connect(source, direct=True)
 
-            # conf_msg = self.cm.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.RESTRUCTURE)
             conf_msg = self.cm.create_message("connection", "restructure")
 
             await self.cm.send_message(source, conf_msg)
 
             ct_actions, df_actions = self.nm.get_actions()
             if len(ct_actions):
-                # cnt_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.CONNECT_TO, ct_actions)
                 cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
 
             if len(df_actions):
-                # df_msg = self.cm.mm.generate_link_message(nebula_pb2.LinkMessage.Action.DISCONNECT_FROM, df_actions)
                 df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 await self.cm.send_message(source, df_msg)
 
@@ -620,8 +616,8 @@ class Engine:
         await self.learning_cycle_lock.acquire_async()
         try:
             model_serialized, rounds, round, _epochs = await self.nm.get_trainning_info()
-            self.total_rounds = rounds  # self.config.participant["scenario_args"]["rounds"] #rounds
-            epochs = _epochs  # self.config.participant["training_args"]["epochs"] #_epochs
+            self.total_rounds = rounds  
+            epochs = _epochs 
             await self.get_round_lock().acquire_async()
             self.round = round
             await self.get_round_lock().release_async()
@@ -803,8 +799,8 @@ class Engine:
 
     async def _waiting_model_updates(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
-        if self.mobility:
-            await self.aggregator.aggregation_push_available() #TODO
+        # if self.mobility:
+        #     await self.aggregator.aggregation_push_available() #TODO
         params = await self.aggregator.get_aggregation()
         if params is not None:
             logging.info(
@@ -1003,7 +999,14 @@ class AggregatorNode(Engine):
         await self.trainer.train()
         await self.trainning_in_progress_lock.release_async()
 
-        await self.aggregator.include_model_in_buffer(
+        # await self.aggregator.include_model_in_buffer(
+        #     self.trainer.get_model_parameters(),
+        #     self.trainer.get_model_weight(),
+        #     source=self.addr,
+        #     round=self.round,
+        # )
+        
+        await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.get_model_weight(),
             source=self.addr,
@@ -1036,12 +1039,20 @@ class ServerNode(Engine):
         await self.trainer.test()
 
         # In the first round, the server node doest take into account the initial model parameters for the aggregation
-        await self.aggregator.include_model_in_buffer(
+        # await self.aggregator.include_model_in_buffer(
+        #     self.trainer.get_model_parameters(),
+        #     self.trainer.BYPASS_MODEL_WEIGHT,
+        #     source=self.addr,
+        #     round=self.round,
+        # )
+        
+        await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.BYPASS_MODEL_WEIGHT,
             source=self.addr,
             round=self.round,
         )
+        
         await self._waiting_model_updates()
         await self.cm.propagator.propagate("stable")
 
@@ -1071,7 +1082,15 @@ class TrainerNode(Engine):
         await self.trainer.test()
         await self.trainer.train()
 
-        await self.aggregator.include_model_in_buffer(
+        # await self.aggregator.include_model_in_buffer(
+        #     self.trainer.get_model_parameters(),
+        #     self.trainer.get_model_weight(),
+        #     source=self.addr,
+        #     round=self.round,
+        #     local=True,
+        # )
+        
+        await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.get_model_weight(),
             source=self.addr,

@@ -9,7 +9,7 @@ from nebula.core.utils.helper import cosine_metric
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
-    from nebula.core.neighbormanagement.nodemanager import NodeManager
+    from nebula.core.topologymanagement.nodemanager import NodeManager
 
 SimilarityMetricType = Callable[[OrderedDict, OrderedDict, bool], float | None]
 MappingSimilarityType = Callable[[float, float], Annotated[float, "Value in (0, 1]"]]

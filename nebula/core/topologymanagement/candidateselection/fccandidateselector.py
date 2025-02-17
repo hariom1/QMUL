@@ -1,7 +1,7 @@
-from nebula.core.neighbormanagement.candidateselection.candidateselector import CandidateSelector
+from nebula.core.topologymanagement.candidateselection.candidateselector import CandidateSelector
 from nebula.core.utils.locker import Locker
 
-class STDandidateSelector(CandidateSelector):
+class FCCandidateSelector(CandidateSelector):
     
     def __init__(self):
         self.candidates = []
@@ -17,11 +17,17 @@ class STDandidateSelector(CandidateSelector):
       
     def select_candidates(self):
         """
-            Select mean number of neighbors
+            In Fully-Connected topology all candidates should be selected
         """
+        #0145
+        #listed = ["192.168.51.2:45001", "192.168.51.3:45002", "192.168.51.6:45005", "192.168.51.7:45006"]
+        #defined = []
         self.candidates_lock.acquire()
-        mean_neighbors = sum(n for n, _ in self.candidates) / len(self.candidates) if self.candidates else 0
-        cdts = self.candidates[:mean_neighbors]
+        cdts = self.candidates.copy()
+        #for (addr,a,b) in cdts:
+        #    if addr in listed:
+        #        defined.append((addr,a,b))
+        #cdts = defined
         self.candidates_lock.release()
         return cdts
     

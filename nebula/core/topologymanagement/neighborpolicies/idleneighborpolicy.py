@@ -1,4 +1,4 @@
-from nebula.core.neighbormanagement.neighborpolicies.neighborpolicy import NeighborPolicy
+from nebula.core.topologymanagement.neighborpolicies.neighborpolicy import NeighborPolicy
 from nebula.core.utils.locker import Locker
 
 class IDLENeighborPolicy(NeighborPolicy):

@@ -3,11 +3,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
-from nebula.core.neighbormanagement.candidateselection.candidateselector import factory_CandidateSelector
-from nebula.core.neighbormanagement.fastreboot import FastReboot
-from nebula.core.neighbormanagement.modelhandlers.modelhandler import factory_ModelHandler
-from nebula.core.neighbormanagement.momentum import Momentum
-from nebula.core.neighbormanagement.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+from nebula.core.topologymanagement.candidateselection.candidateselector import factory_CandidateSelector
+from nebula.core.topologymanagement.fastreboot import FastReboot
+from nebula.core.topologymanagement.modelhandlers.modelhandler import factory_ModelHandler
+from nebula.core.topologymanagement.momentum import Momentum
+from nebula.core.topologymanagement.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -400,7 +400,9 @@ class NodeManager:
                 possible_neighbors = self.neighbor_policy.get_nodes_known(neighbors_too=False)
                 possible_neighbors = await self.engine.cm.apply_restrictions(possible_neighbors)
                 if not possible_neighbors:
-                    logging.info("All possible neighbors using nodes known are restricted...")                                
+                    logging.info("All possible neighbors using nodes known are restricted...")
+                else:
+                    pass                                
                     #asyncio.create_task(self.upgrade_connection_robustness(possible_neighbors)) 
             else:
                 if not self.engine.get_sinchronized_status():

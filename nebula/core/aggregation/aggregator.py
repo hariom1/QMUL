@@ -85,8 +85,8 @@ class Aggregator(ABC):
         else:
             raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
-    async def update_received_from_source(self, model, weight, source, round):
-        await self.us.storage_update(model, weight, source, round)
+    async def update_received_from_source(self, model, weight, source, round, local=False):
+        await self.us.storage_update(model, weight, source, round, local=False)
 
     async def notify_federation_nodes_removed(self, federation_node, remove=False):
         # Neighbor has been removed
@@ -190,7 +190,6 @@ class Aggregator(ABC):
         return self.get_nodes_pending_models_to_aggregate()
 
     async def include_model_in_buffer(self, model, weight, source=None, round=None, local=False):
-        await self.us.storage_update(model, weight, source, round)
         await self._add_model_lock.acquire_async()
         logging.info(
             f"🔄  include_model_in_buffer | source={source} | round={round} | weight={weight} |--| __models={self._pending_models_to_aggregate.keys()} | federation_nodes={self._federation_nodes} | pending_models_to_aggregate={self.get_nodes_pending_models_to_aggregate()}"
@@ -236,7 +235,7 @@ class Aggregator(ABC):
             )
             lock_acquired = lock_task in done
             if skip_task in done:
-                logging.info("Skipping aggregation wait due to detected desynchronization")
+                logging.info("Skipping aggregation timeout, updates received before grace time")
                 self._aggregation_waiting_skip.clear()
                 if not lock_acquired:
                     lock_task.cancel()
@@ -257,30 +256,47 @@ class Aggregator(ABC):
 
         await self.us.stop_notifying_updates()
         updates = await self.us.get_round_updates()
-
-        if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
-            logging.info(
-                "🔄  get_aggregation | Received an global model. Overwriting my model with the aggregated model."
-            )
-            aggregated_model = next(iter(self._pending_models_to_aggregate.values()))[0]
-            self._pending_models_to_aggregate.clear()
-            return aggregated_model
-
-        unique_nodes_involved = set(node for key in self._pending_models_to_aggregate for node in key.split())
-
-        if len(unique_nodes_involved) != len(self._federation_nodes):
-            missing_nodes = self._federation_nodes - unique_nodes_involved
+        
+        missing_nodes = await self.us.get_round_missing_nodes()
+        
+        if missing_nodes:
             logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
         else:
             logging.info("🔄  get_aggregation | All models accounted for, proceeding with aggregation.")
+        
+        logging.info(
+                f"🔄  Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
+            )    
+        message = self.cm.create_message(
+                "federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]]
+            )
+        await self.cm.send_message_to_neighbors(message)
 
-        self._pending_models_to_aggregate = await self.engine.apply_weight_strategy(self._pending_models_to_aggregate)
-        aggregated_result = self.run_aggregation(self._pending_models_to_aggregate)
-        self._pending_models_to_aggregate.clear()
+        # if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
+        #     logging.info(
+        #         "🔄  get_aggregation | Received an global model. Overwriting my model with the aggregated model."
+        #     )
+        #     aggregated_model = next(iter(self._pending_models_to_aggregate.values()))[0]
+        #     self._pending_models_to_aggregate.clear()
+        #     return aggregated_model
+
+        # unique_nodes_involved = set(node for key in self._pending_models_to_aggregate for node in key.split())
+
+        # if len(unique_nodes_involved) != len(self._federation_nodes):
+        #     missing_nodes = self._federation_nodes - unique_nodes_involved
+        #     logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
+        # else:
+        #     logging.info("🔄  get_aggregation | All models accounted for, proceeding with aggregation.")
+
+        # self._pending_models_to_aggregate = await self.engine.apply_weight_strategy(self._pending_models_to_aggregate)
+        # aggregated_result = self.run_aggregation(self._pending_models_to_aggregate)
+        # self._pending_models_to_aggregate.clear()
+        
+        updates = await self.engine.apply_weight_strategy(updates)
+        aggregated_result = self.run_aggregation(updates)
         return aggregated_result
 
     async def include_next_model_in_buffer(self, model, weight, source=None, round=None):
-        await self.us.storage_update(model, weight, source, round)
         logging.info(f"🔄  include_next_model_in_buffer | source={source} | round={round} | weight={weight}")
         if round not in self._future_models_to_aggregate:
             self._future_models_to_aggregate[round] = []

@@ -1,11 +1,10 @@
-from nebula.core.neighbormanagement.neighborpolicies.neighborpolicy import NeighborPolicy
+from nebula.core.topologymanagement.neighborpolicies.neighborpolicy import NeighborPolicy
 from nebula.core.utils.locker import Locker
-import random
 
-class RINGNeighborPolicy(NeighborPolicy):
+class STARNeighborPolicy(NeighborPolicy):
         
     def __init__(self):
-        self.max_neighbors = 2
+        self.max_neighbors = 1
         self.nodes_known = set()
         self.neighbors = set()
         self.neighbors_lock = Locker(name="neighbors_lock")
@@ -21,7 +20,7 @@ class RINGNeighborPolicy(NeighborPolicy):
     def set_config(self, config):
         """
         Args:
-            config[0] -> list of self neighbors
+            config[0] -> list of self neighbors, in this case, the star point
             config[1] -> list of nodes known on federation
             config[2] -> self.addr
         """
@@ -36,13 +35,7 @@ class RINGNeighborPolicy(NeighborPolicy):
         """
             return true if connection is accepted
         """
-        ac = False
-        self.neighbors_lock.acquire()
-        if not joining:    
-            ac = not source in self.neighbors
-        else:
-            ac = not len(self.neighbors) == self.max_neighbors
-        self.neighbors_lock.release()
+        ac = joining
         return ac
     
     def meet_node(self, node):
@@ -78,18 +71,10 @@ class RINGNeighborPolicy(NeighborPolicy):
         ct_actions = []
         df_actions = []
         if len(self.neighbors) < self.max_neighbors:
-            list_neighbors = list(self.neighbors)
-            index = random.randint(0, len(list_neighbors)-1)
-            node = list_neighbors[index]
-            ct_actions.append(node)                            # connect to
-            df_actions.append(self.addr)                       # disconnect from
+            ct_actions.append(self.neighbors[0])               # connect to star point
+            df_actions.append(self.addr)                       # disconnect from me
         self.neighbors_lock.release()
         return [ct_actions, df_actions]
     
     def update_neighbors(self, node, remove=False):
-        self.neighbors_lock.acquire()
-        if remove:
-            self.neighbors.remove(node)
-        else:
-            self.neighbors.add(node)
-        self.neighbors_lock.release() 
+        pass

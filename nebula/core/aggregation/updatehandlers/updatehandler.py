@@ -26,7 +26,7 @@ class UpdateHandler(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def storage_update(self, model, weight, source, round):
+    async def storage_update(self, model, weight, source, round, local=False):
         """
         Stores an update from a source in the update storage.
 
@@ -38,6 +38,7 @@ class UpdateHandler(ABC):
             weight: The weight assigned to the update (e.g., based on the amount of data used in training).
             source (str): The identifier of the node sending the update.
             round (int): The current device local training round when the update was done.
+            local (boolean): Local update
         """
         raise NotImplementedError
     

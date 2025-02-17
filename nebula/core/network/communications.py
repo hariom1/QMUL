@@ -163,85 +163,89 @@ class CommunicationsManager:
         await self.engine.trigger_event(message_event)
 
     async def handle_model_message(self, source, message):
-        #TODO modificar para generar eventos y gestionar en engine
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
-        if self.get_round() is not None:
-            await self.engine.get_round_lock().acquire_async()
-            current_round = self.get_round()
-            await self.engine.get_round_lock().release_async()
-
-            if message.round != current_round and message.round != -1:
-                logging.info(
-                    f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}"
-                )
-                if message.round > current_round:
-                    logging.info(
-                        f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
-                    )
-                    logging.info("### ENTRO 1 ###")
-                    await self.engine.aggregator.include_next_model_in_buffer(
-                        message.parameters,
-                        message.weight,
-                        source=source,
-                        round=message.round,
-                    )
-                else:
-                    logging.info(f"❗️  handle_model_message | Ignoring model from {source} from a previous round")
-                return
-            if not self.engine.get_federation_ready_lock().locked() and len(self.engine.get_federation_nodes()) == 0:
-                logging.info("🤖  handle_model_message | There are no defined federation nodes")
-                return
-            try:
-                # get_federation_ready_lock() is locked when the model is being initialized (first round)
-                # non-starting nodes receive the initialized model from the starting node
-                if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
-                    decoded_model = self.engine.trainer.deserialize_model(message.parameters)
-                    if False and self.config.participant["adaptive_args"]["model_similarity"]:
-                        pass
-                    
-                    logging.info("### ENTRO 2 ###")
-                    await self.engine.aggregator.include_model_in_buffer(
-                        decoded_model,
-                        message.weight,
-                        source=source,
-                        round=message.round,
-                    )
-
-                else:
-                    if message.round != -1:
-                        # Be sure that the model message is from the initialization round (round = -1)
-                        logging.info(
-                            f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
-                        )
-                        logging.info("### ENTRO 3 ###")
-                        await self.engine.aggregator.include_next_model_in_buffer(
-                            message.parameters,
-                            message.weight,
-                            source=source,
-                            round=message.round,
-                        )
-                        return
-                    logging.info(f"🤖  handle_model_message | Initializing model (executed by {source})")
-                    model_init_event = MessageEvent(("model","initialization"), source, message)
-                    await self.engine.trigger_event(model_init_event)
-
-
-            except Exception as e:
-                logging.exception(f"🤖  handle_model_message | Unknown error adding model: {e}")
-                logging.exception(traceback.format_exc())
-
+        if message.round == -1:
+            model_init_event = MessageEvent(("model","initialization"), source, message)
+            await self.engine.trigger_event(model_init_event)
         else:
-            logging.info("🤖  handle_model_message | Tried to add a model while learning is not running")
-            if message.round != -1:
-                # Be sure that the model message is from the initialization round (round = -1)
-                logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
-                await self.engine.aggregator.include_next_model_in_buffer(
-                    message.parameters,
-                    message.weight,
-                    source=source,
-                    round=message.round,
-                )
-        return
+            model_updt_event = MessageEvent(("model","update"), source, message)
+            await self.engine.trigger_event(model_updt_event)
+            
+        # if self.get_round() is not None:
+        #     await self.engine.get_round_lock().acquire_async()
+        #     current_round = self.get_round()
+        #     await self.engine.get_round_lock().release_async()
+            
+        #     if message.round != current_round and message.round != -1:
+        #         logging.info(
+        #             f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}"
+        #         )
+        #         if message.round > current_round:
+        #             logging.info(
+        #                 f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
+        #             )
+        #             logging.info("### ENTRO 1 ###")
+        #             await self.engine.aggregator.include_next_model_in_buffer(
+        #                 message.parameters,
+        #                 message.weight,
+        #                 source=source,
+        #                 round=message.round,
+        #             )
+        #         else:
+        #             logging.info(f"❗️  handle_model_message | Ignoring model from {source} from a previous round")
+        #         return
+        #     if not self.engine.get_federation_ready_lock().locked() and len(self.engine.get_federation_nodes()) == 0:
+        #         logging.info("🤖  handle_model_message | There are no defined federation nodes")
+        #         return
+        #     try:
+        #         # get_federation_ready_lock() is locked when the model is being initialized (first round)
+        #         # non-starting nodes receive the initialized model from the starting node
+        #         if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
+        #             decoded_model = self.engine.trainer.deserialize_model(message.parameters)
+        #             if False and self.config.participant["adaptive_args"]["model_similarity"]:
+        #                 pass
+                    
+        #             logging.info("### ENTRO 2 ###")
+        #             await self.engine.aggregator.include_model_in_buffer(
+        #                 decoded_model,
+        #                 message.weight,
+        #                 source=source,
+        #                 round=message.round,
+        #             )
+
+        #         else:
+        #             if message.round != -1:
+        #                 # Be sure that the model message is from the initialization round (round = -1)
+        #                 logging.info(
+        #                     f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
+        #                 )
+        #                 logging.info("### ENTRO 3 ###")
+        #                 await self.engine.aggregator.include_next_model_in_buffer(
+        #                     message.parameters,
+        #                     message.weight,
+        #                     source=source,
+        #                     round=message.round,
+        #                 )
+        #                 return
+
+
+        #     except Exception as e:
+        #         logging.exception(f"🤖  handle_model_message | Unknown error adding model: {e}")
+        #         logging.exception(traceback.format_exc())
+
+        # else:
+        #     logging.info("🤖  handle_model_message | Tried to add a model while learning is not running")
+        #     if message.round != -1:
+        #         # Be sure that the model message is from the initialization round (round = -1)
+        #         logging.info("### ENTRO 4 ###")
+        #         logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
+        #         await self.engine.aggregator.include_next_model_in_buffer(
+        #             message.parameters,
+        #             message.weight,
+        #             source=source,
+        #             round=message.round,
+        #         )
+        # return
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         return self.mm.create_message(message_type, action, *args, **kwargs)
@@ -289,6 +293,7 @@ class CommunicationsManager:
     async def is_external_connection_service_running(self):
         return self.ecs.is_running()
 
+    #TODO comprobar que el verify_connections no cree un bucle de espera infinito
     async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None):
         """
         Using ExternalConnectionService to get addrs on local network, after that

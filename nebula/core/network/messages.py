@@ -181,7 +181,7 @@ class MessagesManager:
         # logging.info(f"kwargs parameters: {kwargs.keys()}")
         for param_name in template_params:
             if param_name not in kwargs:
-                logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")
+                #logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")
                 kwargs[param_name] = default_values.get(param_name)
 
         # Create an instance of the protobuf message class using the constructed kwargs

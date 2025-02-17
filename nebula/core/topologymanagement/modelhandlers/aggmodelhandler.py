@@ -1,4 +1,4 @@
-from nebula.core.neighbormanagement.modelhandlers.modelhandler import ModelHandler
+from nebula.core.topologymanagement.modelhandlers.modelhandler import ModelHandler
 from nebula.core.utils.locker import Locker
 
 class AGGModelHandler(ModelHandler):
