@@ -269,6 +269,11 @@ class CommunicationsManager:
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
+    
+    #TODO remove
+    async def update_neighbors(self, addr, remove=False):
+        current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
+        await self.engine.update_neighbors(addr, current_connections, remove=remove)
 
     def get_connections_lock(self):
         return self.connections_lock

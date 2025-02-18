@@ -397,7 +397,7 @@ class NodeManager:
             if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
                 self.engine.update_sinchronized_status(False)
-                await self.reconnect_to_federation()
+                #await self.reconnect_to_federation()
             elif (
                 self.neighbor_policy.need_more_neighbors()
                 and self.engine.get_sinchronized_status()

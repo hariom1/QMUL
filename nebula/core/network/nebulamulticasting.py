@@ -201,8 +201,9 @@ class NebulaConnectionService(ExternalConnectionService):
             if linea.strip().startswith("LOCATION:"):
                 addr = linea.split(": ")[1].strip()
                 break
-        logging.info(f"Device addr received: {addr}")
-        self.nodes_found.append(addr)
+        if addr != self.addr:
+            logging.info(f"Device addr received: {addr}")
+            self.nodes_found.append(addr)
         self.addrs_found_lock.release()
         
     def get_nodes(self):

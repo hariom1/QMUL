@@ -153,6 +153,7 @@ class DFLUpdateHandler(UpdateHandler):
         await self._updates_storage_lock.acquire_async()
         if remove:
             self._sources_expected.discard(source)
+            await self._all_updates_received()
         else:
             self.us[source] = (None, deque(maxlen=self._buffersize))
             self._sources_expected.add(source)

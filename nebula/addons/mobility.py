@@ -346,6 +346,7 @@ class Mobility:
                     ):
                         logging.info(f"📍  Node {addr} is close enough [{distance}], adding to direct connections")
                         self.cm.connections[addr].set_direct(True)
+                        await self.cm.update_neighbors(addr)
                     else:
                         # 10% margin to avoid oscillations
                         if (
@@ -355,7 +356,9 @@ class Mobility:
                             logging.info(
                                 f"📍  Node {addr} is too far away [{distance}], removing from direct connections"
                             )
+                            await asyncio.sleep(1)
                             self.cm.connections[addr].set_direct(False)
+                            await self.cm.update_neighbors(addr,remove=True)
                     # Adapt network conditions of the connection based on distance
                     for threshold in sorted(self.network_conditions.keys()):
                         if distance < threshold:
