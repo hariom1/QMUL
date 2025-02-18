@@ -7,7 +7,8 @@ from nebula.core.situationalawareness.candidateselection.candidateselector impor
 from nebula.core.situationalawareness.fastreboot import FastReboot
 from nebula.core.situationalawareness.modelhandlers.modelhandler import factory_ModelHandler
 from nebula.core.situationalawareness.momentum import Momentum
-from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+#from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+from nebula.core.situationalawareness.awareness.samodule import SAModule
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -22,7 +23,6 @@ class NodeManager:
         aditional_participant,
         topology,
         model_handler,
-        push_acceleration,
         engine: "Engine",
         fastreboot=False,
         momentum=False,
@@ -35,8 +35,6 @@ class NodeManager:
         logging.info("🌐  Initializing Node Manager")
         self._engine = engine
         self.config = engine.get_config()
-        logging.info("Initializing Neighbor policy")
-        self._neighbor_policy = factory_NeighborPolicy(self.topology)
         logging.info("Initializing Candidate Selector")
         self._candidate_selector = factory_CandidateSelector(self.topology)
         logging.info("Initializing Model Handler")
@@ -47,27 +45,23 @@ class NodeManager:
         self.pending_confirmation_from_nodes_lock = Locker(name="pending_confirmation_from_nodes_lock", async_lock=True)
         self.accept_candidates_lock = Locker(name="accept_candidates_lock")
         self.recieve_offer_timer = 5
-        self._restructure_process_lock = Locker(name="restructure_process_lock")
-        self.restructure = False
-        self._restructure_cooldown = 0
         self.discarded_offers_addr_lock = Locker(name="discarded_offers_addr_lock")
         self.discarded_offers_addr = []
-        self._push_acceleration = push_acceleration
-
-        self.synchronizing_rounds = False
 
         self._fast_reboot_status = fastreboot
         self._momemtum_status = momentum
 
         self._desc_done = False #TODO remove
+        
+        self._situational_awareness_module = SAModule(self, self.engine.addr, topology)
 
     @property
     def engine(self):
         return self._engine
 
-    @property
-    def neighbor_policy(self):
-        return self._neighbor_policy
+    # @property
+    # def neighbor_policy(self):
+    #     return self._neighbor_policy
 
     @property
     def candidate_selector(self):
@@ -82,32 +76,14 @@ class NodeManager:
         return self._fastreboot
 
     @property
-    def mom(self):
-        return self._momemtum
+    def sam(self):
+        return self._situational_awareness_module
 
     def fast_reboot_on(self):
         return self._fast_reboot_status
 
-    def _update_restructure_cooldown(self):
-        if self._restructure_cooldown:
-            self._restructure_cooldown = (self._restructure_cooldown + 1) % RESTRUCTURE_COOLDOWN
-
-    def _restructure_available(self):
-        if self._restructure_cooldown:
-            logging.info("Reestructure on cooldown")
-        return self._restructure_cooldown == 0
-
-    def get_push_acceleration(self):
-        return self._push_acceleration
-
     def get_restructure_process_lock(self):
-        return self._restructure_process_lock
-
-    def set_synchronizing_rounds(self, status):
-        self.synchronizing_rounds = status
-
-    def get_syncrhonizing_rounds(self):
-        return self.synchronizing_rounds
+        return self.sam.get_restructure_process_lock()
 
     async def set_rounds_pushed(self, rp):
         if self.fast_reboot_on():
@@ -118,11 +94,6 @@ class NodeManager:
 
     async def set_configs(self):
         """
-        neighbor_policy config:
-            - direct connections a.k.a neighbors
-            - all nodes known
-            - self addr
-
         model_handler config:
             - self total rounds
             - self current round
@@ -133,31 +104,13 @@ class NodeManager:
             - self weight distance
             - self weight hetereogeneity
         """
-        logging.info("Building neighbor policy configuration..")
-        self.neighbor_policy.set_config([
-            await self.engine.cm.get_addrs_current_connections(only_direct=True, myself=False),
-            await self.engine.cm.get_addrs_current_connections(only_direct=False, only_undirected=False, myself=False),
-            self.engine.addr,
-            self,
-        ])
+        await self.sam.init()
         logging.info("Building candidate selector configuration..")
         self.candidate_selector.set_config([0, 0.5, 0.5])
         # self.engine.trainer.get_loss(), self.config.participant["molibity_args"]["weight_distance"], self.config.participant["molibity_args"]["weight_het"]
 
         if self._fast_reboot_status:
             self._fastreboot = FastReboot(self)
-
-        self._momemtum = None
-        if self._momemtum_status and not self._aditional_participant:
-            self._momemtum = Momentum(
-                self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False
-            )
-
-    def late_config(self):
-        if self._momemtum_status:
-            self._momemtum = Momentum(
-                self, self.neighbor_policy.get_nodes_known(neighbors_only=True), dispersion_penalty=False
-            )
 
     """
                 ##############################
@@ -172,8 +125,6 @@ class NodeManager:
         logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
         self.meet_node(addr)
         await self.update_neighbors(addr)
-        if self._momemtum_status:
-            await self.mom.update_node(addr)
         if joinning_federation:
             if self.fast_reboot_on():
                 await self.fr.add_fastReboot_addr(addr)
@@ -181,8 +132,6 @@ class NodeManager:
     async def apply_weight_strategy(self, updates: dict):
         if self.fast_reboot_on():
             await self.fr.apply_weight_strategy(updates)
-        if self._momemtum:
-            await self._momemtum.calculate_momentum_weights(updates)
 
     """
                 ##############################
@@ -191,12 +140,12 @@ class NodeManager:
     """
 
     def accept_connection(self, source, joining=False):
-        return self.neighbor_policy.accept_connection(source, joining)
+        return self.sam.accept_connection(source, joining)
 
     async def add_pending_connection_confirmation(self, addr):
         await self._update_neighbors_lock.acquire_async()
         await self.pending_confirmation_from_nodes_lock.acquire_async()
-        if addr not in self.neighbor_policy.get_nodes_known(neighbors_only=True):
+        if addr not in self.sam.get_nodes_known(neighbors_only=True):
             logging.info(f" Addition | pending connection confirmation from: {addr}")
             self.pending_confirmation_from_nodes.add(addr)
         await self.pending_confirmation_from_nodes_lock.release_async()
@@ -232,38 +181,28 @@ class NodeManager:
         self.discarded_offers_addr_lock.release()
 
     def need_more_neighbors(self):
-        return self.neighbor_policy.need_more_neighbors()
+        return self.sam.need_more_neighbors()
 
     def get_actions(self):
-        return self.neighbor_policy.get_actions()
+        return self.sam.get_actions()
 
     async def update_neighbors(self, node, remove=False):
         logging.info(f"Update neighbor | node addr: {node} | remove: {remove}")
         await self._update_neighbors_lock.acquire_async()
-        self.neighbor_policy.update_neighbors(node, remove)
-        # self.timer_generator.update_node(node, remove)
+        self.sam.update_neighbors(node, remove)
         if remove:
             if self._fast_reboot_status:
                 self.fr.discard_fastreboot_for(node)
-            if self._momemtum_status:
-                await self.mom.update_node(node, remove=True)
         else:
-            self.neighbor_policy.meet_node(node)
-            if self._momemtum_status:
-                await self.mom.update_node(node)
+            self.sam.meet_node(node)
             self._remove_pending_confirmation_from(node)
         await self._update_neighbors_lock.release_async()
 
-    async def neighbors_left(self):
-        return len(await self.engine.cm.get_addrs_current_connections(only_direct=True, myself=False)) > 0
-
     def meet_node(self, node):
-        if node != self.engine.addr:
-            logging.info(f"Update nodes known | addr: {node}")
-            self.neighbor_policy.meet_node(node)
+        self.sam.meet_node(node)
 
     def get_nodes_known(self, neighbors_too=False):
-        return self.neighbor_policy.get_nodes_known(neighbors_too)
+        return self.sam.get_nodes_known(neighbors_too)
 
     def accept_model_offer(self, source, decoded_model, rounds, round, epochs, n_neighbors, loss):
         if not self.accept_candidates_lock.locked():
@@ -283,9 +222,6 @@ class NodeManager:
         if not self.accept_candidates_lock.locked():
             self.candidate_selector.add_candidate((source, n_neighbors, loss))
 
-    async def currently_reestructuring(self):
-        return self._restructure_process_lock.locked()
-
     async def stop_not_selected_connections(self):
         try:
             with self.discarded_offers_addr_lock:
@@ -302,26 +238,6 @@ class NodeManager:
                     self.discarded_offers_addr = []
         except asyncio.CancelledError:
             pass
-
-    #TODO todo esto es innecesario
-    async def check_external_connection_service_status(self):
-        logging.info("🔄 Checking external connection service status...")
-        n = await self.neighbors_left()
-        ecs = await self.engine.cm.is_external_connection_service_running()
-        ss = self.engine.get_sinchronized_status()
-        action = None
-        logging.info(f"Stats | neighbors: {n} | service running: {ecs} | synchronized status: {ss}")
-        if not await self.neighbors_left() and await self.engine.cm.is_external_connection_service_running():
-            logging.info("❗️  Isolated node | Shutdowning service required")
-            #action = lambda: self.engine.cm.stop_external_connection_service()
-        elif (
-            await self.neighbors_left()
-            and not await self.engine.cm.is_external_connection_service_running()
-            and self.engine.get_sinchronized_status()
-        ):
-            logging.info("🔄 NOT isolated node | Service not running | Starting service...")
-            action = lambda: self.engine.cm.init_external_connection_service()
-        return action
 
     async def start_late_connection_process(self, connected=False, msg_type="discover_join", addrs_known=None):
         """
@@ -344,6 +260,7 @@ class NodeManager:
 
         # wait offer
         #TODO actualizar con la informacion de latencias
+        logging.info(f"Connections stablish after finding federation: {connections_stablished}")
         if connections_stablished:
             logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
             await asyncio.sleep(self.recieve_offer_timer)
@@ -369,13 +286,13 @@ class NodeManager:
                     await asyncio.sleep(1)
             except asyncio.CancelledError:
                 await self.update_neighbors(addr, remove=True)
-                pass
+                logging.info("Error during stablishment")
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
             if not self._desc_done: #TODO remove
                 self._desc_done = True
-                #asyncio.create_task(self.stop_connections_with_federation())
+                asyncio.create_task(self.sam.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -391,66 +308,7 @@ class NodeManager:
                     ##############################
     """
 
-    async def check_robustness(self):
-        logging.info("🔄 Analizing node network robustness...")
-        logging.info(f"Synchronization status: {self.engine.get_sinchronized_status()} | got neighbors: {await self.neighbors_left()}")
-        if not self._restructure_process_lock.locked():
-            if not await self.neighbors_left():
-                logging.info("No Neighbors left | reconnecting with Federation")
-                self.engine.update_sinchronized_status(False)
-                #await self.reconnect_to_federation()
-            elif (
-                self.neighbor_policy.need_more_neighbors()
-                and self.engine.get_sinchronized_status()
-                and self._restructure_available()
-            ):
-                logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
-                self._update_restructure_cooldown()
-                possible_neighbors = self.neighbor_policy.get_nodes_known(neighbors_too=False)
-                possible_neighbors = await self.engine.cm.apply_restrictions(possible_neighbors)
-                if not possible_neighbors:
-                    logging.info("All possible neighbors using nodes known are restricted...")
-                else:
-                    pass                                
-                    #asyncio.create_task(self.upgrade_connection_robustness(possible_neighbors)) 
-            else:
-                if not self.engine.get_sinchronized_status():
-                    logging.info("Device not synchronized with federation")  
-                else:
-                    logging.info("Sufficient Robustness | no actions required")
-        else:
-            logging.info("❗️ Reestructure/Reconnecting process already running...")
+    async def mobility_actions(self):
+        await self.sam.check_external_connection_service_status()
+        await self.sam.analize_topology_robustness()
 
-    async def reconnect_to_federation(self):
-        self._restructure_process_lock.acquire()
-        await self.engine.cm.clear_restrictions()
-        #await asyncio.sleep(120) 
-        # If we got some refs, try to reconnect to them                 
-        if len(self.neighbor_policy.get_nodes_known()) > 0:
-            logging.info("Reconnecting | Addrs availables")
-            await self.start_late_connection_process(connected=False, msg_type="discover_nodes", addrs_known=self.neighbor_policy.get_nodes_known())
-        else:
-            logging.info("Reconnecting | NO Addrs availables")
-            await self.start_late_connection_process(connected=False, msg_type="discover_nodes")
-        self._restructure_process_lock.release()
-
-    async def upgrade_connection_robustness(self, possible_neighbors):
-        self._restructure_process_lock.acquire()
-        #addrs_to_connect = self.neighbor_policy.get_nodes_known(neighbors_too=False)
-        # If we got some refs, try to connect to them
-        if len(possible_neighbors) > 0:
-            logging.info(f"Reestructuring | Addrs availables | addr list: {possible_neighbors}")
-            await self.start_late_connection_process(connected=True, msg_type="discover_nodes", addrs_known=possible_neighbors)
-        else:
-            logging.info("Reestructuring | NO Addrs availables")
-            await self.start_late_connection_process(connected=True, msg_type="discover_nodes")
-        self._restructure_process_lock.release()
-        
-    async def stop_connections_with_federation(self):
-        await asyncio.sleep(100)
-        logging.info("### DISCONNECTING FROM FEDERATON ###")
-        neighbors = self.neighbor_policy.get_nodes_known(neighbors_only=True)
-        for n in neighbors: 
-            await self.engine.cm.add_to_blacklist(n)
-        for n in neighbors:
-            await self.engine.cm.disconnect(n, mutual_disconnection=False, forced=True)

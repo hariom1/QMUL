@@ -55,6 +55,7 @@ class BlackList:
     
     async def clear_blacklist(self):
         await self._blacklisted_nodes_lock.acquire_async()
+        logging.info(f"🧹 Removing nodes from blacklist")
         self._blacklisted_nodes.clear()
         await self._blacklisted_nodes_lock.release_async()
     
@@ -119,6 +120,7 @@ class BlackList:
         
     async def clear_recently_disconected(self):
         self._recently_disconnected_lock.acquire_async()
+        logging.info(f"🧹 Removing nodes from Recently Disconencted list")
         self._recently_disconnected.clear()
         self._recently_disconnected_lock.release_async()
         

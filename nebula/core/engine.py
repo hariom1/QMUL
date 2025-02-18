@@ -152,12 +152,10 @@ class Engine:
             topology = self.config.participant["mobility_args"]["topology_type"]
             topology = topology.lower()
             model_handler = "std"  # self.config.participant["mobility_args"]["model_handler"]
-            acceleration_push = "fast"  # self.config.participant["mobility_args"]["push_strategy"]
             self._node_manager = NodeManager(
                 config.participant["mobility_args"]["additional_node"]["status"],
                 topology,
                 model_handler,
-                acceleration_push,
                 engine=self,
             )
 
@@ -582,15 +580,11 @@ class Engine:
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
-        self.nm.late_config()
         await self.nm.start_late_connection_process()
         # continue ..
         # asyncio.create_task(self.nm.stop_not_selected_connections())
         logging.info("Creating trainer service to start the federation process..")
         asyncio.create_task(self._start_learning_late())
-
-    def get_push_acceleration(self):
-        return self.nm.get_push_acceleration()
 
     async def set_pushed_done(self, rounds_push):
         await self.nm.set_rounds_pushed(rounds_push)
@@ -892,10 +886,7 @@ class Engine:
         if not self.mobility:
             return
         logging.info("🔄 Starting additional mobility actions...")
-        await self.nm.check_robustness()
-        action = await self.nm.check_external_connection_service_status()
-        if action:
-            action()
+        await self.nm.mobility_actions()
 
     def reputation_calculation(self, aggregated_models_weights):
         cossim_threshold = 0.5

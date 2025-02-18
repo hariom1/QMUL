@@ -314,8 +314,8 @@ class Connection:
                 self.incompleted_reconnections = 0
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
-        except asyncio.CancelledError:
-            logging.info("Message handling cancelled")
+        except asyncio.CancelledError as e:
+            logging.exception(f"Message handling cancelled: {e}")
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
@@ -324,6 +324,7 @@ class Connection:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
             if self.direct:
+                #TODO tal vez una task?
                 await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
