@@ -313,7 +313,7 @@ class NodeManager:
         logging.info(f"Stats | neighbors: {n} | service running: {ecs} | synchronized status: {ss}")
         if not await self.neighbors_left() and await self.engine.cm.is_external_connection_service_running():
             logging.info("❗️  Isolated node | Shutdowning service required")
-            action = lambda: self.engine.cm.stop_external_connection_service()
+            #action = lambda: self.engine.cm.stop_external_connection_service()
         elif (
             await self.neighbors_left()
             and not await self.engine.cm.is_external_connection_service_running()
@@ -374,7 +374,7 @@ class NodeManager:
             self.candidate_selector.remove_candidates()
             if not self._desc_done: #TODO remove
                 self._desc_done = True
-                asyncio.create_task(self.stop_connections_with_federation())
+                #asyncio.create_task(self.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -423,9 +423,9 @@ class NodeManager:
     async def reconnect_to_federation(self):
         self._restructure_process_lock.acquire()
         await self.engine.cm.clear_restrictions()
-        await asyncio.sleep(120)
-        if await self.engine.cm.is_external_connection_service_running():
-            self.engine.cm.stop_external_connection_service()  
+        #await asyncio.sleep(120)
+        #if await self.engine.cm.is_external_connection_service_running():
+        #    self.engine.cm.stop_external_connection_service()  
         # If we got some refs, try to reconnect to them                 
         if len(self.neighbor_policy.get_nodes_known()) > 0:
             logging.info("Reconnecting | Addrs availables")

@@ -844,7 +844,7 @@ class Engine:
                 indent=2,
                 title="Round information",
             )
-            await self.aggregator.reset()
+            #await self.aggregator.reset()
             self.trainer.on_round_end()
             self.round = self.round + 1
             self.config.participant["federation_args"]["round"] = (

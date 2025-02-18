@@ -90,19 +90,22 @@ class Aggregator(ABC):
 
     async def notify_federation_nodes_removed(self, federation_node, remove=False):
         await self.us.notify_federation_update(federation_node, remove=remove)
+        
+    def get_nodes_pending_models_to_aggregate(self):
+        return self._federation_nodes
 
     def set_waiting_global_update(self):
         self._waiting_global_update = True
 
-    async def reset(self):
-        await self._add_model_lock.acquire_async()
-        self._federation_nodes.clear()
-        self._pending_models_to_aggregate.clear()
-        try:
-            await self._aggregation_done_lock.release_async()
-        except:
-            pass
-        await self._add_model_lock.release_async()
+    # async def reset(self):
+    #     await self._add_model_lock.acquire_async()
+    #     self._federation_nodes.clear()
+    #     self._pending_models_to_aggregate.clear()
+    #     try:
+    #         await self._aggregation_done_lock.release_async()
+    #     except:
+    #         pass
+    #     await self._add_model_lock.release_async()
 
     async def get_aggregation(self):
         try:
@@ -133,7 +136,7 @@ class Aggregator(ABC):
         except Exception as e:
             logging.exception(f"🔄  get_aggregation | Error acquiring lock: {e}")
         finally:
-            if lock_acquired:
+            if lock_acquired or self._aggregation_done_lock.locked():
                 await self._aggregation_done_lock.release_async()
 
         await self.us.stop_notifying_updates()

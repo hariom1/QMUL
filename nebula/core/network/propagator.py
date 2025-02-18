@@ -163,8 +163,8 @@ class Propagator:
         for neighbor_addr in eligible_neighbors:
             asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
 
-        if len(self.aggregator.get_nodes_pending_models_to_aggregate()) >= len(self.aggregator._federation_nodes):
-            return False
+        # if len(self.aggregator.get_nodes_pending_models_to_aggregate()) >= len(self.aggregator._federation_nodes):
+        #     return False
 
         await asyncio.sleep(self.interval)
         return True

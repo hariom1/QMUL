@@ -237,11 +237,13 @@ class CommunicationsManager:
 
         msg = self.create_message("discover", msg_type)
         
-        neighbors = await self.get_addrs_current_connections(only_undirected=True)
+        # Remove neighbors
+        neighbors = await self.get_addrs_current_connections(only_undirected=True, myself=True)
         addrs = set(addrs)
         if neighbors:
             addrs.difference_update(neighbors)
 
+        discovers_sent = 0
         if addrs:
             logging.info("Starting communications with devices found")
             max_tries = 5
@@ -249,17 +251,18 @@ class CommunicationsManager:
                 await self.connect(addr, direct=False)
                 await asyncio.sleep(1)
             for i in range(0,max_tries):
-                if self.verify_connections(addrs):
+                if self.verify_any_connections(addrs):
                     break
                 await asyncio.sleep(1)
-            # while not self.verify_connections(addrs):
-            #     await asyncio.sleep(1)
             current_connections = await self.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Connections verified after searching: {current_connections}")
+            
             for addr in addrs:
                 logging.info(f"Sending {msg_type} to ---> {addr}")
                 asyncio.create_task(self.send_message(addr, msg))
                 await asyncio.sleep(1)
+                discovers_sent += 1
+        return discovers_sent
 
 
     """                                                     ##############################
@@ -438,6 +441,12 @@ class CommunicationsManager:
                 connection["tries"] += 1
                 await self.connect(connection["addr"])
 
+    def verify_any_connections(self, neighbors):
+        # Return True if any neighbors are connected
+        if any(neighbor in self.connections for neighbor in neighbors):
+            return True
+        return False
+    
     def verify_connections(self, neighbors):
         # Return True if all neighbors are connected
         if all(neighbor in self.connections for neighbor in neighbors):
@@ -452,8 +461,8 @@ class CommunicationsManager:
         self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
-            pass
-            #await self._discoverer.start()
+            #pass
+            await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
