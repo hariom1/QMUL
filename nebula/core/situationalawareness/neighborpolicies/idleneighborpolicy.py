@@ -1,8 +1,8 @@
-from nebula.core.topologymanagement.neighborpolicies.neighborpolicy import NeighborPolicy
+from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import NeighborPolicy
 from nebula.core.utils.locker import Locker
 
-class FCNeighborPolicy(NeighborPolicy):
-    
+class IDLENeighborPolicy(NeighborPolicy):
+
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()
@@ -17,7 +17,7 @@ class FCNeighborPolicy(NeighborPolicy):
             if there are more nodes known that self.neighbors, more neighbors are required
         """
         self.neighbors_lock.acquire()
-        need_more = (len(self.neighbors) < len(self.nodes_known))
+        need_more = (len(self.neighbors) <= 0)
         self.neighbors_lock.release()
         return need_more
     
@@ -108,4 +108,4 @@ class FCNeighborPolicy(NeighborPolicy):
                 pass    
         else:
             self.neighbors.add(node)
-        self.neighbors_lock.release() 
+        self.neighbors_lock.release()

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
-    from nebula.core.topologymanagement.nodemanager import NodeManager
+    from nebula.core.situationalawareness.nodemanager import NodeManager
 
 VANILLA_LEARNING_RATE = 1e-3
 FR_LEARNING_RATE = 1e-3

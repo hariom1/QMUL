@@ -125,13 +125,13 @@ class DFLUpdateHandler(UpdateHandler):
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
-            updt = source_historic[-1] # Get last update received
+            updt = source_historic[-1]                                          # Get last update received
             if last_updt_received and last_updt_received == updt:
                 logging.info(f"Missing update from source: {sr}, using last update received..")
                 self._nodes_using_historic.add(sr)
             else:
                 last_updt_received = updt
-                self.us[sr] = (last_updt_received, source_historic) # Update storage with new last update used
+                self.us[sr] = (last_updt_received, source_historic)             # Update storage with new last update used
             updates[sr] = (updt.model, updt.weight)
 
         await self._updates_storage_lock.release_async()
@@ -144,16 +144,15 @@ class DFLUpdateHandler(UpdateHandler):
             else:
                 await self._update_source(source, remove)
         else:
-            # Not received update from this source yet
-            if not source in self._sources_received:
+            if not source in self._sources_received:                            # Not received update from this source yet
                 await self._update_source(source, remove=True)
+                await self._all_updates_received()                              # Verify if discarding node aggregation could be done
             
     async def _update_source(self, source, remove=False):
         logging.info(f"🔄 Update | remove: {remove} | source: {source}")
         await self._updates_storage_lock.acquire_async()
         if remove:
             self._sources_expected.discard(source)
-            await self._all_updates_received()
         else:
             self.us[source] = (None, deque(maxlen=self._buffersize))
             self._sources_expected.add(source)

@@ -24,10 +24,10 @@ class CandidateSelector(ABC):
         pass
     
 def factory_CandidateSelector(topology) -> CandidateSelector:
-    from nebula.core.topologymanagement.candidateselection.stdcandidateselector import STDandidateSelector
-    from nebula.core.topologymanagement.candidateselection.fccandidateselector import FCCandidateSelector
-    from nebula.core.topologymanagement.candidateselection.hetcandidateselector import HETCandidateSelector
-    from nebula.core.topologymanagement.candidateselection.ringcandidateselector import RINGCandidateSelector
+    from nebula.core.situationalawareness.candidateselection.stdcandidateselector import STDandidateSelector
+    from nebula.core.situationalawareness.candidateselection.fccandidateselector import FCCandidateSelector
+    from nebula.core.situationalawareness.candidateselection.hetcandidateselector import HETCandidateSelector
+    from nebula.core.situationalawareness.candidateselection.ringcandidateselector import RINGCandidateSelector
     
     options = {
         "ring": RINGCandidateSelector,

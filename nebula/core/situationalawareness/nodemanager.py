@@ -3,11 +3,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
-from nebula.core.topologymanagement.candidateselection.candidateselector import factory_CandidateSelector
-from nebula.core.topologymanagement.fastreboot import FastReboot
-from nebula.core.topologymanagement.modelhandlers.modelhandler import factory_ModelHandler
-from nebula.core.topologymanagement.momentum import Momentum
-from nebula.core.topologymanagement.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+from nebula.core.situationalawareness.candidateselection.candidateselector import factory_CandidateSelector
+from nebula.core.situationalawareness.fastreboot import FastReboot
+from nebula.core.situationalawareness.modelhandlers.modelhandler import factory_ModelHandler
+from nebula.core.situationalawareness.momentum import Momentum
+from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -340,12 +340,13 @@ class NodeManager:
         await self.clear_pending_confirmations()
 
         # find federation and send discover
-        await self.engine.cm.stablish_connection_to_federation(msg_type, addrs_known)
+        connections_stablished = await self.engine.cm.stablish_connection_to_federation(msg_type, addrs_known)
 
         # wait offer
         #TODO actualizar con la informacion de latencias
-        logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
-        await asyncio.sleep(self.recieve_offer_timer)
+        if connections_stablished:
+            logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
+            await asyncio.sleep(self.recieve_offer_timer)
 
         # acquire lock to not accept late candidates
         self.accept_candidates_lock.acquire()
@@ -360,7 +361,7 @@ class NodeManager:
 
             best_candidates = self.candidate_selector.select_candidates()
             logging.info(f"Candidates | {[addr for addr, _, _ in best_candidates]}")
-            # candidates not choosen --> disconnect
+            #TODO candidates not choosen --> disconnect
             try:
                 for addr, _, _ in best_candidates:
                     await self.add_pending_connection_confirmation(addr)
@@ -423,9 +424,7 @@ class NodeManager:
     async def reconnect_to_federation(self):
         self._restructure_process_lock.acquire()
         await self.engine.cm.clear_restrictions()
-        #await asyncio.sleep(120)
-        #if await self.engine.cm.is_external_connection_service_running():
-        #    self.engine.cm.stop_external_connection_service()  
+        #await asyncio.sleep(120) 
         # If we got some refs, try to reconnect to them                 
         if len(self.neighbor_policy.get_nodes_known()) > 0:
             logging.info("Reconnecting | Addrs availables")

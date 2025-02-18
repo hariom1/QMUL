@@ -9,7 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.topologymanagement.nodemanager import NodeManager
+from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
 

@@ -20,9 +20,9 @@ class ModelHandler(ABC):
         pass
     
 def factory_ModelHandler(model_handler) -> ModelHandler:
-    from nebula.core.topologymanagement.modelhandlers.stdmodelhandler import STDModelHandler
-    from nebula.core.topologymanagement.modelhandlers.aggmodelhandler import AGGModelHandler
-    from nebula.core.topologymanagement.modelhandlers.defaultmodelhandler import DefaultModelHandler
+    from nebula.core.situationalawareness.modelhandlers.stdmodelhandler import STDModelHandler
+    from nebula.core.situationalawareness.modelhandlers.aggmodelhandler import AGGModelHandler
+    from nebula.core.situationalawareness.modelhandlers.defaultmodelhandler import DefaultModelHandler
     
     options = {
         "std": STDModelHandler,
