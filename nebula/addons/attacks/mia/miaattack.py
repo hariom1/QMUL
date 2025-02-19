@@ -3,39 +3,39 @@ import torch
 
 class MembershipInferenceAttack:
     """
-        Base Class for conducting Membership Inference Attacks on a given model and dataset.
+    Base Class for conducting Membership Inference Attacks on a given model and dataset.
 
-        Attributes:
-            model (torch.nn.Module): The model to be attacked.
-            global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
-            in_eval (DataLoader): DataLoader for in-sample evaluation.
-            out_eval (DataLoader): DataLoader for out-sample evaluation.
-            device (torch.device): The device used for computation (CPU or GPU).
-            in_eval_pre (tuple): Prediction scores and labels for in-sample evaluation.
-            out_eval_pre (tuple): Prediction scores and labels for out-sample evaluation.
-            index_mapping (dict): Mapping of indices to decompose in-samples for each node.
+    Attributes:
+        model (torch.nn.Module): The model to be attacked.
+        global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
+        in_eval (DataLoader): DataLoader for in-sample evaluation.
+        out_eval (DataLoader): DataLoader for out-sample evaluation.
+        device (torch.device): The device used for computation (CPU or GPU).
+        in_eval_pre (tuple): Prediction scores and labels for in-sample evaluation.
+        out_eval_pre (tuple): Prediction scores and labels for out-sample evaluation.
+        index_mapping (dict): Mapping of indices to decompose in-samples for each node.
 
-        Methods:
-            _compute_predictions(model, dataloader):
-                Computes the predictions and labels for a given model and dataloader.
-            execute_attack():
-                Placeholder method to be overridden by specific attack implementations.
-            evaluate_metrics(true_p, false_p):
-                Evaluates and returns precision, recall, false positive rate, and F1 score.
-            evaluate_tp_for_each_node(in_predictions):
-                Records and returns the number of true positives for each node's in-sample evaluation group.
+    Methods:
+        _compute_predictions(model, dataloader):
+            Computes the predictions and labels for a given model and dataloader.
+        execute_attack():
+            Placeholder method to be overridden by specific attack implementations.
+        evaluate_metrics(true_p, false_p):
+            Evaluates and returns precision, recall, false positive rate, and F1 score.
+        evaluate_tp_for_each_node(in_predictions):
+            Records and returns the number of true positives for each node's in-sample evaluation group.
     """
 
     def __init__(self, model, global_dataset, in_eval, out_eval, indexing_map):
         """
-           Initializes the MembershipInferenceAttack class with the given model, dataset, and evaluation data.
+        Initializes the MembershipInferenceAttack class with the given model, dataset, and evaluation data.
 
-           Args:
-               model (torch.nn.Module): The model to be attacked.
-               global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
-               in_eval (DataLoader): DataLoader for in-sample evaluation.
-               out_eval (DataLoader): DataLoader for out-sample evaluation.
-               indexing_map (dict): Mapping of indices to decompose in-samples for each node.
+        Args:
+            model (torch.nn.Module): The model to be attacked.
+            global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
+            in_eval (DataLoader): DataLoader for in-sample evaluation.
+            out_eval (DataLoader): DataLoader for out-sample evaluation.
+            indexing_map (dict): Mapping of indices to decompose in-samples for each node.
         """
 
         self.model = model
@@ -43,7 +43,7 @@ class MembershipInferenceAttack:
         self.in_eval = in_eval
         self.out_eval = out_eval
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.in_eval_pre = self._compute_predictions(self.model, self.in_eval)
         self.out_eval_pre = self._compute_predictions(self.model, self.out_eval)
@@ -52,14 +52,14 @@ class MembershipInferenceAttack:
 
     def _compute_predictions(self, model, dataloader):
         """
-            Computes the predictions and labels for a given model and dataloader.
+        Computes the predictions and labels for a given model and dataloader.
 
-            Args:
-                model (torch.nn.Module): The model to be used for predictions.
-                dataloader (DataLoader): The dataloader providing input data and labels.
+        Args:
+            model (torch.nn.Module): The model to be used for predictions.
+            dataloader (DataLoader): The dataloader providing input data and labels.
 
-            Returns:
-                tuple: A tuple containing tensors of predictions and labels.
+        Returns:
+            tuple: A tuple containing tensors of predictions and labels.
         """
         model.eval()
         predictions = []
@@ -83,23 +83,23 @@ class MembershipInferenceAttack:
 
     def execute_attack(self):
         """
-            Placeholder method to be overridden by specific attack implementations.
+        Placeholder method to be overridden by specific attack implementations.
 
-            Raises:
-                NotImplementedError: If the method is not overridden.
+        Raises:
+            NotImplementedError: If the method is not overridden.
         """
         raise NotImplementedError("Must override execute_attack")
 
     def evaluate_metrics(self, true_p, false_p):
         """
-           Evaluates and returns precision, recall, false positive rate, and F1 score.
+        Evaluates and returns precision, recall, false positive rate, and F1 score.
 
-           Args:
-               true_p (int): Number of true positives.
-               false_p (int): Number of false positives.
+        Args:
+            true_p (int): Number of true positives.
+            false_p (int): Number of false positives.
 
-           Returns:
-               tuple: A tuple containing precision, recall, false positive rate, and F1 score.
+        Returns:
+            tuple: A tuple containing precision, recall, false positive rate, and F1 score.
         """
         size = len(self.in_eval_pre[0])
 
@@ -114,14 +114,14 @@ class MembershipInferenceAttack:
 
     def evaluate_tp_for_each_node(self, in_predictions):
         """
-            Records and returns the number of true positives for each node's in-sample evaluation group.
+        Records and returns the number of true positives for each node's in-sample evaluation group.
 
-            Args:
-                in_predictions (tensor): A tensor containing 0 and 1 representing the boolean result of
-                                         each data sample regarded as in or out sample.
+        Args:
+            in_predictions (tensor): A tensor containing 0 and 1 representing the boolean result of
+                                     each data sample regarded as in or out sample.
 
-            Returns:
-                dict: A dictionary where keys are node ids and values are counts of true positives for each node.
+        Returns:
+            dict: A dictionary where keys are node ids and values are counts of true positives for each node.
         """
         nodes_tp_dict = {}
 

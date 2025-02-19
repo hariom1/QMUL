@@ -1,7 +1,7 @@
 import lightning as pl
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class SoftmaxMLPClassifier(pl.LightningModule):
@@ -11,7 +11,6 @@ class SoftmaxMLPClassifier(pl.LightningModule):
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)  # Additional hidden layer
         self.fc3 = nn.Linear(hidden_dim, 2)  # Output layer with 2 units for softmax
         self.learning_rate = learning_rate
-
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -23,14 +22,14 @@ class SoftmaxMLPClassifier(pl.LightningModule):
         x, y = batch
         logits = self(x)
         loss = F.cross_entropy(logits, y.long())  # Use cross_entropy, which includes softmax
-        self.log('train_loss', loss)
+        self.log("train_loss", loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
         loss = F.cross_entropy(logits, y.long())  # Use cross_entropy, which includes softmax
-        self.log('val_loss', loss)
+        self.log("val_loss", loss)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)

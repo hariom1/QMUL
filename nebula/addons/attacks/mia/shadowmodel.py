@@ -1,32 +1,43 @@
-import json
-import os
 import torch
 from lightning import Trainer
-from torch.utils.data import TensorDataset, DataLoader
-from nebula.addons.attacks.mia.miaattack import MembershipInferenceAttack
+from torch.utils.data import DataLoader, TensorDataset
+
 from nebula.addons.attacks.mia.attackmodel.softmaxmlpclassifier import SoftmaxMLPClassifier
+from nebula.addons.attacks.mia.miaattack import MembershipInferenceAttack
 
 
 class ShadowModelBasedAttack(MembershipInferenceAttack):
     """
     Subclass of MembershipInferenceAttack for conducting Shadow Model-Based Membership Inference Attacks.
     """
-    def __init__(self, model, global_dataset, in_eval, out_eval, indexing_map, max_epochs, shadow_train,
-                 shadow_test, num_s, attack_model_type):
-        """
-           Initializes the ShadowModelBasedAttack class with the given parameters.
 
-           Args:
-               model (torch.nn.Module): The target model to be attacked.
-               global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
-               in_eval (list): DataLoader for in-sample evaluation.
-               out_eval (DataLoader): DataLoader for out-sample evaluation.
-               indexing_map (dict): Mapping of indices to decompose in-samples for each node.
-               max_epochs (int): Maximum number of training epochs for the shadow models.
-               shadow_train (list): List of dataloaders for shadow model training datasets.
-               shadow_test (list): List of dataloaders for shadow model test datasets.
-               num_s (int): Number of shadow models to be trained.
-               attack_model_type (str): The type of model used for the attack (e.g., "Neural Network").
+    def __init__(
+        self,
+        model,
+        global_dataset,
+        in_eval,
+        out_eval,
+        indexing_map,
+        max_epochs,
+        shadow_train,
+        shadow_test,
+        num_s,
+        attack_model_type,
+    ):
+        """
+        Initializes the ShadowModelBasedAttack class with the given parameters.
+
+        Args:
+            model (torch.nn.Module): The target model to be attacked.
+            global_dataset (Dataset): The global dataset used (e.g., MNIST, FMNIST, CIFAR10).
+            in_eval (list): DataLoader for in-sample evaluation.
+            out_eval (DataLoader): DataLoader for out-sample evaluation.
+            indexing_map (dict): Mapping of indices to decompose in-samples for each node.
+            max_epochs (int): Maximum number of training epochs for the shadow models.
+            shadow_train (list): List of dataloaders for shadow model training datasets.
+            shadow_test (list): List of dataloaders for shadow model test datasets.
+            num_s (int): Number of shadow models to be trained.
+            attack_model_type (str): The type of model used for the attack (e.g., "Neural Network").
         """
 
         super().__init__(model, global_dataset, in_eval, out_eval, indexing_map)
@@ -43,12 +54,12 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
 
     def _generate_attack_dataset(self):
         """
-            Generates the attack dataset using shadow models by training multiple shadow models
-            and collecting their predictions and labels.
+        Generates the attack dataset using shadow models by training multiple shadow models
+        and collecting their predictions and labels.
 
-            This method trains the specified number of shadow models using the provided shadow
-            train and test dataloaders, and then collects their predictions and labels to create
-            the attack dataset.
+        This method trains the specified number of shadow models using the provided shadow
+        train and test dataloaders, and then collects their predictions and labels to create
+        the attack dataset.
         """
         model_class = type(self.model)
 
@@ -60,15 +71,17 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
         for i in range(self.num_shadow):
             shadow_model = model_class()
 
-            shadow_trainer = Trainer(max_epochs=self.max_epochs, accelerator="auto", devices="auto", logger=False, enable_checkpointing=False)
+            shadow_trainer = Trainer(
+                max_epochs=self.max_epochs, accelerator="auto", devices="auto", logger=False, enable_checkpointing=False
+            )
             shadow_trainer.fit(shadow_model, self.shadow_train[i])
             # shadow_train_result = shadow_trainer.callback_metrics
             # shadow_trainer.test(shadow_model, self.shadow_test[i])
             # shadow_test_result = shadow_trainer.callback_metrics
 
-            '''shadow_merged_results = {**shadow_train_result, **shadow_test_result}
+            """shadow_merged_results = {**shadow_train_result, **shadow_test_result}
                shadow_res_dict = {key: value.item() if hasattr(value, 'item') else value for key, value in
-                               shadow_merged_results.items()}'''
+                               shadow_merged_results.items()}"""
 
             tr_pre, tr_label = self._compute_predictions(shadow_model.to(self.device), self.shadow_train[i])
             te_pre, te_label = self._compute_predictions(shadow_model.to(self.device), self.shadow_test[i])
@@ -84,13 +97,13 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
 
     def MIA_shadow_model_attack(self):
         """
-           Conducts the Membership Inference Attack using the shadow model approach.
+        Conducts the Membership Inference Attack using the shadow model approach.
 
-           This method uses the shadow model predictions to train an attack model, which is then used
-           to infer membership of the original dataset samples.
+        This method uses the shadow model predictions to train an attack model, which is then used
+        to infer membership of the original dataset samples.
 
-           Returns:
-               tuple: A tuple containing precision, recall, and F1 score of the attack.
+        Returns:
+            tuple: A tuple containing precision, recall, and F1 score of the attack.
         """
 
         shadow_train_pre = self.shadow_train_res[0]
@@ -99,8 +112,9 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
         in_labels = torch.ones(shadow_train_pre.shape[0], dtype=torch.long)
         out_labels = torch.zeros(shadow_test_pre.shape[0], dtype=torch.long)
 
-        attack_dataset = TensorDataset(torch.cat((shadow_train_pre, shadow_test_pre), dim=0),
-                                       torch.cat((in_labels, out_labels), dim=0))
+        attack_dataset = TensorDataset(
+            torch.cat((shadow_train_pre, shadow_test_pre), dim=0), torch.cat((in_labels, out_labels), dim=0)
+        )
 
         attack_dataloader = DataLoader(attack_dataset, batch_size=128, shuffle=True, num_workers=0)
 
@@ -110,8 +124,14 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
         else:
             pass  # Add other possible attack model type further
 
-        attack_trainer = Trainer(max_epochs=50, accelerator="auto", devices="auto", logger=False,
-                                 enable_checkpointing=False, enable_model_summary=False)
+        attack_trainer = Trainer(
+            max_epochs=50,
+            accelerator="auto",
+            devices="auto",
+            logger=False,
+            enable_checkpointing=False,
+            enable_model_summary=False,
+        )
         attack_trainer.fit(attack_model, attack_dataloader)
 
         def in_out_samples_check(model, dataset):

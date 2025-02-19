@@ -1,18 +1,41 @@
 import numpy as np
-import torch
+
 from nebula.addons.attacks.mia.shadowmodel import ShadowModelBasedAttack
 
 
 class ClassMetricBasedAttack(ShadowModelBasedAttack):
     """
-        Subclass of ShadowModelBasedAttack for conducting Class Metric-Based Membership Inference Attacks.
-        This kind of MIA depends on training a single shadow model to create the threshold,
-        which is slightly different from the usual metric-based MIAs.
+    Subclass of ShadowModelBasedAttack for conducting Class Metric-Based Membership Inference Attacks.
+    This kind of MIA depends on training a single shadow model to create the threshold,
+    which is slightly different from the usual metric-based MIAs.
     """
-    def __init__(self, model, global_dataset, in_eval, out_eval, indexing_map, max_epochs, shadow_train,
-                 shadow_test, num_s, attack_model_type, method_name):
-        super().__init__(model, global_dataset, in_eval, out_eval, indexing_map, max_epochs, shadow_train,
-                         shadow_test, num_s, attack_model_type)
+
+    def __init__(
+        self,
+        model,
+        global_dataset,
+        in_eval,
+        out_eval,
+        indexing_map,
+        max_epochs,
+        shadow_train,
+        shadow_test,
+        num_s,
+        attack_model_type,
+        method_name,
+    ):
+        super().__init__(
+            model,
+            global_dataset,
+            in_eval,
+            out_eval,
+            indexing_map,
+            max_epochs,
+            shadow_train,
+            shadow_test,
+            num_s,
+            attack_model_type,
+        )
 
         self.num_classes = 10
 
