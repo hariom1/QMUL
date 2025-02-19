@@ -82,15 +82,12 @@ class NodeManager:
     def fast_reboot_on(self):
         return self._fast_reboot_status
 
-    def get_restructure_process_lock(self):
-        return self.sam.get_restructure_process_lock()
-
     async def set_rounds_pushed(self, rp):
         if self.fast_reboot_on():
             self.fr.set_rounds_pushed(rp)
 
-    def still_waiting_for_candidates(self):
-        return not self.accept_candidates_lock.locked()
+    def is_additional_participant(self):
+        return self._aditional_participant
 
     async def set_configs(self):
         """
@@ -139,8 +136,14 @@ class NodeManager:
                 ##############################
     """
 
+    def get_restructure_process_lock(self):
+        return self.sam.get_restructure_process_lock()
+
     def accept_connection(self, source, joining=False):
         return self.sam.accept_connection(source, joining)
+    
+    def still_waiting_for_candidates(self):
+        return not self.accept_candidates_lock.locked()
 
     async def add_pending_connection_confirmation(self, addr):
         await self._update_neighbors_lock.acquire_async()

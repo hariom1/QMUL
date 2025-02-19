@@ -14,7 +14,9 @@ from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
-from nebula.core.network.nebulamulticasting import NebulaConnectionService
+#from nebula.core.network.nebulamulticasting import NebulaConnectionService
+from nebula.core.network.externalconnectionservice import ExternalConnectionService
+from nebula.core.network.nebuladiscoveryservice import NebulaConnectionService #TODO mover a método factoria
 from nebula.core.network.propagator import Propagator
 from nebula.core.network.messages import MessageEvent
 from nebula.core.utils.helper import (
@@ -82,18 +84,18 @@ class CommunicationsManager:
         self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
-        self._external_connection_service = None
+        self._external_connection_service : ExternalConnectionService = None
 
         # The line below is neccesary when mobility would be set up
-        mob = self.config.participant["mobility_args"]["mobility"]
-        aditional_node = self.config.participant["mobility_args"]["additional_node"]["status"]
-        if mob == True and not aditional_node:
-            self._external_connection_service = NebulaConnectionService(self.addr)
-            logging.info("Deploying External Connection Service")
-            self.ecs.start()
-        else:
-            logging.info("Deploying External Connection Service | No running")
-            self._external_connection_service = NebulaConnectionService(self.addr)
+        # mob = self.config.participant["mobility_args"]["mobility"]
+        # aditional_node = self.config.participant["mobility_args"]["additional_node"]["status"]
+        # if mob == True and not aditional_node:
+        #     self._external_connection_service = NebulaConnectionService(self.addr)
+        #     )
+        #     self.ecs.start()
+        # else:
+            
+        #     self._external_connection_service = NebulaConnectionService(self.addr)
 
     @property
     def engine(self):
@@ -203,16 +205,17 @@ class CommunicationsManager:
                                                             ###############################
     """
 
-    def start_external_connection_service(self):
+    async def start_external_connection_service(self, run_service=True):
         if self.ecs == None:
-            self.ecs = NebulaConnectionService(self.addr)
-        self.ecs.start()
+            self._external_connection_service = NebulaConnectionService(self.addr)
+        if run_service:
+            await self.ecs.start()
 
-    def stop_external_connection_service(self):
-        self.ecs.stop()
+    async def stop_external_connection_service(self):
+        await self.ecs.stop()
 
-    def init_external_connection_service(self):
-        self.start_external_connection_service()
+    async def init_external_connection_service(self):
+        await self.start_external_connection_service()
 
     async def is_external_connection_service_running(self):
         return self.ecs.is_running()
@@ -229,7 +232,7 @@ class CommunicationsManager:
         addrs = []
         if addrs_known == None:
             logging.info("Searching federation process beginning...")
-            addrs = self.ecs.find_federation()
+            addrs = await self.ecs.find_federation()
             logging.info(f"Found federation devices | addrs {addrs}")
         else:
             logging.info(f"Searching federation process beginning... | Using addrs previously known {addrs_known}")

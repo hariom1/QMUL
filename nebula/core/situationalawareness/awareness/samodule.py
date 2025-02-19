@@ -41,6 +41,13 @@ class SAModule():
         return self.nm.engine.cm
     
     async def init(self):
+        if not self.nm.is_additional_participant():
+            logging.info("Deploying External Connection Service")
+            await self.cm.start_external_connection_service()
+        else:
+            logging.info("Deploying External Connection Service | No running")
+            await self.cm.start_external_connection_service(run_service=False)
+
         logging.info("Building neighbor policy configuration..")
         self.np.set_config([
             await self.cm.get_addrs_current_connections(only_direct=True, myself=False),
@@ -105,9 +112,9 @@ class SAModule():
     """
     
     async def check_external_connection_service_status(self):
-        if not await self.nm.engine.cm.is_external_connection_service_running():
+        if not await self.cm.is_external_connection_service_running():
             logging.info("🔄 External Service not running | Starting service...")
-            self.nm.engine.cm.init_external_connection_service()
+            await self.cm.init_external_connection_service()
             
     async def analize_topology_robustness(self):
         logging.info("🔄 Analizing node network robustness...")
