@@ -44,14 +44,11 @@ class Aggregator(ABC):
         self._waiting_global_update = False
         self._pending_models_to_aggregate = {}
         self._pending_models_to_aggregate_lock = Locker(name="pending_models_to_aggregate_lock", async_lock=True)
-        self._future_models_to_aggregate = {}
-        self._add_model_lock = Locker(name="add_model_lock", async_lock=True)
-        self._add_next_model_lock = Locker(name="add_next_model_lock", async_lock=True)
         self._aggregation_done_lock = Locker(name="aggregation_done_lock", async_lock=True)
         self._aggregation_waiting_skip = asyncio.Event()
-        self._push_strategy_lock = Locker(name="push_strategy_lock", async_lock=True)
-        self._end_round_push = 0
-        self._update_storage = factory_update_handler("DFL", self, self._addr) #TODO use json config
+        
+        scenario = self.config.participant["scenario_args"]["federation"]
+        self._update_storage = factory_update_handler(scenario, self, self._addr)
 
     def __str__(self):
         return self.__class__.__name__

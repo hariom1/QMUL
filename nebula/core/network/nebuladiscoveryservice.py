@@ -18,7 +18,6 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
         logging.info("Nebula UPnP server is listening...")
     
     def datagram_received(self, data, addr):
-        logging.info("Server service receiving information")
         if self._is_nebula_message(data):
             logging.info("Nebula request received, responding...")
             asyncio.create_task(self.respond(addr))
@@ -80,10 +79,15 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
             logging.error(f"Error sending search request: {e}")
     
     def datagram_received(self, data, addr):
-        if "ST: urn:nebula-service" in data.decode('utf-8'):
-            logging.info("Received response from server")
-            self.nebula_service.response_received(data, addr)
+        try:
+            if "ST: urn:nebula-service" in data.decode('utf-8'):
+                logging.info("Received response from Node server-service")
+                self.nebula_service.response_received(data, addr)
+        except UnicodeDecodeError:
+            logging.warning(f"Received malformed message from {addr}, ignoring.")
 
+
+#TODO si la busqueda no devuelve nada nuevo, dejar de hacerla para eliminar tráfico inutil
 class NebulaConnectionService(ExternalConnectionService):
     def __init__(self, addr):
         self.nodes_found = set()

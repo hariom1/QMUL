@@ -14,9 +14,7 @@ from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
-#from nebula.core.network.nebulamulticasting import NebulaConnectionService
-from nebula.core.network.externalconnectionservice import ExternalConnectionService
-from nebula.core.network.nebuladiscoveryservice import NebulaConnectionService #TODO mover a método factoria
+from nebula.core.network.externalconnectionservice import factory_connection_service
 from nebula.core.network.propagator import Propagator
 from nebula.core.network.messages import MessageEvent
 from nebula.core.utils.helper import (
@@ -84,18 +82,7 @@ class CommunicationsManager:
         self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
-        self._external_connection_service : ExternalConnectionService = None
-
-        # The line below is neccesary when mobility would be set up
-        # mob = self.config.participant["mobility_args"]["mobility"]
-        # aditional_node = self.config.participant["mobility_args"]["additional_node"]["status"]
-        # if mob == True and not aditional_node:
-        #     self._external_connection_service = NebulaConnectionService(self.addr)
-        #     )
-        #     self.ecs.start()
-        # else:
-            
-        #     self._external_connection_service = NebulaConnectionService(self.addr)
+        self._external_connection_service = factory_connection_service("nebula", self.addr)
 
     @property
     def engine(self):
@@ -207,7 +194,7 @@ class CommunicationsManager:
 
     async def start_external_connection_service(self, run_service=True):
         if self.ecs == None:
-            self._external_connection_service = NebulaConnectionService(self.addr)
+            self._external_connection_service = factory_connection_service(self.addr) #NebulaConnectionService(self.addr)
         if run_service:
             await self.ecs.start()
 

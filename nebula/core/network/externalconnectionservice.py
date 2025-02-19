@@ -18,3 +18,20 @@ class ExternalConnectionService(ABC):
     @abstractmethod 
     async def find_federation(self):
         pass
+
+class ExternalConnectionServiceException(Exception):
+    pass 
+
+def factory_connection_service(con_serv, addr) -> ExternalConnectionService:
+    from nebula.core.network.nebuladiscoveryservice import NebulaConnectionService
+    
+    CONNECTION_SERVICES = {
+        "nebula": NebulaConnectionService,
+    }
+    
+    con_serv = CONNECTION_SERVICES.get(con_serv, NebulaConnectionService)
+    
+    if con_serv:
+        return con_serv(addr)
+    else:
+         raise ExternalConnectionServiceException(f"Connection Service {con_serv} not found")
