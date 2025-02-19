@@ -1,12 +1,13 @@
-import time
 from abc import ABC, abstractmethod
-from collections import defaultdict
 
+import os
+from typing import Any, Dict, List
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.manifold import TSNE
+import torch
 from torch.utils.data import Dataset
 
 matplotlib.use("Agg")
@@ -18,6 +19,142 @@ from nebula.config.config import TRAINING_LOGGER
 from nebula.core.utils.deterministic import enable_deterministic
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
+
+def wait_for_file(file_path):
+    """Wait until the given file exists, polling every 'interval' seconds."""
+    while not os.path.exists(file_path):
+        logging_training.info(f"Waiting for file: {file_path}")
+    return
+
+
+class SimpleDataset(Dataset):
+    def __init__(self, data, targets):
+        self.data = data
+        self.targets = targets
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.targets[idx]
+
+    def __len__(self):
+        return len(self.data)
+    
+
+class NebulaDatasetPartition(Dataset, ABC):
+    """
+    Abstract class for a partitioned dataset.
+    """
+    
+    def __init__(self, dataset_name, config):
+        super().__init__()
+        self.dataset_name = dataset_name
+        self.config = config
+
+        self.train_set = None
+        self.train_indices = None
+        
+        self.test_set = None
+        self.test_indices = None
+        self.local_test_indices = None
+        
+        enable_deterministic(seed=self.config.participant["scenario_args"]["random_seed"])
+        
+    def get_train_indices(self):
+        """
+        Get the indices of the training set based on the indices map.
+        """
+        if self.train_indices is None:
+            return None
+        return self.train_indices
+    
+    def get_test_indices(self):
+        """
+        Get the indices of the test set based on the indices map.
+        """
+        if self.test_indices is None:
+            return None
+        return self.test_indices
+    
+    def get_local_test_indices(self):
+        """
+        Get the indices of the local test set based on the indices map.
+        """
+        if self.local_test_indices is None:
+            return None
+        return self.local_test_indices
+    
+    def get_train_labels(self):
+        """
+        Get the labels of the training set based on the indices map.
+        """
+        if self.train_indices is None:
+            return None
+        return [self.train_set.targets[idx] for idx in self.train_indices]
+
+    def get_test_labels(self):
+        """
+        Get the labels of the test set based on the indices map.
+        """
+        if self.test_indices is None:
+            return None
+        return [self.test_set.targets[idx] for idx in self.test_indices]
+
+    def get_local_test_labels(self):
+        """
+        Get the labels of the test set based on the indices map.
+        """
+        if self.local_test_indices is None:
+            return None
+        return [self.test_set.targets[idx] for idx in self.local_test_indices]
+    
+    def set_local_test_indices(self):
+        """
+        Set the local test indices for the current node.
+        """
+        test_labels = self.get_test_labels()
+        train_labels = self.get_train_labels()
+        return [idx for idx in range(len(self.test_set.data)) if test_labels[idx] in train_labels]
+    
+    def log_partition(self):
+        logging_training.info(f"{'=' * 10}")
+        logging_training.info(f"LOG NEBULA PARTITION DATASET [{self.dataset_name}] [Participant {self.config.participant['device_args']['idx']}]")
+        logging_training.info(f"{'=' * 10}")
+        logging_training.info(f"TRAIN - Train labels unique: {set(self.get_train_labels())}")
+        logging_training.info(f"TRAIN - Length of train indices map: {len(self.get_train_indices())}")
+        logging_training.info(f"{'=' * 10}")
+        logging_training.info(f"LOCAL - Test labels unique: {set(self.get_local_test_labels())}")
+        logging_training.info(f"LOCAL - Length of test indices map: {len(self.get_local_test_indices())}")
+        logging_training.info(f"{'=' * 10}")
+        logging_training.info(f"GLOBAL - Test labels unique: {set(self.get_test_labels())}")
+        logging_training.info(f"GLOBAL - Length of test indices map: {len(self.get_test_indices())}")
+        logging_training.info(f"{'=' * 10}")
+        
+    def load_partition(self):
+        """
+        Load only the partition data corresponding to the current node.
+        The node loads its train, test, and local test partition data from pickle files.
+        """
+        p = self.config.participant["device_args"]["idx"]
+        logging_training.info(f"Loading partition data for participant {p}")
+        path = self.config.participant["tracking_args"]["config_dir"]
+        
+        train_partition_file = os.path.join(path, f"participant_{p}_train_data.pt")
+        wait_for_file(train_partition_file)
+        logging_training.info(f"Loading train data from {train_partition_file}")
+        train_data = torch.load(train_partition_file)
+        logging_training.info(f"Train data loaded from {train_partition_file}")
+        self.train_set = SimpleDataset(train_data["data"], train_data["targets"])
+        self.train_indices = list(range(len(self.train_set.data)))
+
+        test_partition_file = os.path.join(path, f"global_test_data.pt")
+        wait_for_file(test_partition_file)
+        logging_training.info(f"Loading test data from {test_partition_file}")
+        test_data = torch.load(test_partition_file)
+        logging_training.info(f"Test data loaded from {test_partition_file}")
+        self.test_set = SimpleDataset(test_data["data"], test_data["targets"])
+        self.test_indices = list(range(len(self.test_set.data)))
+        self.local_test_indices = self.set_local_test_indices()
+
+        logging_training.info(f"Successfully loaded partition data for participant {p}.")
 
 
 class NebulaDataset(Dataset, ABC):
@@ -31,7 +168,6 @@ class NebulaDataset(Dataset, ABC):
     def __init__(
         self,
         num_classes=10,
-        partition_id=0,
         partitions_number=1,
         batch_size=32,
         num_workers=4,
@@ -39,15 +175,11 @@ class NebulaDataset(Dataset, ABC):
         partition="dirichlet",
         partition_parameter=0.5,
         seed=42,
-        config=None,
+        config_dir=None,
     ):
         super().__init__()
-
-        if partition_id < 0 or partition_id >= partitions_number:
-            raise ValueError(f"partition_id {partition_id} is out of range for partitions_number {partitions_number}")
-
+        
         self.num_classes = num_classes
-        self.partition_id = partition_id
         self.partitions_number = partitions_number
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -55,36 +187,135 @@ class NebulaDataset(Dataset, ABC):
         self.partition = partition
         self.partition_parameter = partition_parameter
         self.seed = seed
-        self.config = config
-
+        self.config_dir = config_dir
+        
+        logging.info(f"Dataset {self.__class__.__name__} initialized | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}")
+        
+        # Dataset
         self.train_set = None
         self.train_indices_map = None
         self.test_set = None
         self.test_indices_map = None
+        self.local_test_indices_map = None
 
         # Classes of the participants to be sure that the same classes are used in training and testing
         self.class_distribution = None
 
-        enable_deterministic(config)
+        enable_deterministic(self.seed)
 
-        if self.partition_id == 0:
-            self.initialize_dataset()
-        else:
-            max_tries = 10
-            for i in range(max_tries):
-                try:
-                    self.initialize_dataset()
-                    break
-                except Exception as e:
-                    logging_training.info(f"Error loading dataset: {e}. Retrying {i + 1}/{max_tries} in 5 seconds...")
-                    time.sleep(5)
 
     @abstractmethod
     def initialize_dataset(self):
         """
         Initialize the dataset. This should load or create the dataset.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement this method.") 
+    
+    def data_partitioning(self, plot=False):
+        """
+        Perform the data partitioning.
+        """
+        
+        logging.info(f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}")
+
+        self.train_indices_map = (
+            self.generate_iid_map(self.train_set)
+            if self.iid
+            else self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
+        )
+        self.test_indices_map = self.get_test_indices_map()
+        self.local_test_indices_map = self.get_local_test_indices_map()
+
+        logging.info(f"[ALL NODES] Train indices map:\n{self.train_indices_map}")
+        logging.info(f"[ALL NODES] Test indices map:\n{self.test_indices_map}")
+        logging.info(f"[ALL NODES] Local test indices map:\n{self.local_test_indices_map}")
+
+        if plot:
+            self.plot_data_distribution("train", self.train_set, self.train_indices_map)
+            self.plot_all_data_distribution("train", self.train_set, self.train_indices_map)
+            self.plot_data_distribution("local_test", self.test_set, self.local_test_indices_map)
+            self.plot_all_data_distribution("local_test", self.test_set, self.local_test_indices_map)
+
+        self.save_partitions()
+        
+    def get_test_indices_map(self):
+        """
+        Get the indices of the test set for each participant.
+
+        Returns:
+            A dictionary mapping participant_id to a list of indices.
+        """
+        try:
+            test_indices_map = {}
+            for participant_id in range(self.partitions_number):
+                test_indices_map[participant_id] = list(range(len(self.test_set)))
+            return test_indices_map
+        except Exception as e:
+            logging.error(f"Error in get_test_indices_map: {e}")
+            raise
+
+    def get_local_test_indices_map(self):
+        """
+        Get the indices of the local test set for each participant.
+        Indices whose labels are the same as the training set are selected.
+
+        Returns:
+            A dictionary mapping participant_id to a list of indices.
+        """
+        try:
+            local_test_indices_map = {}
+            for participant_id in range(self.partitions_number):
+                test_labels = [self.test_set.targets[idx] for idx in self.test_indices_map[participant_id]]
+                train_labels = [self.train_set.targets[idx] for idx in self.train_indices_map[participant_id]]
+                local_test_indices_map[participant_id] = [
+                    idx for idx in range(len(self.test_set)) if test_labels[idx] in train_labels
+                ]
+            return local_test_indices_map
+        except Exception as e:
+            logging.error(f"Error in get_local_test_indices_map: {e}")
+            raise
+
+    def save_partitions(self):
+        """
+        Save each partition data (train, test, and local test) to separate pickle files.
+        The controller saves one file per partition for each data split.
+        """
+        try:
+            logging.info(
+                f"Saving partitions data for ALL participants ({self.partitions_number}) in {self.config_dir}"
+            )
+            path = self.config_dir
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Path {path} does not exist")
+            # Check that the partition maps have the expected number of partitions
+            if not (len(self.train_indices_map) == len(self.test_indices_map) == len(self.local_test_indices_map) == self.partitions_number):
+                raise ValueError("One of the partition maps has an unexpected length.")
+            
+            # Save global test data
+            global_test_file = os.path.join(path, "global_test_data.pt")
+            global_test_data = {"data": self.test_set.data, "targets": self.test_set.targets}
+            logging.info(f"Saving global test data to {global_test_file} | {len(global_test_data['data'])} samples | {len(global_test_data['targets'])} targets")
+            logging.info(f"Checking types of global test data: {type(global_test_data['data'])}, {type(global_test_data['targets'])}")
+            logging.info(f"Checking sets of global test data: {set(global_test_data['targets'])}")
+            torch.save(global_test_data, global_test_file)
+            
+            for partition_index in range(self.partitions_number):
+                logging.info(f"Saving partition data for participant {partition_index}")
+                train_partition_file = os.path.join(path, f"participant_{partition_index}_train_data.pt")
+                train_indices = self.train_indices_map[partition_index]
+                partition_train = [self.train_set[i] for i in train_indices]
+                partition_train_targets = [self.train_set.targets[i] for i in train_indices]
+                partition_train_data = {"data": partition_train, "targets": partition_train_targets}
+                logging.info(f"Saving train data for participant {partition_index} to {train_partition_file} | {len(partition_train_data['data'])} samples | {len(partition_train_data['targets'])} targets")
+                logging.info(f"Checking types of train data for participant {partition_index}: {type(partition_train_data['data'])}, {type(partition_train_data['targets'])}")
+                logging.info(f"Checking sets of train data for participant {partition_index}: {set(partition_train_data['targets'])}")
+                torch.save(partition_train_data, train_partition_file)
+
+            logging.info("Successfully saved all partition files.")
+            
+        except Exception as e:
+            logging.error(f"Error in save_partitions: {e}")
+            raise
 
     @abstractmethod
     def generate_non_iid_map(self, dataset, partition="dirichlet", plot=False):
@@ -100,104 +331,51 @@ class NebulaDataset(Dataset, ABC):
         """
         pass
 
-    def get_train_labels(self):
-        """
-        Get the labels of the training set based on the indices map.
-        """
-        if self.train_indices_map is None:
-            return None
-        return [self.train_set.targets[idx] for idx in self.train_indices_map]
-
-    def get_test_labels(self):
-        """
-        Get the labels of the test set based on the indices map.
-        """
-        if self.test_indices_map is None:
-            return None
-        return [self.test_set.targets[idx] for idx in self.test_indices_map]
-
-    def get_local_test_labels(self):
-        """
-        Get the labels of the local test set based on the indices map.
-        """
-        if self.local_test_indices_map is None:
-            return None
-        return [self.test_set.targets[idx] for idx in self.local_test_indices_map]
-
-    def plot_data_distribution(self, dataset, partitions_map):
+    def plot_data_distribution(self, phase, dataset, partitions_map):
         """
         Plot the data distribution of the dataset.
 
         Plot the data distribution of the dataset according to the partitions map provided.
 
         Args:
+            phase: The phase of the dataset (train, test, local_test).
             dataset: The dataset to plot (torch.utils.data.Dataset).
             partitions_map: The map of the dataset partitions.
         """
+        logging_training.info(f"Plotting data distribution for {phase} dataset")
         # Plot the data distribution of the dataset, one graph per partition
         sns.set()
         sns.set_style("whitegrid", {"axes.grid": False})
         sns.set_context("paper", font_scale=1.5)
         sns.set_palette("Set2")
 
-        for i in range(self.partitions_number):
-            indices = partitions_map[i]
+        # Plot bar charts for each partition
+        partition_index = 0
+        for partition_index in range(self.partitions_number):
+            indices = partitions_map[partition_index]
             class_counts = [0] * self.num_classes
             for idx in indices:
                 label = dataset.targets[idx]
                 class_counts[label] += 1
-            logging_training.info(f"Participant {i + 1} class distribution: {class_counts}")
-            plt.figure()
+            
+            logging_training.info(f"[{phase}] Participant {partition_index} total samples: {len(indices)}")
+            logging_training.info(f"[{phase}] Participant {partition_index} data distribution: {class_counts}")
+
+            plt.figure(figsize=(12, 8))
             plt.bar(range(self.num_classes), class_counts)
+            for j, count in enumerate(class_counts):
+                plt.text(j, count, str(count), ha="center", va="bottom", fontsize=12)
             plt.xlabel("Class")
             plt.ylabel("Number of samples")
             plt.xticks(range(self.num_classes))
-            if self.iid:
-                plt.title(f"Participant {i + 1} class distribution (IID)")
-            else:
-                plt.title(
-                    f"Participant {i + 1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}"
-                )
+            plt.title(
+                f"[{phase}] Participant {partition_index} data distribution ({'IID' if self.iid else f'Non-IID - {self.partition}'} - {self.partition_parameter})"
+            )
             plt.tight_layout()
-            path_to_save = f"{self.config.participant['tracking_args']['log_dir']}/{self.config.participant['scenario_args']['name']}/participant_{i}_class_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}.png"
+            path_to_save = f"{self.config_dir}/participant_{partition_index}_data_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
+            logging_training.info(f"Saving data distribution for participant {partition_index} to {path_to_save}")
             plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
             plt.close()
-
-        plt.figure()
-        max_point_size = 500
-        min_point_size = 0
-
-        for i in range(self.partitions_number):
-            class_counts = [0] * self.num_classes
-            indices = partitions_map[i]
-            for idx in indices:
-                label = dataset.targets[idx]
-                class_counts[label] += 1
-
-            # Normalize the point sizes for this partition
-            max_samples_partition = max(class_counts)
-            sizes = [
-                (size / max_samples_partition) * (max_point_size - min_point_size) + min_point_size
-                for size in class_counts
-            ]
-            plt.scatter([i] * self.num_classes, range(self.num_classes), s=sizes, alpha=0.5)
-
-        plt.xlabel("Participant")
-        plt.ylabel("Class")
-        plt.xticks(range(self.partitions_number))
-        plt.yticks(range(self.num_classes))
-        if self.iid:
-            plt.title(f"Participant {i + 1} class distribution (IID)")
-        else:
-            plt.title(
-                f"Participant {i + 1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}"
-            )
-        plt.tight_layout()
-
-        # Saves the distribution display with circles of different size
-        path_to_save = f"{self.config.participant['tracking_args']['log_dir']}/{self.config.participant['scenario_args']['name']}/class_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}.png"
-        plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
-        plt.close()
 
         if hasattr(self, "tsne") and self.tsne:
             self.visualize_tsne(dataset)
@@ -232,56 +410,104 @@ class NebulaDataset(Dataset, ABC):
         plt.legend(title="Class")
         plt.tight_layout()
 
-        path_to_save_tsne = f"{self.config.participant['tracking_args']['log_dir']}/{self.config.participant['scenario_args']['name']}/tsne_visualization.png"
+        path_to_save_tsne = f"{self.config_dir}/tsne_visualization.png"
         plt.savefig(path_to_save_tsne, dpi=300, bbox_inches="tight")
         plt.close()
 
-    def dirichlet_partition(self, dataset, alpha=0.5, min_samples_per_class=10):
+    def dirichlet_partition(
+        self,
+        dataset: Any,
+        alpha: float = 0.5,
+        min_samples_size: int = 50,
+        balanced: bool = False,
+        max_iter: int = 100,
+        verbose: bool = True,
+    ) -> Dict[int, List[int]]:
+        """
+        Partition the dataset among clients using a Dirichlet distribution.
+        This function ensures each client gets at least min_samples_size samples.
+        
+        Parameters
+        ----------
+        dataset : Dataset
+            The dataset to partition. Must have a 'targets' attribute.
+        alpha : float, default=0.5
+            Concentration parameter for the Dirichlet distribution.
+        min_samples_size : int, default=50
+            Minimum number of samples required in each partition.
+        balanced : bool, default=False
+            If True, distribute each class evenly among clients.
+            Otherwise, allocate according to a Dirichlet distribution.
+        max_iter : int, default=100
+            Maximum number of iterations to try finding a valid partition.
+        verbose : bool, default=True
+            If True, print debug information per iteration.
+
+        Returns
+        -------
+        partitions : dict[int, list[int]]
+            Dictionary mapping each client index to a list of sample indices.
+        """
+        # Extract targets and unique labels.
         y_data = self._get_targets(dataset)
         unique_labels = np.unique(y_data)
-        logging_training.info(f"Labels unique: {unique_labels}")
-        num_samples = len(y_data)
 
-        indices_per_partition = [[] for _ in range(self.partitions_number)]
-        label_distribution = self.class_distribution if self.class_distribution is not None else None
-
+        # For each class, get a shuffled list of indices.
+        class_indices = {}
+        base_rng = np.random.default_rng(self.seed)
         for label in unique_labels:
-            label_indices = np.where(y_data == label)[0]
-            np.random.shuffle(label_indices)
+            idx = np.where(y_data == label)[0]
+            base_rng.shuffle(idx)
+            class_indices[label] = idx
 
-            if label_distribution is None:
-                proportions = np.random.dirichlet([alpha] * self.partitions_number)
+        # Prepare container for client indices.
+        indices_per_partition = [[] for _ in range(self.partitions_number)]
+
+        def allocate_for_label(label_idx: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+            num_label_samples = len(label_idx)
+            if balanced:
+                proportions = np.full(self.partitions_number, 1.0 / self.partitions_number)
             else:
-                proportions = label_distribution[label]
+                proportions = rng.dirichlet([alpha] * self.partitions_number)
+            sample_counts = (proportions * num_label_samples).astype(int)
+            remainder = num_label_samples - sample_counts.sum()
+            if remainder > 0:
+                extra_indices = rng.choice(self.partitions_number, size=remainder, replace=False)
+                for idx in extra_indices:
+                    sample_counts[idx] += 1
+            return sample_counts
 
-            proportions = self._adjust_proportions(proportions, indices_per_partition, num_samples)
-            split_points = (np.cumsum(proportions) * len(label_indices)).astype(int)[:-1]
+        for iteration in range(1, max_iter + 1):
+            rng = np.random.default_rng(self.seed + iteration)
+            temp_indices_per_partition = [[] for _ in range(self.partitions_number)]
+            for label in unique_labels:
+                label_idx = class_indices[label]
+                counts = allocate_for_label(label_idx, rng)
+                start = 0
+                for client_idx, count in enumerate(counts):
+                    end = start + count
+                    temp_indices_per_partition[client_idx].extend(label_idx[start:end])
+                    start = end
 
-            for partition_idx, indices in enumerate(np.split(label_indices, split_points)):
-                if len(indices) < min_samples_per_class:
-                    indices_per_partition[partition_idx].extend([])
-                else:
-                    indices_per_partition[partition_idx].extend(indices)
+            client_sizes = [len(indices) for indices in temp_indices_per_partition]
+            if min(client_sizes) >= min_samples_size:
+                indices_per_partition = temp_indices_per_partition
+                if verbose:
+                    print(f"Partition successful at iteration {iteration}. Client sizes: {client_sizes}")
+                break
+            if verbose:
+                print(f"Iteration {iteration}: client sizes {client_sizes}")
 
-        if label_distribution is None:
-            self.class_distribution = self._calculate_class_distribution(indices_per_partition, y_data)
+        else:
+            raise ValueError(
+                f"Could not create partitions with at least {min_samples_size} samples per client after {max_iter} iterations."
+            )
+            
+        initial_partition = {i: indices for i, indices in enumerate(indices_per_partition)}
+        
+        final_partition = self.postprocess_partition(initial_partition, y_data)
 
-        return {i: indices for i, indices in enumerate(indices_per_partition)}
-
-    def _adjust_proportions(self, proportions, indices_per_partition, num_samples):
-        adjusted = np.array([
-            p * (len(indices) < num_samples / self.partitions_number)
-            for p, indices in zip(proportions, indices_per_partition, strict=False)
-        ])
-        return adjusted / adjusted.sum()
-
-    def _calculate_class_distribution(self, indices_per_partition, y_data):
-        distribution = defaultdict(lambda: np.zeros(self.partitions_number))
-        for partition_idx, indices in enumerate(indices_per_partition):
-            labels, counts = np.unique(y_data[indices], return_counts=True)
-            for label, count in zip(labels, counts, strict=False):
-                distribution[label][partition_idx] = count
-        return {k: v / v.sum() for k, v in distribution.items()}
+        return final_partition
 
     @staticmethod
     def _get_targets(dataset) -> np.ndarray:
@@ -291,6 +517,66 @@ class NebulaDataset(Dataset, ABC):
             return dataset.targets.numpy()
         else:
             return np.asarray(dataset.targets)
+        
+    def postprocess_partition(
+        self,
+        partition: Dict[int, List[int]], 
+        y_data: np.ndarray, 
+        min_samples_per_class: int = 10
+    ) -> Dict[int, List[int]]:
+        """
+        Post-process a partition to remove (and reassign) classes with too few samples per client.
+        
+        For each class:
+        - For clients with a count > 0 but below min_samples_per_class, remove those samples.
+        - Reassign the removed samples to the client that already has the maximum count for that class.
+        
+        Parameters
+        ----------
+        partition : dict[int, list[int]]
+            The initial partition mapping client indices to sample indices.
+        y_data : np.ndarray
+            The array of labels corresponding to the dataset samples.
+        min_samples_per_class : int, default=10
+            The minimum acceptable number of samples per class for each client.
+        
+        Returns
+        -------
+        new_partition : dict[int, list[int]]
+            The updated partition.
+        """
+        # Copy partition so we can modify it.
+        new_partition = {client: list(indices) for client, indices in partition.items()}
+        
+        # Iterate over each class.
+        for label in np.unique(y_data):
+            # For each client, count how many samples of this label exist.
+            client_counts = {}
+            for client, indices in new_partition.items():
+                client_counts[client] = np.sum(np.array(y_data)[indices] == label)
+            
+            # Identify clients with fewer than min_samples_per_class but nonzero counts.
+            donors = [client for client, count in client_counts.items() if 0 < count < min_samples_per_class]
+            # Identify potential recipients: those with at least min_samples_per_class.
+            recipients = [client for client, count in client_counts.items() if count >= min_samples_per_class]
+            # If no client meets the threshold, choose the one with the highest count.
+            if not recipients:
+                best_recipient = max(client_counts, key=client_counts.get)
+                recipients = [best_recipient]
+            # Choose the recipient with the maximum count.
+            best_recipient = max(recipients, key=lambda c: client_counts[c])
+            
+            # For each donor, remove samples of this label and reassign them.
+            for donor in donors:
+                donor_indices = new_partition[donor]
+                # Identify indices corresponding to this label.
+                donor_label_indices = [idx for idx in donor_indices if y_data[idx] == label]
+                # Remove these from the donor.
+                new_partition[donor] = [idx for idx in donor_indices if y_data[idx] != label]
+                # Add these to the best recipient.
+                new_partition[best_recipient].extend(donor_label_indices)
+        
+        return new_partition
 
     def homo_partition(self, dataset):
         """
@@ -336,7 +622,7 @@ class NebulaDataset(Dataset, ABC):
             for idx in net_dataidx_map[i]:
                 label = dataset.targets[idx]
                 class_counts[label] += 1
-            logging_training.info(f"Partition {i + 1} class distribution: {class_counts}")
+            logging.info(f"Partition {i + 1} class distribution: {class_counts}")
 
         return net_dataidx_map
 
@@ -531,13 +817,13 @@ class NebulaDataset(Dataset, ABC):
                 subset_indices[i].extend(indices[: min_count // 2])
 
             class_counts = np.bincount(np.array([dataset.targets[idx] for idx in subset_indices[i]]))
-            logging_training.info(f"Partition {i + 1} class distribution: {class_counts.tolist()}")
+            logging.info(f"Partition {i + 1} class distribution: {class_counts.tolist()}")
 
         partitioned_datasets = {i: subset_indices[i] for i in range(num_subsets)}
 
         return partitioned_datasets
 
-    def plot_all_data_distribution(self, dataset, partitions_map):
+    def plot_all_data_distribution(self, phase, dataset, partitions_map):
         """
 
         Plot all of the data distribution of the dataset according to the partitions map provided.
@@ -554,6 +840,27 @@ class NebulaDataset(Dataset, ABC):
         num_clients = len(partitions_map)
         num_classes = self.num_classes
 
+        # Plot number of samples per class in the dataset
+        plt.figure(figsize=(12, 8))
+
+        class_counts = [0] * num_classes
+        for target in dataset.targets:
+            class_counts[target] += 1
+
+        plt.bar(range(num_classes), class_counts, tick_label=dataset.classes)
+        for j, count in enumerate(class_counts):
+            plt.text(j, count, str(count), ha='center', va='bottom', fontsize=12)
+        plt.title(f"[{phase}] Number of samples per class in the dataset")
+        plt.xlabel("Class")
+        plt.ylabel("Number of samples")
+        plt.tight_layout()
+
+        path_to_save_class_distribution = f"{self.config_dir}/full_data_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
+        plt.savefig(path_to_save_class_distribution, dpi=300, bbox_inches="tight")
+        plt.close()
+
+
+        # Plot distribution of samples across participants
         plt.figure(figsize=(12, 8))
 
         label_distribution = [[] for _ in range(num_classes)]
@@ -572,13 +879,50 @@ class NebulaDataset(Dataset, ABC):
             np.arange(num_clients),
             ["Participant %d" % (c_id + 1) for c_id in range(num_clients)],
         )
-        plt.title("Distribution of splited datasets")
+        plt.title(f"[{phase}] Distribution of splited datasets")
         plt.xlabel("Participant")
         plt.ylabel("Number of samples")
         plt.xticks(range(num_clients), [f" {i}" for i in range(num_clients)])
         plt.legend(loc="upper right")
         plt.tight_layout()
 
-        path_to_save = f"{self.config.participant['tracking_args']['log_dir']}/{self.config.participant['scenario_args']['name']}/all_data_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}.png"
+        path_to_save = f"{self.config_dir}/all_data_distribution_HIST_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
+        plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
+        plt.close()
+        
+        
+        plt.figure(figsize=(12, 8))
+        max_point_size = 1200
+        min_point_size = 0
+
+        for i in range(self.partitions_number):
+            class_counts = [0] * self.num_classes
+            indices = partitions_map[i]
+            for idx in indices:
+                label = dataset.targets[idx]
+                class_counts[label] += 1
+
+            # Normalize the point sizes for this partition, handling the case where max_samples_partition is 0
+            max_samples_partition = max(class_counts)
+            if max_samples_partition == 0:
+                logging.warning(f"[{phase}] Participant {i} has no samples. Skipping size normalization.")
+                sizes = [min_point_size] * self.num_classes
+            else:
+                sizes = [
+                    (size / max_samples_partition) * (max_point_size - min_point_size) + min_point_size
+                    for size in class_counts
+                ]
+            plt.scatter([i] * self.num_classes, range(self.num_classes), s=sizes, alpha=0.5)
+
+        plt.xlabel("Participant")
+        plt.ylabel("Class")
+        plt.xticks(range(self.partitions_number))
+        plt.yticks(range(self.num_classes))
+        plt.title(
+            f"[{phase}] Data distribution across participants ({'IID' if self.iid else f'Non-IID - {self.partition}'} - {self.partition_parameter})"
+        )
+        plt.tight_layout()
+        
+        path_to_save = f"{self.config_dir}/all_data_distribution_CIRCLES_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
         plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
         plt.close()

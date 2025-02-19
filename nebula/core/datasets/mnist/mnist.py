@@ -1,4 +1,5 @@
 import os
+import logging
 
 from torchvision import transforms
 from torchvision.datasets import MNIST
@@ -10,7 +11,6 @@ class MNISTDataset(NebulaDataset):
     def __init__(
         self,
         num_classes=10,
-        partition_id=0,
         partitions_number=1,
         batch_size=32,
         num_workers=4,
@@ -18,11 +18,10 @@ class MNISTDataset(NebulaDataset):
         partition="dirichlet",
         partition_parameter=0.5,
         seed=42,
-        config=None,
+        config_dir=None,
     ):
         super().__init__(
             num_classes=num_classes,
-            partition_id=partition_id,
             partitions_number=partitions_number,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -30,10 +29,8 @@ class MNISTDataset(NebulaDataset):
             partition=partition,
             partition_parameter=partition_parameter,
             seed=seed,
-            config=config,
+            config_dir=config_dir,
         )
-        if partition_id < 0 or partition_id >= partitions_number:
-            raise ValueError(f"partition_id {partition_id} is out of range for partitions_number {partitions_number}")
 
     def initialize_dataset(self):
         if self.train_set is None:
@@ -41,21 +38,7 @@ class MNISTDataset(NebulaDataset):
         if self.test_set is None:
             self.test_set = self.load_mnist_dataset(train=False)
 
-        self.test_indices_map = list(range(len(self.test_set)))
-
-        # Depending on the iid flag, generate a non-iid or iid map of the train set
-        if self.iid:
-            self.train_indices_map = self.generate_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
-        else:
-            self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(
-                self.test_set, self.partition, self.partition_parameter
-            )
-
-        print(f"Length of train indices map: {len(self.train_indices_map)}")
-        print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
-        print(f"Length of test indices map (local): {len(self.local_test_indices_map)}")
+        self.data_partitioning(plot=True)
 
     def load_mnist_dataset(self, train=True):
         apply_transforms = transforms.Compose([
@@ -79,11 +62,7 @@ class MNISTDataset(NebulaDataset):
         else:
             raise ValueError(f"Partition {partition} is not supported for Non-IID map")
 
-        if self.partition_id == 0:
-            self.plot_data_distribution(dataset, partitions_map)
-            self.plot_all_data_distribution(dataset, partitions_map)
-
-        return partitions_map[self.partition_id]
+        return partitions_map
 
     def generate_iid_map(self, dataset, partition="balancediid", partition_parameter=2):
         if partition == "balancediid":
@@ -93,8 +72,4 @@ class MNISTDataset(NebulaDataset):
         else:
             raise ValueError(f"Partition {partition} is not supported for IID map")
 
-        if self.partition_id == 0:
-            self.plot_data_distribution(dataset, partitions_map)
-            self.plot_all_data_distribution(dataset, partitions_map)
-
-        return partitions_map[self.partition_id]
+        return partitions_map
