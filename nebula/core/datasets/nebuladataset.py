@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.manifold import TSNE
-import torch
+import h5py
 from torch.utils.data import Dataset
+import torch
 
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
@@ -27,21 +28,46 @@ def wait_for_file(file_path):
     return
 
 
-class SimpleDataset(Dataset):
-    def __init__(self, data, targets):
-        self.data = data
-        self.targets = targets
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.targets[idx]
+class BridgeDataset(Dataset):
+    """
+    Bridge dataset for loading data from HDF5 files.
+    """
+    def __init__(self, file_path, prefix):
+        self.file_path = file_path
+        self.prefix = prefix
+        self.file = None
+        
+        self.targets = []
+        
+        with h5py.File(self.file_path, 'r') as f:
+            self.length = f[f"{self.prefix}_data"].shape[0]
+            self.targets = f[f"{self.prefix}_targets"][:]
+            self.data_shape = f[f"{self.prefix}_data"].shape[1:]
 
     def __len__(self):
-        return len(self.data)
+        return self.length
+
+    def __getitem__(self, idx):
+        if self.file is None:
+            self.file = h5py.File(self.file_path, 'r')
+        data = self.file[f"{self.prefix}_data"][idx]
+        target = self.file[f"{self.prefix}_targets"][idx]
+
+        # Convert data to tensor and handle dimensionality
+        data = torch.FloatTensor(data)
+        
+        # If the data is 1D or 2D and likely needs a channel dimension (e.g., for images)
+        if len(self.data_shape) <= 2:
+            data = data.unsqueeze(0)  # Add channel dimension at the start
+        
+        # Convert target to long tensor
+        target = torch.tensor(target, dtype=torch.long)
+        return data, target
     
 
-class NebulaDatasetPartition(Dataset, ABC):
+class NebulaDatasetPartition:
     """
-    Abstract class for a partitioned dataset.
+    A class to handle the partitioning of datasets for federated learning.
     """
     
     def __init__(self, dataset_name, config):
@@ -112,7 +138,7 @@ class NebulaDatasetPartition(Dataset, ABC):
         """
         test_labels = self.get_test_labels()
         train_labels = self.get_train_labels()
-        return [idx for idx in range(len(self.test_set.data)) if test_labels[idx] in train_labels]
+        return [idx for idx in range(len(self.test_set)) if test_labels[idx] in train_labels]
     
     def log_partition(self):
         logging_training.info(f"{'=' * 10}")
@@ -137,21 +163,17 @@ class NebulaDatasetPartition(Dataset, ABC):
         logging_training.info(f"Loading partition data for participant {p}")
         path = self.config.participant["tracking_args"]["config_dir"]
         
-        train_partition_file = os.path.join(path, f"participant_{p}_train_data.pt")
+        train_partition_file = os.path.join(path, f"participant_{p}_train.h5")
         wait_for_file(train_partition_file)
         logging_training.info(f"Loading train data from {train_partition_file}")
-        train_data = torch.load(train_partition_file)
-        logging_training.info(f"Train data loaded from {train_partition_file}")
-        self.train_set = SimpleDataset(train_data["data"], train_data["targets"])
-        self.train_indices = list(range(len(self.train_set.data)))
+        self.train_set = BridgeDataset(train_partition_file, f"train")
+        self.train_indices = list(range(len(self.train_set)))
 
-        test_partition_file = os.path.join(path, f"global_test_data.pt")
+        test_partition_file = os.path.join(path, f"global_test.h5")
         wait_for_file(test_partition_file)
         logging_training.info(f"Loading test data from {test_partition_file}")
-        test_data = torch.load(test_partition_file)
-        logging_training.info(f"Test data loaded from {test_partition_file}")
-        self.test_set = SimpleDataset(test_data["data"], test_data["targets"])
-        self.test_indices = list(range(len(self.test_set.data)))
+        self.test_set = BridgeDataset(test_partition_file, "test")
+        self.test_indices = list(range(len(self.test_set)))
         self.local_test_indices = self.set_local_test_indices()
 
         logging_training.info(f"Successfully loaded partition data for participant {p}.")
@@ -225,10 +247,9 @@ class NebulaDataset(Dataset, ABC):
         )
         self.test_indices_map = self.get_test_indices_map()
         self.local_test_indices_map = self.get_local_test_indices_map()
-
-        logging.info(f"[ALL NODES] Train indices map:\n{self.train_indices_map}")
-        logging.info(f"[ALL NODES] Test indices map:\n{self.test_indices_map}")
-        logging.info(f"[ALL NODES] Local test indices map:\n{self.local_test_indices_map}")
+        # logging.info(f"[ALL NODES] Train indices map:\n{self.train_indices_map}")
+        # logging.info(f"[ALL NODES] Test indices map:\n{self.test_indices_map}")
+        # logging.info(f"[ALL NODES] Local test indices map:\n{self.local_test_indices_map}")
 
         if plot:
             self.plot_data_distribution("train", self.train_set, self.train_indices_map)
@@ -252,7 +273,6 @@ class NebulaDataset(Dataset, ABC):
             return test_indices_map
         except Exception as e:
             logging.error(f"Error in get_test_indices_map: {e}")
-            raise
 
     def get_local_test_indices_map(self):
         """
@@ -264,16 +284,16 @@ class NebulaDataset(Dataset, ABC):
         """
         try:
             local_test_indices_map = {}
+            test_targets = np.array(self.test_set.targets)
             for participant_id in range(self.partitions_number):
-                test_labels = [self.test_set.targets[idx] for idx in self.test_indices_map[participant_id]]
-                train_labels = [self.train_set.targets[idx] for idx in self.train_indices_map[participant_id]]
-                local_test_indices_map[participant_id] = [
-                    idx for idx in range(len(self.test_set)) if test_labels[idx] in train_labels
-                ]
+                train_labels = np.array([self.train_set.targets[idx] for idx in self.train_indices_map[participant_id]])
+                indices = np.where(np.isin(test_targets, train_labels))[0].tolist()
+                local_test_indices_map[participant_id] = indices
+                logging.info(f"Participant {participant_id} | Local test indices: {indices}")
             return local_test_indices_map
         except Exception as e:
             logging.error(f"Error in get_local_test_indices_map: {e}")
-            raise
+            raise Exception(f"Error in get_local_test_indices_map: {e}")
 
     def save_partitions(self):
         """
@@ -292,30 +312,28 @@ class NebulaDataset(Dataset, ABC):
                 raise ValueError("One of the partition maps has an unexpected length.")
             
             # Save global test data
-            global_test_file = os.path.join(path, "global_test_data.pt")
-            global_test_data = {"data": self.test_set.data, "targets": self.test_set.targets}
-            logging.info(f"Saving global test data to {global_test_file} | {len(global_test_data['data'])} samples | {len(global_test_data['targets'])} targets")
-            logging.info(f"Checking types of global test data: {type(global_test_data['data'])}, {type(global_test_data['targets'])}")
-            logging.info(f"Checking sets of global test data: {set(global_test_data['targets'])}")
-            torch.save(global_test_data, global_test_file)
+            file_name = os.path.join(path, "global_test.h5")
+            with h5py.File(file_name, "w") as f:
+                test_data = np.array(self.test_set.data)
+                test_targets = np.array(self.test_set.targets)
+                f.create_dataset("test_data", data=test_data, compression="gzip")
+                f.create_dataset("test_targets", data=test_targets, compression="gzip")
             
-            for partition_index in range(self.partitions_number):
-                logging.info(f"Saving partition data for participant {partition_index}")
-                train_partition_file = os.path.join(path, f"participant_{partition_index}_train_data.pt")
-                train_indices = self.train_indices_map[partition_index]
-                partition_train = [self.train_set[i] for i in train_indices]
-                partition_train_targets = [self.train_set.targets[i] for i in train_indices]
-                partition_train_data = {"data": partition_train, "targets": partition_train_targets}
-                logging.info(f"Saving train data for participant {partition_index} to {train_partition_file} | {len(partition_train_data['data'])} samples | {len(partition_train_data['targets'])} targets")
-                logging.info(f"Checking types of train data for participant {partition_index}: {type(partition_train_data['data'])}, {type(partition_train_data['targets'])}")
-                logging.info(f"Checking sets of train data for participant {partition_index}: {set(partition_train_data['targets'])}")
-                torch.save(partition_train_data, train_partition_file)
+            for participant in range(self.partitions_number):
+                file_name = os.path.join(path, f"participant_{participant}_train.h5")
+                with h5py.File(file_name, "w") as f:
+                    logging.info(f"Guardando datos de entrenamiento para el participante {participant} en {file_name}")
+                    indices = self.train_indices_map[participant]
+                    train_data = np.array([self.train_set.data[i] for i in indices])
+                    train_targets = np.array([self.train_set.targets[i] for i in indices])
+                    f.create_dataset("train_data", data=train_data, compression="gzip")
+                    f.create_dataset("train_targets", data=train_targets, compression="gzip")
+                    logging.info(f"Partición guardada para el participante {participant} con {train_data.shape[0]} muestras.")
 
             logging.info("Successfully saved all partition files.")
             
         except Exception as e:
             logging.error(f"Error in save_partitions: {e}")
-            raise
 
     @abstractmethod
     def generate_non_iid_map(self, dataset, partition="dirichlet", plot=False):
