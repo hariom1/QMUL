@@ -577,6 +577,9 @@ class Engine:
     async def trigger_event(self, message_event):
         await self.event_manager.publish(message_event)
 
+    async def get_geoloc(self):
+        return await self.nm.get_geoloc()
+
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")

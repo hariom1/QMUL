@@ -82,7 +82,7 @@ class CommunicationsManager:
         self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
-        self._external_connection_service = factory_connection_service("nebula", self.addr)
+        self._external_connection_service = factory_connection_service("nebula", self, self.addr)
 
     @property
     def engine(self):
@@ -191,10 +191,13 @@ class CommunicationsManager:
                                                             # EXTERNAL CONNECTION SERVICE #
                                                             ###############################
     """
+    
+    async def get_geoloc(self):
+        return await self.engine.get_geoloc()
 
     async def start_external_connection_service(self, run_service=True):
         if self.ecs == None:
-            self._external_connection_service = factory_connection_service(self.addr)
+            self._external_connection_service = factory_connection_service(self, self.addr)
         if run_service:
             await self.ecs.start()
 

@@ -109,14 +109,20 @@ class SAModule():
     def get_actions(self):
         return self.np.get_actions()
     
+    async def get_geoloc(self):
+        latitude = self.nm.config.participant["mobility_args"]["latitude"]
+        longitude = self.nm.config.participant["mobility_args"]["longitude"]
+        return (latitude,longitude)
+    
     
     """                                                     ###############################
                                                             #         ROBUSTNESS          #
                                                             ###############################
     """
     
-    async def beacon_received(self, addr):
-        logging.info(f"Beacon received SAModule, source:{addr}")
+    async def beacon_received(self, addr, geoloc):
+        latitude, longitude = geoloc
+        logging.info(f"Beacon received SAModule, source: {addr}, geolocalization: {latitude},{longitude}")
     
     async def check_external_connection_service_status(self):
         if not await self.cm.is_external_connection_service_running():

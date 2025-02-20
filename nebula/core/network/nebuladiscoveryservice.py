@@ -5,6 +5,10 @@ import struct
 from nebula.core.network.externalconnectionservice import ExternalConnectionService
 from nebula.core.utils.locker import Locker
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nebula.core.network.communications import CommunicationsManager
+
 class NebulaServerProtocol(asyncio.DatagramProtocol):
     BCAST_IP = '239.255.255.250'
     UPNP_PORT = 1900
@@ -43,12 +47,22 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
             logging.error(f"Error responding to client: {e}")
     
     async def handle_beacon_received(self, msg):
-        for line in msg.splitlines():
-            if line.startswith("LOCATION:"):
-                beacon_addr = line.split(": ")[1].strip()
-                if beacon_addr != self.addr:
-                    logging.info(f"Beacon received from: {beacon_addr}")
-                    await self.nebula_service.notify_beacon_received(beacon_addr)
+        lines = msg.split("\r\n")
+        beacon_data = {}
+        
+        for line in lines:
+            if ": " in line:
+                key, value = line.split(": ", 1)
+                beacon_data[key] = value
+
+        # Verificar que no sea el propio beacon
+        beacon_addr = beacon_data.get("LOCATION")
+        if beacon_addr == self.addr:
+            return
+
+        latitude = float(beacon_data.get("LATITUDE", 0.0))
+        longitude = float(beacon_data.get("LONGITUDE", 0.0))
+        await self.nebula_service.notify_beacon_received(beacon_addr, (latitude, longitude))
     
     def _is_nebula_message(self, msg):
         return "ST: urn:nebula-service" in msg
@@ -56,7 +70,7 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
 class NebulaClientProtocol(asyncio.DatagramProtocol):
     BCAST_IP = '239.255.255.250'
     BCAST_PORT = 1900
-    SEARCH_TRIES = 5
+    SEARCH_TRIES = 3
     SEARCH_INTERVAL = 3
 
     def __init__(self, nebula_service):
@@ -105,7 +119,8 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
             logging.warning(f"Received malformed message from {addr}, ignoring.")
 
 class NebulaBeacon:
-    def __init__(self, addr, interval=20):
+    def __init__(self, nebula_service, addr, interval=20):
+        self.nebula_service : NebulaConnectionService = nebula_service
         self.addr = addr
         self.interval = interval  # Intervalo de envío en segundos
         self.running = False
@@ -126,12 +141,15 @@ class NebulaBeacon:
         self.interval = frequency    
 
     async def send_beacon(self):
+        latitude, longitude = await self.nebula_service.cm.get_geoloc()
         try:
             message = ("NOTIFY * HTTP/1.1\r\n"
                        "HOST: 239.255.255.250:1900\r\n"
                        "ST: urn:nebula-service\r\n"
                        "TYPE: beacon\r\n"
                        f"LOCATION: {self.addr}\r\n"
+                       f"LATITUDE: {latitude}\r\n"
+                       f"LONGITUDE: {longitude}\r\n"
                        "\r\n")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
@@ -141,17 +159,21 @@ class NebulaBeacon:
         except Exception as e:
             logging.error(f"Error sending beacon: {e}")
 
-#TODO si la busqueda no devuelve nada nuevo, dejar de hacerla para eliminar tráfico inutil
 class NebulaConnectionService(ExternalConnectionService):
-    def __init__(self, addr):
+    def __init__(self, cm: "CommunicationsManager", addr):
+        self._cm = cm
         self.nodes_found = set()
         self.addr = addr
         self.server : NebulaServerProtocol = None
         self.client : NebulaClientProtocol = None
-        self.beacon : NebulaBeacon = NebulaBeacon(self.addr)
+        self.beacon : NebulaBeacon = NebulaBeacon(self, self.addr)
         self.running = False
         self._beacon_listeners_lock = Locker(name="beacon_listeners_lock", async_lock=True)
         self._beacon_listeners = []
+        
+    @property
+    def cm(self):
+        return self._cm
 
     async def start(self):
         loop = asyncio.get_running_loop()
@@ -178,7 +200,7 @@ class NebulaConnectionService(ExternalConnectionService):
 
     async def start_beacon(self):
         if not self.beacon:
-            self.beacon = NebulaBeacon(self.addr)
+            self.beacon = NebulaBeacon(self, self.addr)
         asyncio.create_task(self.beacon.start())
     
     async def stop_beacon(self):
@@ -204,14 +226,15 @@ class NebulaConnectionService(ExternalConnectionService):
         return self.nodes_found
 
     def response_received(self, data, addr):
-        logging.info("Parsing response...")
+        #logging.info("Parsing response...")
         msg_str = data.decode('utf-8')
         for line in msg_str.splitlines():
             if line.strip().startswith("LOCATION:"):
                 addr = line.split(": ")[1].strip()
                 if addr != self.addr:
-                    logging.info(f"Device address received: {addr}")
-                    self.nodes_found.add(addr)
+                    if addr not in self.nodes_found:
+                        logging.info(f"Device address received: {addr}")
+                        self.nodes_found.add(addr)
                     
     async def subscribe_beacon_listener(self, listener : callable):
         await self._beacon_listeners_lock.acquire_async()
@@ -219,8 +242,8 @@ class NebulaConnectionService(ExternalConnectionService):
         self._beacon_listeners.append(listener)
         await self._beacon_listeners_lock.release_async()
                                        
-    async def notify_beacon_received(self, addr):
+    async def notify_beacon_received(self, addr, geoloc):
         await self._beacon_listeners_lock.acquire_async()
         for bec_listener in self._beacon_listeners:
-            await bec_listener(addr)
+            await bec_listener(addr, geoloc)
         await self._beacon_listeners_lock.release_async()

@@ -391,6 +391,34 @@ class Mobility:
                 logging.exception("📍  Error changing connections based on distance")
                 return
 
+    async def calculate_network_conditions(self, distance):
+        thresholds = sorted(self.network_conditions.keys())
+        
+        # Si la distancia es menor que el primer umbral, devolver la mejor condición
+        if distance < thresholds[0]:
+            return self.network_conditions[thresholds[0]]
+        
+        # Encontrar el tramo en el que se encuentra la distancia
+        for i in range(len(thresholds) - 1):
+            lower_bound = thresholds[i]
+            upper_bound = thresholds[i + 1]
+            
+            if lower_bound <= distance < upper_bound:
+                lower_cond = self.network_conditions[lower_bound]
+                upper_cond = self.network_conditions[upper_bound]
+                
+                # Calcular el progreso en el tramo (0 a 1)
+                progress = (distance - lower_bound) / (upper_bound - lower_bound)
+                
+                # Interpolación lineal de valores
+                bandwidth = lower_cond["bandwidth"] - progress * (lower_cond["bandwidth"] - upper_cond["bandwidth"])
+                delay = lower_cond["delay"] + progress * (upper_cond["delay"] - lower_cond["delay"])
+                
+                return {"bandwidth": round(bandwidth, 2), "delay": round(delay, 2)}
+        
+        # Si la distancia es infinita, devolver el último valor
+        return self.network_conditions[float("inf")]
+
     async def change_connections(self):
         """
         Changes the connections of the entity based on the specified mobility scheme.

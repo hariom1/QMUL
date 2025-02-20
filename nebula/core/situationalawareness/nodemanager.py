@@ -314,6 +314,9 @@ class NodeManager:
                     ##############################
     """
 
+    async def get_geoloc(self):
+        return await self.sam.get_geoloc()
+
     async def mobility_actions(self):
         await self.sam.check_external_connection_service_status()
         await self.sam.analize_topology_robustness()
