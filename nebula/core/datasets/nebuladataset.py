@@ -330,7 +330,9 @@ class NebulaDataset(Dataset, ABC):
             with h5py.File(file_name, "w") as f:
                 test_data = np.array(self.test_set.data)
                 test_targets = np.array(self.test_set.targets)
-                f.create_dataset("test_data", data=test_data, compression="gzip")
+                dset = f.create_dataset("test_data", data=test_data, compression="gzip")
+                dset.attrs["data_shape"] = test_data.shape[1:] # Save the shape of the data
+                dset.attrs["num_classes"] = self.num_classes # Save the number of classes
                 f.create_dataset("test_targets", data=test_targets, compression="gzip")
             
             for participant in range(self.partitions_number):
