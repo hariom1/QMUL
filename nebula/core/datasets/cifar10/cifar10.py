@@ -8,8 +8,8 @@ from nebula.core.datasets.nebuladataset import NebulaDataset, NebulaPartitionHan
 
 
 class CIFAR10PartitionHandler(NebulaPartitionHandler):
-    def __init__(self, file_path, prefix):
-        super().__init__(file_path, prefix)
+    def __init__(self, file_path, prefix, mode):
+        super().__init__(file_path, prefix, mode)
 
         # Custom transform for CIFAR10
         mean = (0.4914, 0.4822, 0.4465)

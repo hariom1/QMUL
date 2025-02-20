@@ -8,8 +8,8 @@ from nebula.core.datasets.nebuladataset import NebulaDataset, NebulaPartitionHan
 
 
 class FashionMNISTPartitionHandler(NebulaPartitionHandler):
-    def __init__(self, file_path, prefix):
-        super().__init__(file_path, prefix)
+    def __init__(self, file_path, prefix, mode):
+        super().__init__(file_path, prefix, mode)
 
         # Custom transform for MNIST
         self.transform = transforms.Compose([
