@@ -37,28 +37,47 @@ class NebulaPartitionHandler(Dataset, ABC):
         self,
         file_path: str,
         prefix: str = "train",
+        mode: str = "memory",
     ):
         self.file_path = file_path
         self.prefix = prefix
+        self.mode = mode
         self.transform = None
         self.target_transform = None
         self.file = None
-
-        # Data is not loaded into memory to save space
-        # self.data = []
+        
+        if self.mode == "memory":
+            self.load_data()
+        elif self.mode == "lazy":
+            self.load_data_lazy()
+        else:
+            raise ValueError(f"Mode {self.mode} not supported")
+        
+    def load_data(self):
+        # Load the data into memory
+        with h5py.File(self.file_path, "r") as f:
+            dset = f[f"{self.prefix}_data"]
+            self.data = dset[:]
+            self.targets = f[f"{self.prefix}_targets"][:]
+            self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
+            self.num_classes = dset.attrs.get("num_classes", 0)
+            self.length = len(self.data)
+        logging_training.info(
+            f"[NebulaPartitionHandler - Memory] [{self.prefix}] Loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes."
+        )
+        
+    def load_data_lazy(self):
         self.targets = []
-
         with h5py.File(self.file_path, "r") as f:
             dset = f[f"{self.prefix}_data"]
             self.length = dset.shape[0]
             self.targets = f[f"{self.prefix}_targets"][:]
             self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
             self.num_classes = dset.attrs.get("num_classes", 0)
-
         logging_training.info(
-            f"[NebulaPartitionHandler] [{self.prefix}] Loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes."
+            f"[NebulaPartitionHandler - Disk] [{self.prefix}] Loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes."
         )
-
+        
     def __len__(self):
         return self.length
 
@@ -67,13 +86,17 @@ class NebulaPartitionHandler(Dataset, ABC):
             self.file.close()
 
     def __getitem__(self, idx):
-        if self.file is None:
-            self.file = h5py.File(self.file_path, "r")
-        try:
-            data = self.file[f"{self.prefix}_data"][idx]
-            target = self.file[f"{self.prefix}_targets"][idx]
-        except Exception as e:
-            raise RuntimeError(f"[NebulaPartitionHandler] Error reading index {idx} from file {self.file_path}: {e}")
+        if self.mode == "memory":
+            data = self.data[idx]
+            target = self.targets[idx]
+        else:
+            if self.file is None:
+                self.file = h5py.File(self.file_path, "r")
+            try:
+                data = self.file[f"{self.prefix}_data"][idx]
+                target = self.file[f"{self.prefix}_targets"][idx]
+            except Exception as e:
+                raise RuntimeError(f"[NebulaPartitionHandler] Error reading index {idx} from file {self.file_path}: {e}")
 
         return data, target
 
@@ -83,9 +106,13 @@ class NebulaPartition:
     A class to handle the partitioning of datasets for federated learning.
     """
 
-    def __init__(self, handler: NebulaPartitionHandler, config: dict[str, Any]):
+    def __init__(self, handler: NebulaPartitionHandler, mode: str, config: dict[str, Any]):
         self.handler = handler
+        self.mode = mode
         self.config = config
+        
+        if self.mode not in ["lazy", "memory"]:
+            raise ValueError(f"Mode {self.mode} not supported")
 
         self.train_set = None
         self.train_indices = None
@@ -181,13 +208,13 @@ class NebulaPartition:
             train_partition_file = os.path.join(path, f"participant_{p}_train.h5")
             wait_for_file(train_partition_file)
             logging_training.info(f"Loading train data from {train_partition_file}")
-            self.train_set = self.handler(train_partition_file, "train")
+            self.train_set = self.handler(train_partition_file, "train", mode=self.mode)
             self.train_indices = list(range(len(self.train_set)))
 
             test_partition_file = os.path.join(path, "global_test.h5")
             wait_for_file(test_partition_file)
             logging_training.info(f"Loading test data from {test_partition_file}")
-            self.test_set = self.handler(test_partition_file, "test")
+            self.test_set = self.handler(test_partition_file, "test", mode=self.mode)
             self.test_indices = list(range(len(self.test_set)))
             self.local_test_indices = self.set_local_test_indices()
 

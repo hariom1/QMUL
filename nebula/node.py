@@ -122,8 +122,8 @@ async def main(config):
             raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
-
-    dataset = NebulaPartition(handler=handler, config=config)
+    
+    dataset = NebulaPartition(handler=handler, mode="memory", config=config)
     dataset.load_partition()
     dataset.log_partition()
 
