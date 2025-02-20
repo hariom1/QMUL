@@ -57,9 +57,9 @@ class SAModule():
             self.nm.engine.addr,
             self,
         ])
-
-    async def beacon_received(self):
-        logging.info("Beacon received SAModule")
+        
+    async def experiment_finish(self):
+        await self.cm.stop_external_connection_service()    
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #
@@ -115,11 +115,14 @@ class SAModule():
                                                             ###############################
     """
     
+    async def beacon_received(self, addr):
+        logging.info(f"Beacon received SAModule, source:{addr}")
+    
     async def check_external_connection_service_status(self):
         if not await self.cm.is_external_connection_service_running():
             logging.info("🔄 External Service not running | Starting service...")
             await self.cm.init_external_connection_service()
-            await self.cm.subscribe_beacon_listener(None)
+            await self.cm.subscribe_beacon_listener(self.beacon_received)
             await self.cm.start_beacon()
             
     async def analize_topology_robustness(self):
@@ -127,7 +130,7 @@ class SAModule():
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
-                #await self.reconnect_to_federation()
+                await self.reconnect_to_federation()
             elif (self.np.need_more_neighbors() and self._restructure_available()):
                 logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()

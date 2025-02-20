@@ -846,6 +846,7 @@ class Engine:
             )  # Set current round in config (send to the controller)
             await self.get_round_lock().release_async()
 
+        await self.nm.experiment_finish()
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()

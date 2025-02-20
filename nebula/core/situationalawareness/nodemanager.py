@@ -108,6 +108,9 @@ class NodeManager:
 
         if self._fast_reboot_status:
             self._fastreboot = FastReboot(self)
+            
+    async def experiment_finish(self):
+        await self.sam.experiment_finish()        
 
     """
                 ##############################

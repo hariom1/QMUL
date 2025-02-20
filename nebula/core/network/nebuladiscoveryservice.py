@@ -23,12 +23,12 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         msg = data.decode('utf-8')
         if self._is_nebula_message(msg):
-            logging.info("Nebula message received...")
+            #logging.info("Nebula message received...")
             if self.DISCOVER_MESSAGE in msg:
                 logging.info("Discovery request received, responding...")
                 asyncio.create_task(self.respond(addr))
             elif self.BEACON_MESSAGE in msg:
-                asyncio.create_task(self.handle_beacon_received(msg, addr))
+                asyncio.create_task(self.handle_beacon_received(msg))
     
     async def respond(self, addr):
         try:
@@ -105,7 +105,7 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
             logging.warning(f"Received malformed message from {addr}, ignoring.")
 
 class NebulaBeacon:
-    def __init__(self, addr, interval=7):
+    def __init__(self, addr, interval=20):
         self.addr = addr
         self.interval = interval  # Intervalo de envío en segundos
         self.running = False
@@ -170,8 +170,10 @@ class NebulaConnectionService(ExternalConnectionService):
         self.running = True
 
     async def stop(self):
+        logging.info("Stop Nebula Connection Service")
         if self.server and self.server.transport:
             self.server.transport.close()
+        await self.beacon.stop()
         self.running = False
 
     async def start_beacon(self):
@@ -213,6 +215,7 @@ class NebulaConnectionService(ExternalConnectionService):
                     
     async def subscribe_beacon_listener(self, listener : callable):
         await self._beacon_listeners_lock.acquire_async()
+        logging.info("Registering beacon listener...")
         self._beacon_listeners.append(listener)
         await self._beacon_listeners_lock.release_async()
                                        
