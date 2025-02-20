@@ -147,6 +147,8 @@ class DFLUpdateHandler(UpdateHandler):
             if not source in self._sources_received:                            # Not received update from this source yet
                 await self._update_source(source, remove=True)
                 await self._all_updates_received()                              # Verify if discarding node aggregation could be done
+            else:
+                logging.info(f"Already received update from: {source}, it will be discarded next round")
             
     async def _update_source(self, source, remove=False):
         logging.info(f"🔄 Update | remove: {remove} | source: {source}")

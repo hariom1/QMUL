@@ -1,4 +1,4 @@
-from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import NeighborPolicy
+from nebula.core.situationalawareness.awareness.neighborpolicies.neighborpolicy import NeighborPolicy
 from nebula.core.utils.locker import Locker
 
 class STARNeighborPolicy(NeighborPolicy):

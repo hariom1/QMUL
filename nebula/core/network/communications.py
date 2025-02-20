@@ -194,7 +194,7 @@ class CommunicationsManager:
 
     async def start_external_connection_service(self, run_service=True):
         if self.ecs == None:
-            self._external_connection_service = factory_connection_service(self.addr) #NebulaConnectionService(self.addr)
+            self._external_connection_service = factory_connection_service(self.addr)
         if run_service:
             await self.ecs.start()
 
@@ -206,6 +206,18 @@ class CommunicationsManager:
 
     async def is_external_connection_service_running(self):
         return self.ecs.is_running()
+    
+    async def start_beacon(self):
+        await self.ecs.start_beacon()
+        
+    async def stop_beacon(self):
+        await self.ecs.stop_beacon()
+        
+    async def subscribe_beacon_listener(self, listener):
+        await self.ecs.subscribe_beacon_listener(listener)
+        
+    async def modify_beacon_frequency(self, frequency):
+        await self.ecs.modify_beacon_frequency(frequency)        
 
     #TODO
     # si se utilizan addr conocidas y no se consigue conectar a ninguna qué hacer

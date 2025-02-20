@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+from nebula.core.situationalawareness.awareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.core.utils.locker import Locker
 from nebula.addons.functions import print_msg_box
 
@@ -44,6 +44,8 @@ class SAModule():
         if not self.nm.is_additional_participant():
             logging.info("Deploying External Connection Service")
             await self.cm.start_external_connection_service()
+            await self.cm.subscribe_beacon_listener(self.beacon_received)
+            await self.cm.start_beacon()
         else:
             logging.info("Deploying External Connection Service | No running")
             await self.cm.start_external_connection_service(run_service=False)
@@ -56,6 +58,8 @@ class SAModule():
             self,
         ])
 
+    async def beacon_received(self):
+        logging.info("Beacon received SAModule")
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #
@@ -115,6 +119,8 @@ class SAModule():
         if not await self.cm.is_external_connection_service_running():
             logging.info("🔄 External Service not running | Starting service...")
             await self.cm.init_external_connection_service()
+            await self.cm.subscribe_beacon_listener(None)
+            await self.cm.start_beacon()
             
     async def analize_topology_robustness(self):
         logging.info("🔄 Analizing node network robustness...")
