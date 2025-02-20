@@ -32,36 +32,50 @@ class BridgeDataset(Dataset):
     """
     Bridge dataset for loading data from HDF5 files.
     """
-    def __init__(self, file_path, prefix):
+    def __init__(self, file_path, prefix, transform=None):
         self.file_path = file_path
         self.prefix = prefix
+        self.transform = transform
         self.file = None
         
         self.targets = []
         
         with h5py.File(self.file_path, 'r') as f:
-            self.length = f[f"{self.prefix}_data"].shape[0]
+            dset = f[f"{self.prefix}_data"]
+            self.length = dset.shape[0]
             self.targets = f[f"{self.prefix}_targets"][:]
-            self.data_shape = f[f"{self.prefix}_data"].shape[1:]
+            self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
+            self.num_classes = dset.attrs.get("num_classes", 0)
+            
+        logging_training.info(f"[BridgeDataset] Loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes.")
 
     def __len__(self):
         return self.length
+    
+    def __del__(self):
+        if self.file is not None:
+            self.file.close()
 
     def __getitem__(self, idx):
         if self.file is None:
             self.file = h5py.File(self.file_path, 'r')
-        data = self.file[f"{self.prefix}_data"][idx]
-        target = self.file[f"{self.prefix}_targets"][idx]
+        try:
+            data = self.file[f"{self.prefix}_data"][idx]
+            target = self.file[f"{self.prefix}_targets"][idx]
+        except Exception as e:
+            raise RuntimeError(f"[BridgeDataset] Error reading index {idx} from file {self.file_path}: {e}")
 
         # Convert data to tensor and handle dimensionality
         data = torch.FloatTensor(data)
-        
-        # If the data is 1D or 2D and likely needs a channel dimension (e.g., for images)
-        if len(self.data_shape) <= 2:
-            data = data.unsqueeze(0)  # Add channel dimension at the start
+        if len(self.data_shape) <= 2 and data.dim() == 2:
+            data = data.unsqueeze(0)
         
         # Convert target to long tensor
         target = torch.tensor(target, dtype=torch.long)
+        
+        if self.transform:
+            data = self.transform(data)
+        
         return data, target
     
 
@@ -326,7 +340,9 @@ class NebulaDataset(Dataset, ABC):
                     indices = self.train_indices_map[participant]
                     train_data = np.array([self.train_set.data[i] for i in indices])
                     train_targets = np.array([self.train_set.targets[i] for i in indices])
-                    f.create_dataset("train_data", data=train_data, compression="gzip")
+                    dset = f.create_dataset("train_data", data=train_data, compression="gzip")
+                    dset.attrs["data_shape"] = train_data.shape[1:] # Save the shape of the data
+                    dset.attrs["num_classes"] = self.num_classes # Save the number of classes
                     f.create_dataset("train_targets", data=train_targets, compression="gzip")
                     logging.info(f"Partición guardada para el participante {participant} con {train_data.shape[0]} muestras.")
 
