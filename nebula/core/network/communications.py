@@ -3,7 +3,6 @@ import collections
 import logging
 import subprocess
 import sys
-import traceback
 from typing import TYPE_CHECKING
 
 import requests
@@ -12,19 +11,10 @@ from nebula.addons.mobility import Mobility
 from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
-from nebula.core.network.forwarder import Forwarder
-from nebula.core.network.messages import MessagesManager
 from nebula.core.network.externalconnectionservice import factory_connection_service
+from nebula.core.network.forwarder import Forwarder
+from nebula.core.network.messages import MessageEvent, MessagesManager
 from nebula.core.network.propagator import Propagator
-from nebula.core.network.messages import MessageEvent
-from nebula.core.utils.helper import (
-    cosine_metric,
-    euclidean_metric,
-    jaccard_metric,
-    manhattan_metric,
-    minkowski_metric,
-    pearson_correlation_metric,
-)
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -154,10 +144,10 @@ class CommunicationsManager:
     async def handle_model_message(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
         if message.round == -1:
-            model_init_event = MessageEvent(("model","initialization"), source, message)
+            model_init_event = MessageEvent(("model", "initialization"), source, message)
             await self.engine.trigger_event(model_init_event)
         else:
-            model_updt_event = MessageEvent(("model","update"), source, message)
+            model_updt_event = MessageEvent(("model", "update"), source, message)
             await self.engine.trigger_event(model_updt_event)
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
@@ -186,12 +176,11 @@ class CommunicationsManager:
     async def clear_restrictions(self):
         await self.bl.clear_restrictions()
 
-
     """                                                     ###############################
                                                             # EXTERNAL CONNECTION SERVICE #
                                                             ###############################
     """
-    
+
     async def get_geoloc(self):
         return await self.engine.get_geoloc()
 
@@ -209,23 +198,19 @@ class CommunicationsManager:
 
     async def is_external_connection_service_running(self):
         return self.ecs.is_running()
-    
+
     async def start_beacon(self):
         await self.ecs.start_beacon()
-        
+
     async def stop_beacon(self):
         await self.ecs.stop_beacon()
-        
+
     async def subscribe_beacon_listener(self, listener):
         await self.ecs.subscribe_beacon_listener(listener)
-        
-    async def modify_beacon_frequency(self, frequency):
-        await self.ecs.modify_beacon_frequency(frequency)        
 
-    #TODO
-    # si se utilizan addr conocidas y no se consigue conectar a ninguna qué hacer
-    #   -> funcion reentrante pero sin utilizar las conocidas
-    # S
+    async def modify_beacon_frequency(self, frequency):
+        await self.ecs.modify_beacon_frequency(frequency)
+
     async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None):
         """
         Using ExternalConnectionService to get addrs on local network, after that
@@ -241,7 +226,7 @@ class CommunicationsManager:
             addrs = addrs_known
 
         msg = self.create_message("discover", msg_type)
-        
+
         # Remove neighbors
         neighbors = await self.get_addrs_current_connections(only_undirected=True, myself=True)
         addrs = set(addrs)
@@ -255,13 +240,13 @@ class CommunicationsManager:
             for addr in addrs:
                 await self.connect(addr, direct=False)
                 await asyncio.sleep(1)
-            for i in range(0,max_tries):
+            for i in range(0, max_tries):
                 if self.verify_any_connections(addrs):
                     break
                 await asyncio.sleep(1)
             current_connections = await self.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Connections verified after searching: {current_connections}")
-            
+
             for addr in addrs:
                 logging.info(f"Sending {msg_type} to ---> {addr}")
                 asyncio.create_task(self.send_message(addr, msg))
@@ -269,16 +254,15 @@ class CommunicationsManager:
                 discovers_sent += 1
         return discovers_sent
 
-
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
-    
-    #TODO remove
-    async def update_neighbors(self, addr, remove=False):
-        current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
-        await self.engine.update_neighbors(addr, current_connections, remove=remove)
+
+    # TODO remove
+    # async def update_neighbors(self, addr, remove=False):
+    #     current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
+    #     await self.engine.update_neighbors(addr, current_connections, remove=remove)
 
     def get_connections_lock(self):
         return self.connections_lock
@@ -456,7 +440,7 @@ class CommunicationsManager:
         if any(neighbor in self.connections for neighbor in neighbors):
             return True
         return False
-    
+
     def verify_connections(self, neighbors):
         # Return True if all neighbors are connected
         if all(neighbor in self.connections for neighbor in neighbors):
@@ -472,7 +456,7 @@ class CommunicationsManager:
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
             pass
-            #await self._discoverer.start()
+            # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
@@ -589,6 +573,9 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"❗️  Network simulation error: {e}")
             return
+
+    async def update_connection_geolocalziation(source, latitude, longitude):
+        pass
 
     async def include_received_message_hash(self, hash_message):
         try:

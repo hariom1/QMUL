@@ -340,25 +340,25 @@ class Mobility:
                         # If the distance is not found, we skip the node
                         continue
                     # logging.info(f"📍  Distance to node {addr}: {distance}")
-                    if (
-                        not self.cm.connections[addr].get_direct()
-                        and distance < self.max_distance_with_direct_connections
-                    ):
-                        logging.info(f"📍  Node {addr} is close enough [{distance}], adding to direct connections")
-                        self.cm.connections[addr].set_direct(True)
-                        await self.cm.update_neighbors(addr)
-                    else:
-                        # 10% margin to avoid oscillations
-                        if (
-                            self.cm.connections[addr].get_direct()
-                            and distance > self.max_distance_with_direct_connections * 1.1
-                        ):
-                            logging.info(
-                                f"📍  Node {addr} is too far away [{distance}], removing from direct connections"
-                            )
-                            await asyncio.sleep(1)
-                            self.cm.connections[addr].set_direct(False)
-                            await self.cm.update_neighbors(addr,remove=True)
+                    # if (
+                    #     not self.cm.connections[addr].get_direct()
+                    #     and distance < self.max_distance_with_direct_connections
+                    # ):
+                    #     logging.info(f"📍  Node {addr} is close enough [{distance}], adding to direct connections")
+                    #     self.cm.connections[addr].set_direct(True)
+                    #     await self.cm.update_neighbors(addr)
+                    # else:
+                    #     # 10% margin to avoid oscillations
+                    #     if (
+                    #         self.cm.connections[addr].get_direct()
+                    #         and distance > self.max_distance_with_direct_connections * 1.1
+                    #     ):
+                    #         logging.info(
+                    #             f"📍  Node {addr} is too far away [{distance}], removing from direct connections"
+                    #         )
+                    #         await asyncio.sleep(1)
+                    #         self.cm.connections[addr].set_direct(False)
+                    #         await self.cm.update_neighbors(addr,remove=True)
                     # Adapt network conditions of the connection based on distance
                     for threshold in sorted(self.network_conditions.keys()):
                         if distance < threshold:
@@ -393,29 +393,29 @@ class Mobility:
 
     async def calculate_network_conditions(self, distance):
         thresholds = sorted(self.network_conditions.keys())
-        
+
         # Si la distancia es menor que el primer umbral, devolver la mejor condición
         if distance < thresholds[0]:
             return self.network_conditions[thresholds[0]]
-        
+
         # Encontrar el tramo en el que se encuentra la distancia
         for i in range(len(thresholds) - 1):
             lower_bound = thresholds[i]
             upper_bound = thresholds[i + 1]
-            
+
             if lower_bound <= distance < upper_bound:
                 lower_cond = self.network_conditions[lower_bound]
                 upper_cond = self.network_conditions[upper_bound]
-                
+
                 # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
-                
+
                 # Interpolación lineal de valores
                 bandwidth = lower_cond["bandwidth"] - progress * (lower_cond["bandwidth"] - upper_cond["bandwidth"])
                 delay = lower_cond["delay"] + progress * (upper_cond["delay"] - lower_cond["delay"])
-                
+
                 return {"bandwidth": round(bandwidth, 2), "delay": round(delay, 2)}
-        
+
         # Si la distancia es infinita, devolver el último valor
         return self.network_conditions[float("inf")]
 

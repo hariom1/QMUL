@@ -9,8 +9,8 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.network.communications import CommunicationsManager
+from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
 
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -165,8 +165,8 @@ class Engine:
         self.register_message_events_callbacks()
 
         # Additional callbacks not registered automatically
-        self.register_message_callback(("model","initialization"), "model_initialization_callback")
-        self.register_message_callback(("model","update"), "model_update_callback")
+        self.register_message_callback(("model", "initialization"), "model_initialization_callback")
+        self.register_message_callback(("model", "update"), "model_update_callback")
 
     @property
     def cm(self):
@@ -276,17 +276,17 @@ class Engine:
     async def model_update_callback(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model update from {source} with round {message.round}")
         if not self.get_federation_ready_lock().locked() and len(self.get_federation_nodes()) == 0:
-                logging.info("🤖  handle_model_message | There are no defined federation nodes")
-                return
+            logging.info("🤖  handle_model_message | There are no defined federation nodes")
+            return
         decoded_model = self.trainer.deserialize_model(message.parameters)
         await self.aggregator.update_received_from_source(decoded_model, message.weight, source, message.round)
-
 
     """                                                     ##############################
                                                             #      General callbacks     #
                                                             ##############################
     """
 
+    # TODO llevar a communications
     async def _discovery_discover_callback(self, source, message):
         logging.info(
             f"🔍  handle_discovery_message | Trigger | Received discovery message from {source} (network propagation)"
@@ -544,9 +544,6 @@ class Engine:
             await self.cm.disconnect(source, mutual_disconnection=False)
             await self.nm.update_neighbors(addr, remove=True)
 
-
-
-
     """                                                     ##############################
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ##############################
@@ -572,7 +569,7 @@ class Engine:
         event_type, action = message_event
         method = getattr(self, callback, None)
         if callable(method):
-                self.event_manager.subscribe((event_type, action), method)
+            self.event_manager.subscribe((event_type, action), method)
 
     async def trigger_event(self, message_event):
         await self.event_manager.publish(message_event)
@@ -615,8 +612,8 @@ class Engine:
         await self.learning_cycle_lock.acquire_async()
         try:
             model_serialized, rounds, round, _epochs = await self.nm.get_trainning_info()
-            self.total_rounds = rounds  
-            epochs = _epochs 
+            self.total_rounds = rounds
+            epochs = _epochs
             await self.get_round_lock().acquire_async()
             self.round = round
             await self.get_round_lock().release_async()
@@ -841,7 +838,7 @@ class Engine:
                 indent=2,
                 title="Round information",
             )
-            #await self.aggregator.reset()
+            # await self.aggregator.reset()
             self.trainer.on_round_end()
             self.round = self.round + 1
             self.config.participant["federation_args"]["round"] = (
@@ -1000,7 +997,7 @@ class AggregatorNode(Engine):
         #     source=self.addr,
         #     round=self.round,
         # )
-        
+
         await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.get_model_weight(),
@@ -1040,14 +1037,14 @@ class ServerNode(Engine):
         #     source=self.addr,
         #     round=self.round,
         # )
-        
+
         await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.BYPASS_MODEL_WEIGHT,
             source=self.addr,
             round=self.round,
         )
-        
+
         await self._waiting_model_updates()
         await self.cm.propagator.propagate("stable")
 
@@ -1084,7 +1081,7 @@ class TrainerNode(Engine):
         #     round=self.round,
         #     local=True,
         # )
-        
+
         await self.aggregator.update_received_from_source(
             self.trainer.get_model_parameters(),
             self.trainer.get_model_weight(),
