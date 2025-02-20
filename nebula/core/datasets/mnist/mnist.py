@@ -1,10 +1,34 @@
 import os
-import logging
 
+from PIL import Image
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
-from nebula.core.datasets.nebuladataset import NebulaDataset
+from nebula.core.datasets.nebuladataset import NebulaDataset, NebulaPartitionHandler
+
+
+class MNISTPartitionHandler(NebulaPartitionHandler):
+    def __init__(self, file_path, prefix):
+        super().__init__(file_path, prefix)
+
+        # Custom transform for MNIST
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,), inplace=True),
+        ])
+
+    def __getitem__(self, idx):
+        img, target = super().__getitem__(idx)
+
+        img = Image.fromarray(img, mode="L")
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
 
 
 class MNISTDataset(NebulaDataset):
@@ -41,17 +65,12 @@ class MNISTDataset(NebulaDataset):
         self.data_partitioning(plot=True)
 
     def load_mnist_dataset(self, train=True):
-        apply_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,), inplace=True),
-        ])
         data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         os.makedirs(data_dir, exist_ok=True)
         return MNIST(
             data_dir,
             train=train,
             download=True,
-            transform=apply_transforms,
         )
 
     def generate_non_iid_map(self, dataset, partition="dirichlet", partition_parameter=0.5):

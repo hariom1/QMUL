@@ -496,10 +496,10 @@ async def check_enough_resources():
     resources = await get_host_resources()
 
     mem_percent = resources.get("memory_percent")
-    
+
     if settings.resources_threshold == 0.0:
         return True
-    
+
     if mem_percent >= settings.resources_threshold:
         return False
 
