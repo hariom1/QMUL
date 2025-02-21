@@ -60,11 +60,10 @@ class NebulaPartitionHandler(Dataset, ABC):
             raise ValueError(f"Mode {self.mode} not supported")
         
     def load_data(self):
-        # Load the data into memory
         with h5py.File(self.file_path, "r") as f:
             dset = f[f"{self.prefix}_data"]
-            self.data = dset[:]
-            self.targets = f[f"{self.prefix}_targets"][:]
+            self.data = np.array(dset)
+            self.targets = np.array(f[f"{self.prefix}_targets"])
             self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
             self.num_classes = dset.attrs.get("num_classes", 0)
             self.length = len(self.data)
@@ -309,9 +308,6 @@ class NebulaDataset:
         )
         self.test_indices_map = self.get_test_indices_map()
         self.local_test_indices_map = self.get_local_test_indices_map()
-        # logging.info(f"[ALL NODES] Train indices map:\n{self.train_indices_map}")
-        # logging.info(f"[ALL NODES] Test indices map:\n{self.test_indices_map}")
-        # logging.info(f"[ALL NODES] Local test indices map:\n{self.local_test_indices_map}")
 
         if plot:
             self.plot_data_distribution("train", self.train_set, self.train_indices_map)
