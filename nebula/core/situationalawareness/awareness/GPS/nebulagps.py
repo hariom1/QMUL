@@ -80,9 +80,9 @@ class NebulaGPS(GPSModule):
     async def _notify_geolocs(self):
         while True:
             await asyncio.sleep(self.update_interval)
-            self._nodes_location_lock.acquire_async()
+            await self._nodes_location_lock.acquire_async()
             geolocs = self._node_locations.copy()
-            self._nodes_location_lock.release_async()
+            await self._nodes_location_lock.release_async()
             if geolocs:
                 await self.sam.cm.update_geolocalization(geolocs)
         
