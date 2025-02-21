@@ -60,6 +60,7 @@ class SAModule:
         else:
             logging.info("Deploying External Connection Service | No running")
             await self.cm.start_external_connection_service(run_service=False)
+        
 
         logging.info("Building neighbor policy configuration..")
         self.np.set_config([

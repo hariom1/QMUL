@@ -113,7 +113,7 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         try:
             if "ST: urn:nebula-service" in data.decode('utf-8'):
-                logging.info("Received response from Node server-service")
+                #logging.info("Received response from Node server-service")
                 self.nebula_service.response_received(data, addr)
         except UnicodeDecodeError:
             logging.warning(f"Received malformed message from {addr}, ignoring.")

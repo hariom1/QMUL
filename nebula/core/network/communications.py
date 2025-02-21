@@ -266,7 +266,8 @@ class CommunicationsManager:
             for source in geoloc.keys():
                 latitude, longitude = geoloc[source]
                 #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
-                self.connections[source].update_geolocation(latitude, longitude)
+                if source in self.connections:
+                    self.connections[source].update_geolocation(latitude, longitude)
 
     def get_connections_lock(self):
         return self.connections_lock
@@ -927,10 +928,13 @@ class CommunicationsManager:
                     conn.get_neighbor_distance() if conn.get_neighbor_distance() is not None else float("inf")
                 ),
             )
-            if top == 1:
-                return sorted_connections[0]
+            if sorted_connections:
+                if top == 1:
+                    return sorted_connections[0]
+                else:
+                    return sorted_connections[:top]
             else:
-                return sorted_connections[:top]
+                return None
         finally:
             await self.get_connections_lock().release_async()
 

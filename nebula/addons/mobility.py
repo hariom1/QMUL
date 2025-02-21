@@ -67,7 +67,7 @@ class Mobility:
             100: {"bandwidth": "5Gbps", "delay": "5ms"},
             200: {"bandwidth": "2Gbps", "delay": "50ms"},
             300: {"bandwidth": "100Mbps", "delay": "200ms"},
-            float("inf"): {"bandwidth": "10Mbps", "delay": "1000000000000ms"},
+            float("inf"): {"bandwidth": "10Mbps", "delay": "100000ms"},
         }
         # Current network conditions of each connection {addr: {bandwidth: "5Gbps", delay: "0ms"}}
         self.current_network_conditions = {}
@@ -269,32 +269,33 @@ class Mobility:
             latitude = float(self.config.participant["mobility_args"]["latitude"])
             longitude = float(self.config.participant["mobility_args"]["longitude"])
 
-            direct_connections = await self.cm.get_direct_connections()
-            undirect_connection = await self.cm.get_undirect_connections()
-            if True or len(undirect_connection) > len(direct_connections):
+            if True:
                 # Get neighbor closer to me
                 selected_neighbor = await self.cm.get_nearest_connections(top=1)
-                logging.info(f"📍  Selected neighbor: {selected_neighbor}")
-                try:
-                    (
-                        neighbor_latitude,
-                        neighbor_longitude,
-                    ) = selected_neighbor.get_geolocation()
-                    distance = selected_neighbor.get_neighbor_distance()
-                    if distance > self.max_initiate_approximation:
-                        # If the distance is too big, we move towards the neighbor
-                        await self.change_geo_location_nearest_neighbor_strategy(
-                            distance,
-                            latitude,
-                            longitude,
+                if selected_neighbor:
+                    logging.info(f"📍  Selected neighbor: {selected_neighbor}")
+                    try:
+                        (
                             neighbor_latitude,
                             neighbor_longitude,
-                        )
-                    else:
+                        ) = selected_neighbor.get_geolocation()
+                        distance = selected_neighbor.get_neighbor_distance()
+                        if distance > self.max_initiate_approximation:
+                            # If the distance is too big, we move towards the neighbor
+                            await self.change_geo_location_nearest_neighbor_strategy(
+                                distance,
+                                latitude,
+                                longitude,
+                                neighbor_latitude,
+                                neighbor_longitude,
+                            )
+                        else:
+                            await self.change_geo_location_random_strategy(latitude, longitude)
+                    except Exception as e:
+                        logging.info(f"📍  Neighbor location/distance not found for {selected_neighbor.get_addr()}: {e}")
                         await self.change_geo_location_random_strategy(latitude, longitude)
-                except Exception as e:
-                    logging.info(f"📍  Neighbor location/distance not found for {selected_neighbor.get_addr()}: {e}")
-                    await self.change_geo_location_random_strategy(latitude, longitude)
+                else:
+                     await self.change_geo_location_random_strategy(latitude, longitude)
             else:
                 await self.change_geo_location_random_strategy(latitude, longitude)
         else:
@@ -338,36 +339,11 @@ class Mobility:
                     if distance is None:
                         # If the distance is not found, we skip the node
                         continue
-                    # logging.info(f"📍  Distance to node {addr}: {distance}")
-                    # if (
-                    #     not self.cm.connections[addr].get_direct()
-                    #     and distance < self.max_distance_with_direct_connections
-                    # ):
-                    #     logging.info(f"📍  Node {addr} is close enough [{distance}], adding to direct connections")
-                    #     self.cm.connections[addr].set_direct(True)
-                    #     await self.cm.update_neighbors(addr)
-                    # else:
-                    #     # 10% margin to avoid oscillations
-                    #     if (
-                    #         self.cm.connections[addr].get_direct()
-                    #         and distance > self.max_distance_with_direct_connections * 1.1
-                    #     ):
-                    #         logging.info(
-                    #             f"📍  Node {addr} is too far away [{distance}], removing from direct connections"
-                    #         )
-                    #         await asyncio.sleep(1)
-                    #         self.cm.connections[addr].set_direct(False)
-                    #         await self.cm.update_neighbors(addr,remove=True)
-                    # Adapt network conditions of the connection based on distance
-                    # for threshold in sorted(self.network_conditions.keys()):
-                    #     if distance < threshold:
-                    #         conditions = self.network_conditions[threshold]
-                    #         break
                     conditions = await self.calculate_network_conditions(distance)
+                    logging.info(f"Conditions for source: {addr}, | {conditions}")
                     # Only update the network conditions if they have changed
                     if (
-                        addr not in self.current_network_conditions
-                        or self.current_network_conditions[addr] != conditions
+                        addr not in self.current_network_conditions or self.current_network_conditions[addr] != conditions
                     ):
                         # eth1 is the interface of the container that connects to the node network - eth0 is the interface of the container that connects to the frontend/backend
                         self.cm._set_network_conditions(
@@ -383,6 +359,8 @@ class Mobility:
                             reordering="0%",
                         )
                         self.current_network_conditions[addr] = conditions
+                    else:
+                        logging.info("network conditions havent changed since last time")
             except KeyError:
                 # Except when self.cm.connections[addr] is not found (disconnected during the process)
                 logging.exception(f"📍  Connection {addr} not found")
@@ -392,6 +370,7 @@ class Mobility:
                 return
 
     async def calculate_network_conditions(self, distance):
+        logging.info(f"Calculating conditions for distance: {distance}")
         def extract_number(value):
             import re
             match = re.match(r"([\d.]+)", value)
@@ -413,7 +392,11 @@ class Mobility:
             lower_bound = thresholds[i]
             upper_bound = thresholds[i + 1]
 
+            if upper_bound == float("inf"):
+                break
+
             if lower_bound <= distance < upper_bound:
+                logging.info(f"Bounds | lower: {lower_bound} | upper: {upper_bound}")
                 lower_cond = self.network_conditions[lower_bound]
                 upper_cond = self.network_conditions[upper_bound]
 
@@ -429,6 +412,7 @@ class Mobility:
 
                 # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
+                logging.info(f"Progress between the bounds: {progress}")
 
                 # Interpolación lineal de valores
                 bandwidth_value = lower_bandwidth_value - progress * (lower_bandwidth_value - upper_bandwidth_value)
@@ -442,8 +426,8 @@ class Mobility:
 
         # Si la distancia es infinita, devolver el último valor
         return {
-            "bandwidth": float(self.network_conditions[float("inf")]["bandwidth"]),
-            "delay": float(self.network_conditions[float("inf")]["delay"])
+            "bandwidth": self.network_conditions[float("inf")]["bandwidth"],
+            "delay": self.network_conditions[float("inf")]["delay"]
         }
 
     async def change_connections(self):
