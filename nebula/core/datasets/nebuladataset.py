@@ -282,6 +282,11 @@ class NebulaDataset:
         """
         Clear the dataset. This should remove or reset the dataset.
         """
+        if self.train_set is not None and hasattr(self.train_set, "close"):
+            self.train_set.close()
+        if self.test_set is not None and hasattr(self.test_set, "close"):
+            self.test_set.close()
+            
         self.train_set = None
         self.train_indices_map = None
         self.test_set = None
