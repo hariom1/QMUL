@@ -259,10 +259,14 @@ class CommunicationsManager:
                                                             ##############################
     """
 
-    # TODO remove
-    # async def update_neighbors(self, addr, remove=False):
-    #     current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
-    #     await self.engine.update_neighbors(addr, current_connections, remove=remove)
+    #TODO setcondition para la direccion multicast
+    async def update_geolocalization(self, geoloc : dict):
+        async with self.get_connections_lock():
+            #logging.info("Update geolocs to simulate network conditions")
+            for source in geoloc.keys():
+                latitude, longitude = geoloc[source]
+                #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
+                #self.connections[source].update_geolocation(latitude, longitude)
 
     def get_connections_lock(self):
         return self.connections_lock
@@ -573,9 +577,6 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"❗️  Network simulation error: {e}")
             return
-
-    async def update_connection_geolocalziation(source, latitude, longitude):
-        pass
 
     async def include_received_message_hash(self, hash_message):
         try:

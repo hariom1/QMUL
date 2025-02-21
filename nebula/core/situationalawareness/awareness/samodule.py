@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
+from nebula.core.situationalawareness.awareness.GPS.gpsmodule import factory_gpsmodule
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ class SAModule:
         self._neighbor_policy = factory_NeighborPolicy(topology)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
+        self._gpsmodule = factory_gpsmodule("nebula", self)
 
     @property
     def nm(self):
@@ -43,6 +45,10 @@ class SAModule:
     @property
     def cm(self):
         return self.nm.engine.cm
+    
+    @property
+    def gps(self):
+        return self._gpsmodule
 
     async def init(self):
         if not self.nm.is_additional_participant():
@@ -50,6 +56,7 @@ class SAModule:
             await self.cm.start_external_connection_service()
             await self.cm.subscribe_beacon_listener(self.beacon_received)
             await self.cm.start_beacon()
+            await self.gps.start()
         else:
             logging.info("Deploying External Connection Service | No running")
             await self.cm.start_external_connection_service(run_service=False)
@@ -124,7 +131,7 @@ class SAModule:
 
     async def beacon_received(self, addr, geoloc):
         latitude, longitude = geoloc
-        await self.meet_node(addr)
+        self.meet_node(addr)
         logging.info(f"Beacon received SAModule, source: {addr}, geolocalization: {latitude},{longitude}")
 
     async def check_external_connection_service_status(self):
