@@ -582,6 +582,7 @@ class ScenarioManagement:
                 partition=self.scenario.partition_selection,
                 partition_parameter=self.scenario.partition_parameter,
                 seed=42,
+                config_dir=self.config_dir,
             )
         elif dataset_name == "EMNIST":
             dataset = EMNISTDataset(
@@ -591,6 +592,7 @@ class ScenarioManagement:
                 partition=self.scenario.partition_selection,
                 partition_parameter=self.scenario.partition_parameter,
                 seed=42,
+                config_dir=self.config_dir,
             )
         elif dataset_name == "CIFAR10":
             dataset = CIFAR10Dataset(
@@ -600,6 +602,7 @@ class ScenarioManagement:
                 partition=self.scenario.partition_selection,
                 partition_parameter=self.scenario.partition_parameter,
                 seed=42,
+                config_dir=self.config_dir,
             )
         elif dataset_name == "CIFAR100":
             dataset = CIFAR100Dataset(
@@ -609,6 +612,7 @@ class ScenarioManagement:
                 partition=self.scenario.partition_selection,
                 partition_parameter=self.scenario.partition_parameter,
                 seed=42,
+                config_dir=self.config_dir,
             )
         else:
             raise ValueError(f"Dataset {dataset_name} not supported")
