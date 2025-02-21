@@ -32,7 +32,7 @@ class SAModule:
         self._neighbor_policy = factory_NeighborPolicy(topology)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
-        self._gpsmodule = factory_gpsmodule("nebula", self)
+        self._gpsmodule = factory_gpsmodule("nebula", self, self._addr)
 
     @property
     def nm(self):

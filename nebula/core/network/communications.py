@@ -36,7 +36,7 @@ class CommunicationsManager:
         self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
         self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
 
-        self._connections = {}
+        self._connections : dict[str, Connection] = {}
         self.connections_lock = Locker(name="connections_lock", async_lock=True)
         self.connections_manager_lock = Locker(name="connections_manager_lock", async_lock=True)
         self.connection_attempt_lock_incoming = Locker(name="connection_attempt_lock_incoming", async_lock=True)
@@ -266,7 +266,7 @@ class CommunicationsManager:
             for source in geoloc.keys():
                 latitude, longitude = geoloc[source]
                 #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
-                #self.connections[source].update_geolocation(latitude, longitude)
+                self.connections[source].update_geolocation(latitude, longitude)
 
     def get_connections_lock(self):
         return self.connections_lock

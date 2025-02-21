@@ -67,7 +67,7 @@ class Mobility:
             100: {"bandwidth": "5Gbps", "delay": "5ms"},
             200: {"bandwidth": "2Gbps", "delay": "50ms"},
             300: {"bandwidth": "100Mbps", "delay": "200ms"},
-            float("inf"): {"bandwidth": "10Mbps", "delay": "1000ms"},
+            float("inf"): {"bandwidth": "10Mbps", "delay": "1000000000000ms"},
         }
         # Current network conditions of each connection {addr: {bandwidth: "5Gbps", delay: "0ms"}}
         self.current_network_conditions = {}
@@ -271,8 +271,7 @@ class Mobility:
 
             direct_connections = await self.cm.get_direct_connections()
             undirect_connection = await self.cm.get_undirect_connections()
-            if len(undirect_connection) > len(direct_connections):
-                logging.info("📍  Undirect Connections is higher than Direct Connections")
+            if True or len(undirect_connection) > len(direct_connections):
                 # Get neighbor closer to me
                 selected_neighbor = await self.cm.get_nearest_connections(top=1)
                 logging.info(f"📍  Selected neighbor: {selected_neighbor}")
@@ -364,6 +363,7 @@ class Mobility:
                         if distance < threshold:
                             conditions = self.network_conditions[threshold]
                             break
+                    conditions = await self.calculate_network_conditions(distance)
                     # Only update the network conditions if they have changed
                     if (
                         addr not in self.current_network_conditions
@@ -391,12 +391,16 @@ class Mobility:
                 logging.exception("📍  Error changing connections based on distance")
                 return
 
+    #TODO corregir formato, no son float son float-mbps por ejemplo
     async def calculate_network_conditions(self, distance):
         thresholds = sorted(self.network_conditions.keys())
 
         # Si la distancia es menor que el primer umbral, devolver la mejor condición
         if distance < thresholds[0]:
-            return self.network_conditions[thresholds[0]]
+            return {
+                "bandwidth": float(self.network_conditions[thresholds[0]]["bandwidth"]),
+                "delay": float(self.network_conditions[thresholds[0]]["delay"])
+            }
 
         # Encontrar el tramo en el que se encuentra la distancia
         for i in range(len(thresholds) - 1):
@@ -407,17 +411,26 @@ class Mobility:
                 lower_cond = self.network_conditions[lower_bound]
                 upper_cond = self.network_conditions[upper_bound]
 
+                # Convertir a float antes de operar
+                lower_bandwidth = float(lower_cond["bandwidth"])
+                upper_bandwidth = float(upper_cond["bandwidth"])
+                lower_delay = float(lower_cond["delay"])
+                upper_delay = float(upper_cond["delay"])
+
                 # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
 
                 # Interpolación lineal de valores
-                bandwidth = lower_cond["bandwidth"] - progress * (lower_cond["bandwidth"] - upper_cond["bandwidth"])
-                delay = lower_cond["delay"] + progress * (upper_cond["delay"] - lower_cond["delay"])
+                bandwidth = lower_bandwidth - progress * (lower_bandwidth - upper_bandwidth)
+                delay = lower_delay + progress * (upper_delay - lower_delay)
 
                 return {"bandwidth": round(bandwidth, 2), "delay": round(delay, 2)}
 
         # Si la distancia es infinita, devolver el último valor
-        return self.network_conditions[float("inf")]
+        return {
+            "bandwidth": float(self.network_conditions[float("inf")]["bandwidth"]),
+            "delay": float(self.network_conditions[float("inf")]["delay"])
+        }
 
     async def change_connections(self):
         """

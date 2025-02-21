@@ -14,7 +14,7 @@ class GPSModule(ABC):
 class GPSModuleException(Exception):
     pass
 
-def factory_gpsmodule(gps_module, sam) -> GPSModule:
+def factory_gpsmodule(gps_module, sam, addr) -> GPSModule:
     from nebula.core.situationalawareness.awareness.GPS.nebulagps import NebulaGPS
     
     GPS_SERVICES = {
@@ -24,6 +24,6 @@ def factory_gpsmodule(gps_module, sam) -> GPSModule:
     gps_module = GPS_SERVICES.get(gps_module, NebulaGPS)
     
     if gps_module:
-        return gps_module(sam)
+        return gps_module(sam, addr)
     else:
          raise GPSModuleException(f"GPS Module {gps_module} not found")

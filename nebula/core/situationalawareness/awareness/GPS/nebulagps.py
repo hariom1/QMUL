@@ -13,7 +13,8 @@ class NebulaGPS(GPSModule):
     BROADCAST_PORT = 50001              # Poort used for GPS
     INTERFACE = "eth2"                  # Interface to avoid network conditions
 
-    def __init__(self, sam: "SAModule", update_interval: float = 5.0):
+    def __init__(self, sam: "SAModule", addr, update_interval: float = 5.0):
+        self._addr = addr
         self._situational_awareness_module = sam
         self.update_interval = update_interval  # Frecuencia de emisión
         self.running = False
@@ -54,7 +55,7 @@ class NebulaGPS(GPSModule):
         """Envia la geolocalización periódicamente por broadcast."""
         while self.running:
             latitude, longitude = await self.sam.get_geoloc()  # Obtener ubicación actual
-            message = f"GPS-UPDATE {latitude} {longitude}"
+            message = f"GPS-UPDATE {self._addr} {latitude} {longitude}"
             self._broadcast_socket.sendto(message.encode(), (self.BROADCAST_IP, self.BROADCAST_PORT))
             #logging.info(f"Sent GPS location: ({latitude}, {longitude})")
             await asyncio.sleep(self.update_interval)
@@ -68,10 +69,10 @@ class NebulaGPS(GPSModule):
                 )
                 message = data.decode().strip()
                 if message.startswith("GPS-UPDATE"):
-                    _, lat, lon = message.split()
-                    self._nodes_location_lock.acquire_async()
-                    self._node_locations[addr[0]] = (float(lat), float(lon))
-                    self._nodes_location_lock.release_async()
+                    _, sender_addr, lat, lon = message.split()
+                    if sender_addr != self._addr:
+                        async with self._nodes_location_lock:
+                            self._node_locations[sender_addr] = (float(lat), float(lon))
                     #logging.info(f"Received GPS from {addr[0]}: {lat}, {lon}")
             except Exception as e:
                 logging.error(f"Error receiving GPS update: {e}")
