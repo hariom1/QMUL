@@ -359,10 +359,10 @@ class Mobility:
                     #         self.cm.connections[addr].set_direct(False)
                     #         await self.cm.update_neighbors(addr,remove=True)
                     # Adapt network conditions of the connection based on distance
-                    for threshold in sorted(self.network_conditions.keys()):
-                        if distance < threshold:
-                            conditions = self.network_conditions[threshold]
-                            break
+                    # for threshold in sorted(self.network_conditions.keys()):
+                    #     if distance < threshold:
+                    #         conditions = self.network_conditions[threshold]
+                    #         break
                     conditions = await self.calculate_network_conditions(distance)
                     # Only update the network conditions if they have changed
                     if (
@@ -391,8 +391,14 @@ class Mobility:
                 logging.exception("📍  Error changing connections based on distance")
                 return
 
-    #TODO corregir formato, no son float son float-mbps por ejemplo
     async def calculate_network_conditions(self, distance):
+        def extract_number(value):
+            import re
+            match = re.match(r"([\d.]+)", value)
+            if not match:
+                raise ValueError(f"Formato inválido: {value}")
+            return float(match.group(1))
+        
         thresholds = sorted(self.network_conditions.keys())
 
         # Si la distancia es menor que el primer umbral, devolver la mejor condición
@@ -411,20 +417,28 @@ class Mobility:
                 lower_cond = self.network_conditions[lower_bound]
                 upper_cond = self.network_conditions[upper_bound]
 
-                # Convertir a float antes de operar
-                lower_bandwidth = float(lower_cond["bandwidth"])
-                upper_bandwidth = float(upper_cond["bandwidth"])
-                lower_delay = float(lower_cond["delay"])
-                upper_delay = float(upper_cond["delay"])
+                # Extraer valores numéricos y unidades
+                lower_bandwidth_value = extract_number(lower_cond["bandwidth"])
+                upper_bandwidth_value = extract_number(upper_cond["bandwidth"])
+                lower_bandwidth_unit = lower_cond["bandwidth"].replace(str(lower_bandwidth_value), "")
+                upper_bandwidth_unit = upper_cond["bandwidth"].replace(str(upper_bandwidth_value), "")
+
+                lower_delay_value = extract_number(lower_cond["delay"])
+                upper_delay_value = extract_number(upper_cond["delay"])
+                delay_unit = lower_cond["delay"].replace(str(lower_delay_value), "")
 
                 # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
 
                 # Interpolación lineal de valores
-                bandwidth = lower_bandwidth - progress * (lower_bandwidth - upper_bandwidth)
-                delay = lower_delay + progress * (upper_delay - lower_delay)
+                bandwidth_value = lower_bandwidth_value - progress * (lower_bandwidth_value - upper_bandwidth_value)
+                delay_value = lower_delay_value + progress * (upper_delay_value - lower_delay_value)
 
-                return {"bandwidth": round(bandwidth, 2), "delay": round(delay, 2)}
+                # Reconstruir valores con unidades originales
+                bandwidth = f"{round(bandwidth_value, 2)}{lower_bandwidth_unit}"
+                delay = f"{round(delay_value, 2)}{delay_unit}"
+
+                return {"bandwidth": bandwidth, "delay": delay}
 
         # Si la distancia es infinita, devolver el último valor
         return {

@@ -192,7 +192,7 @@ class SAModule:
         self._restructure_process_lock.release()
 
     async def stop_connections_with_federation(self):
-        await asyncio.sleep(200)
+        await asyncio.sleep(400)
         logging.info("### DISCONNECTING FROM FEDERATON ###")
         neighbors = self.np.get_nodes_known(neighbors_only=True)
         for n in neighbors:
