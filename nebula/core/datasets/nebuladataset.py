@@ -46,6 +46,12 @@ class NebulaPartitionHandler(Dataset, ABC):
         self.target_transform = None
         self.file = None
         
+        self.data = None
+        self.targets = None
+        self.data_shape = None
+        self.num_classes = None
+        self.length = None
+        
         if self.mode == "memory":
             self.load_data()
         elif self.mode == "lazy":
@@ -67,16 +73,23 @@ class NebulaPartitionHandler(Dataset, ABC):
         )
         
     def load_data_lazy(self):
-        self.targets = []
-        with h5py.File(self.file_path, "r") as f:
-            dset = f[f"{self.prefix}_data"]
-            self.length = dset.shape[0]
-            self.targets = f[f"{self.prefix}_targets"][:]
-            self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
-            self.num_classes = dset.attrs.get("num_classes", 0)
+        self.file = h5py.File(self.file_path, "r", swmr=True)
+        dset = self.file[f"{self.prefix}_data"]
+        self.length = dset.shape[0]
+        self.data_shape = dset.attrs.get("data_shape", dset.shape[1:])
+        self.num_classes = dset.attrs.get("num_classes", 0)
         logging_training.info(
-            f"[NebulaPartitionHandler - Disk] [{self.prefix}] Loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes."
+            f"[NebulaPartitionHandler - Lazy] [{self.prefix}] Lazy loaded {self.length} samples from {self.file_path} with shape {self.data_shape} and {self.num_classes} classes."
         )
+        
+    def close(self):
+        if self.file is not None:
+            self.file.close()
+            self.file = None
+            logging_training.info(f"[NebulaPartitionHandler] Closed file {self.file_path}")
+            
+    def __del__(self):
+        self.close()
         
     def __len__(self):
         return self.length
@@ -90,8 +103,6 @@ class NebulaPartitionHandler(Dataset, ABC):
             data = self.data[idx]
             target = self.targets[idx]
         else:
-            if self.file is None:
-                self.file = h5py.File(self.file_path, "r")
             try:
                 data = self.file[f"{self.prefix}_data"][idx]
                 target = self.file[f"{self.prefix}_targets"][idx]
@@ -258,9 +269,6 @@ class NebulaDataset:
         self.test_indices_map = None
         self.local_test_indices_map = None
 
-        # Classes of the participants to be sure that the same classes are used in training and testing
-        self.class_distribution = None
-
         enable_deterministic(self.seed)
 
     @abstractmethod
@@ -269,6 +277,16 @@ class NebulaDataset:
         Initialize the dataset. This should load or create the dataset.
         """
         raise NotImplementedError("Subclasses must implement this method.")
+    
+    def clear(self):
+        """
+        Clear the dataset. This should remove or reset the dataset.
+        """
+        self.train_set = None
+        self.train_indices_map = None
+        self.test_set = None
+        self.test_indices_map = None
+        self.local_test_indices_map = None
 
     def data_partitioning(self, plot=False):
         """
@@ -380,6 +398,10 @@ class NebulaDataset:
 
         except Exception as e:
             logging.exception(f"Error in save_partitions: {e}")
+            
+        finally:
+            self.clear()
+            logging.info("Cleared dataset after saving partitions.")
 
     @abstractmethod
     def generate_non_iid_map(self, dataset, partition="dirichlet", plot=False):
