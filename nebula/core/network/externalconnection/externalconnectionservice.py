@@ -39,7 +39,7 @@ class ExternalConnectionServiceException(Exception):
     pass 
 
 def factory_connection_service(con_serv, cm, addr) -> ExternalConnectionService:
-    from nebula.core.network.nebuladiscoveryservice import NebulaConnectionService
+    from nebula.core.network.externalconnection.nebuladiscoveryservice import NebulaConnectionService
     
     CONNECTION_SERVICES = {
         "nebula": NebulaConnectionService,

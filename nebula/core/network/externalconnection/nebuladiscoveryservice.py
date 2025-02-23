@@ -2,7 +2,7 @@ import asyncio
 import logging
 import socket
 import struct
-from nebula.core.network.externalconnectionservice import ExternalConnectionService
+from nebula.core.network.externalconnection.externalconnectionservice import ExternalConnectionService
 from nebula.core.utils.locker import Locker
 
 from typing import TYPE_CHECKING

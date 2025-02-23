@@ -11,7 +11,7 @@ from nebula.addons.mobility import Mobility
 from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
-from nebula.core.network.externalconnectionservice import factory_connection_service
+from nebula.core.network.externalconnection.externalconnectionservice import factory_connection_service
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessageEvent, MessagesManager
 from nebula.core.network.propagator import Propagator
