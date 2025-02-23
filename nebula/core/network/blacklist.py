@@ -13,7 +13,7 @@ class BlackList:
     ):
         self._max_time_listed = max_time_listed
         self._blacklisted_nodes: dict = {}
-        self._recently_disconnected: set = set() # para no inentar coenctarse a recently disconnected
+        self._recently_disconnected: set = set()
         self._recently_disconnected_lock = Locker(name="recently_disconnected_lock", async_lock=True)
         self._blacklisted_nodes_lock = Locker(name="blacklisted_nodes_lock", async_lock=True)
         self._bl_cleaner_running = False

@@ -529,6 +529,21 @@ class CommunicationsManager:
             logging.exception(f"❗️  Network simulation error: {e}")
             return
 
+    def set_network_conditions(
+        self,
+        interface="eth0",
+        network="192.168.50.2",
+        bandwidth="5Gbps",
+        delay="0ms",
+        delay_distro="0ms",
+        delay_distribution="normal",
+        loss="0%",
+        duplicate="0%",
+        corrupt="0%",
+        reordering="0%",
+    ):
+        self._set_network_conditions(self, interface, network, bandwidth, delay, delay_distro, delay_distribution, loss, duplicate, corrupt, reordering)
+
     def _set_network_conditions(
         self,
         interface="eth0",
@@ -578,6 +593,21 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"❗️  Network simulation error: {e}")
             return
+        
+    def _set_multicast_conditions(
+        self,
+        interface="eth0",
+        network="192.168.50.2",
+        bandwidth="5Gbps",
+        delay="0ms",
+        delay_distro="0ms",
+        delay_distribution="normal",
+        loss="0%",
+        duplicate="0%",
+        corrupt="0%",
+        reordering="0%",
+    ):
+        pass  
 
     async def include_received_message_hash(self, hash_message):
         try:

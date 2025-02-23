@@ -67,7 +67,7 @@ class Mobility:
             100: {"bandwidth": "5Gbps", "delay": "5ms"},
             200: {"bandwidth": "2Gbps", "delay": "50ms"},
             300: {"bandwidth": "100Mbps", "delay": "200ms"},
-            float("inf"): {"bandwidth": "10Mbps", "delay": "100000ms"},
+            float("inf"): {"bandwidth": "10Mbps", "delay": "1000ms"},
         }
         # Current network conditions of each connection {addr: {bandwidth: "5Gbps", delay: "0ms"}}
         self.current_network_conditions = {}
@@ -340,13 +340,13 @@ class Mobility:
                         # If the distance is not found, we skip the node
                         continue
                     conditions = await self.calculate_network_conditions(distance)
-                    logging.info(f"Conditions for source: {addr}, | {conditions}")
+                    #logging.info(f"Conditions for source: {addr}, | {conditions}")
                     # Only update the network conditions if they have changed
                     if (
                         addr not in self.current_network_conditions or self.current_network_conditions[addr] != conditions
                     ):
                         # eth1 is the interface of the container that connects to the node network - eth0 is the interface of the container that connects to the frontend/backend
-                        self.cm._set_network_conditions(
+                        self.cm.set_network_conditions(
                             interface="eth0",
                             network=addr.split(":")[0],
                             bandwidth=conditions["bandwidth"],
@@ -383,8 +383,8 @@ class Mobility:
         # Si la distancia es menor que el primer umbral, devolver la mejor condición
         if distance < thresholds[0]:
             return {
-                "bandwidth": float(self.network_conditions[thresholds[0]]["bandwidth"]),
-                "delay": float(self.network_conditions[thresholds[0]]["delay"])
+                "bandwidth": self.network_conditions[thresholds[0]]["bandwidth"],
+                "delay": self.network_conditions[thresholds[0]]["delay"]
             }
 
         # Encontrar el tramo en el que se encuentra la distancia
@@ -396,7 +396,7 @@ class Mobility:
                 break
 
             if lower_bound <= distance < upper_bound:
-                logging.info(f"Bounds | lower: {lower_bound} | upper: {upper_bound}")
+                #logging.info(f"Bounds | lower: {lower_bound} | upper: {upper_bound}")
                 lower_cond = self.network_conditions[lower_bound]
                 upper_cond = self.network_conditions[upper_bound]
 
@@ -412,7 +412,7 @@ class Mobility:
 
                 # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
-                logging.info(f"Progress between the bounds: {progress}")
+                #logging.info(f"Progress between the bounds: {progress}")
 
                 # Interpolación lineal de valores
                 bandwidth_value = lower_bandwidth_value - progress * (lower_bandwidth_value - upper_bandwidth_value)
