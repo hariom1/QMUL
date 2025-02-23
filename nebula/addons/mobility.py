@@ -347,7 +347,7 @@ class Mobility:
                     ):
                         # eth1 is the interface of the container that connects to the node network - eth0 is the interface of the container that connects to the frontend/backend
                         self.cm._set_network_conditions(
-                            interface="eth1",
+                            interface="eth0",
                             network=addr.split(":")[0],
                             bandwidth=conditions["bandwidth"],
                             delay=conditions["delay"],

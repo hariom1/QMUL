@@ -457,7 +457,7 @@ class CommunicationsManager:
 
     async def deploy_additional_services(self):
         logging.info("🌐  Deploying additional services...")
-        self._generate_network_conditions()
+       # self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
             pass
