@@ -591,6 +591,12 @@
                                 placeholder="Stopping round" min="0" value="10"
                                 style="display: inline; width: 80%">
                         </div>
+                        <h5 id="attack-interval-title" class="step-title" style="display: none;">Attack interval</h5>
+                        <div class="form-check form-check-inline" id="attack-interval-container" style="display: none;">
+                            <input type="number" class="form-control" id="attack-interval"
+                                placeholder="Repetitions" min="1" value="1"
+                                style="display: inline; width: 80%">
+                        </div>
                     </div>
                 </div>
                 <!-- Advanced Defense -->
@@ -1123,6 +1129,7 @@
             data["attack_params"].delay = document.getElementById("delay").value;
             data["attack_params"].round_start_attack = document.getElementById("start-attack").value
             data["attack_params"].round_stop_attack = document.getElementById("stop-attack").value
+            data["attack_params"].attack_interval = document.getElementById("attack-interval").value
             // Step 13
             data["with_reputation"] = document.getElementById("with-reputation-btn").checked ? true : false
             data["is_dynamic_topology"] = document.getElementById("dynamic-topology-btn").checked ? true : false
@@ -1237,6 +1244,7 @@
                 document.getElementById("delay").value = data.attack_params.delay;
                 document.getElementById("start-attack").value = data.attack_params.round_start_attack
                 document.getElementById("stop-attack").value = data.attack_params.round_stop_attack
+                document.getElementById("attack-interval").value = data.attack_params.attack_interval
 
                 if (data["poisoned_node_percent"] == 0)
                 {
@@ -2691,6 +2699,8 @@
                 document.getElementById("start-attack-container").style.display = "none";
                 document.getElementById("stop-attack-title").style.display = "none";
                 document.getElementById("stop-attack-container").style.display = "none";
+                document.getElementById("attack-interval-title").style.display = "none";
+                document.getElementById("attack-interval-container").style.display = "none";
             }
             else if(this.value == "Label Flipping"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2716,6 +2726,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "Sample Poisoning"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2741,6 +2753,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "Model Poisoning"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2766,6 +2780,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "GLL Neuron Inversion"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2792,6 +2808,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "Noise Injection"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2818,6 +2836,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "Swapping Weights"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2844,6 +2864,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
             else if(this.value == "Delayer"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -2870,6 +2892,8 @@
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
+                document.getElementById("attack-interval-title").style.display = "block";
+                document.getElementById("attack-interval-container").style.display = "block";
             }
         });
     </script>

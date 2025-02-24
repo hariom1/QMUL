@@ -22,6 +22,7 @@ class DelayerAttack(CommunicationAttack):
             self.delay = int(attack_params["delay"])
             round_start = int(attack_params["round_start_attack"])
             round_stop = int(attack_params["round_stop_attack"])
+            attack_interval = int(attack_params["attack_interval"])
         except KeyError as e:
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
@@ -33,6 +34,7 @@ class DelayerAttack(CommunicationAttack):
             "propagate",
             round_start,
             round_stop,
+            attack_interval,
             self.delay,
         )
 
