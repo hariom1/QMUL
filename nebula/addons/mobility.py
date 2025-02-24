@@ -135,7 +135,7 @@ class Mobility:
         await asyncio.sleep(self.grace_time)
         while True:
             await self.change_geo_location()
-            await self.change_connections_based_on_distance()
+            #await self.change_connections_based_on_distance()
             await asyncio.sleep(self.period)
 
     async def change_geo_location_random_strategy(self, latitude, longitude):

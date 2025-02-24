@@ -12,6 +12,7 @@ from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.externalconnection.externalconnectionservice import factory_connection_service
+from nebula.core.network.networksimulation.networksimulator import factory_network_simulator
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessageEvent, MessagesManager
 from nebula.core.network.propagator import Propagator
@@ -73,6 +74,10 @@ class CommunicationsManager:
 
         # Connection service to communicate with external devices
         self._external_connection_service = factory_connection_service("nebula", self, self.addr)
+        
+        # Network simulator service to deplay realistic network conditions
+        refresh_conditions_interval = 5
+        self._network_simulator = factory_network_simulator("nebula", self, refresh_conditions_interval, "eth0", verbose=True)
 
     @property
     def engine(self):
@@ -109,6 +114,10 @@ class CommunicationsManager:
     @property
     def ecs(self):
         return self._external_connection_service
+    
+    @property
+    def ns(self):
+        return self._network_simulator
 
     @property
     def bl(self):
@@ -255,11 +264,143 @@ class CommunicationsManager:
         return discovers_sent
 
     """                                                     ##############################
+                                                            #     NETWORK CONDITIONS     #
+                                                            ##############################
+    """
+
+    async def get_network_conditions_grace_time(self):
+        return await self.config.participant["mobility_args"]["change_geo_interval"]
+
+    def _generate_network_conditions(self):
+        # TODO: Implement selection of network conditions from frontend
+        if self.config.participant["network_args"]["simulation"]:
+            interface = self.config.participant["network_args"]["interface"]
+            bandwidth = self.config.participant["network_args"]["bandwidth"]
+            delay = self.config.participant["network_args"]["delay"]
+            delay_distro = self.config.participant["network_args"]["delay-distro"]
+            delay_distribution = self.config.participant["network_args"]["delay-distribution"]
+            loss = self.config.participant["network_args"]["loss"]
+            duplicate = self.config.participant["network_args"]["duplicate"]
+            corrupt = self.config.participant["network_args"]["corrupt"]
+            reordering = self.config.participant["network_args"]["reordering"]
+            logging.info(
+                f"🌐  Network simulation is enabled | Interface: {interface} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
+            )
+            try:
+                results = subprocess.run(
+                    [
+                        "tcset",
+                        str(interface),
+                        "--rate",
+                        str(bandwidth),
+                        "--delay",
+                        str(delay),
+                        "--delay-distro",
+                        str(delay_distro),
+                        "--delay-distribution",
+                        str(delay_distribution),
+                        "--loss",
+                        str(loss),
+                        "--duplicate",
+                        str(duplicate),
+                        "--corrupt",
+                        str(corrupt),
+                        "--reordering",
+                        str(reordering),
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except Exception as e:
+                logging.exception(f"🌐  Network simulation error: {e}")
+                return
+        else:
+            logging.info("🌐  Network simulation is disabled. Using default network conditions...")
+
+    def _reset_network_conditions(self):
+        interface = self.config.participant["network_args"]["interface"]
+        logging.info("🌐  Resetting network conditions")
+        try:
+            results = subprocess.run(
+                ["tcdel", str(interface), "--all"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            logging.exception(f"❗️  Network simulation error: {e}")
+            return
+
+    async def set_network_conditions(self, addr, distance):
+        await self.ns.set_network_conditions(addr, distance)
+        #self._set_network_conditions(self, interface, network, bandwidth, delay, delay_distro, delay_distribution, loss, duplicate, corrupt, reordering)
+        
+    def clear_network_conditions(self):
+        self.ns.clear_network_conditions() 
+        
+    async def set_network_conditions_thresholds(self, thresholds : dict):
+        await self.ns.set_thresholds(thresholds)       
+
+    def _set_network_conditions(
+        self,
+        interface="eth0",
+        network="192.168.50.2",
+        bandwidth="5Gbps",
+        delay="0ms",
+        delay_distro="0ms",
+        delay_distribution="normal",
+        loss="0%",
+        duplicate="0%",
+        corrupt="0%",
+        reordering="0%",
+    ):
+        logging.info(
+            f"🌐  Changing network conditions | Interface: {interface} | Network: {network} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
+        )
+        try:
+            results = subprocess.run(
+                [
+                    "tcset",
+                    str(interface),
+                    "--network",
+                    str(network) if network is not None else "",
+                    "--rate",
+                    str(bandwidth),
+                    "--delay",
+                    str(delay),
+                    "--delay-distro",
+                    str(delay_distro),
+                    "--delay-distribution",
+                    str(delay_distribution),
+                    "--loss",
+                    str(loss),
+                    "--duplicate",
+                    str(duplicate),
+                    "--corrupt",
+                    str(corrupt),
+                    "--reordering",
+                    str(reordering),
+                    "--change",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            logging.exception(f"❗️  Network simulation error: {e}")
+            return
+        
+
+
+    """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
 
-    #TODO setcondition para la direccion multicast
     async def update_geolocalization(self, geoloc : dict):
         async with self.get_connections_lock():
             #logging.info("Update geolocs to simulate network conditions")
@@ -460,154 +601,12 @@ class CommunicationsManager:
        # self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
-            pass
+            await self.ns.start()
             # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
-
-    def _generate_network_conditions(self):
-        # TODO: Implement selection of network conditions from frontend
-        if self.config.participant["network_args"]["simulation"]:
-            interface = self.config.participant["network_args"]["interface"]
-            bandwidth = self.config.participant["network_args"]["bandwidth"]
-            delay = self.config.participant["network_args"]["delay"]
-            delay_distro = self.config.participant["network_args"]["delay-distro"]
-            delay_distribution = self.config.participant["network_args"]["delay-distribution"]
-            loss = self.config.participant["network_args"]["loss"]
-            duplicate = self.config.participant["network_args"]["duplicate"]
-            corrupt = self.config.participant["network_args"]["corrupt"]
-            reordering = self.config.participant["network_args"]["reordering"]
-            logging.info(
-                f"🌐  Network simulation is enabled | Interface: {interface} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
-            )
-            try:
-                results = subprocess.run(
-                    [
-                        "tcset",
-                        str(interface),
-                        "--rate",
-                        str(bandwidth),
-                        "--delay",
-                        str(delay),
-                        "--delay-distro",
-                        str(delay_distro),
-                        "--delay-distribution",
-                        str(delay_distribution),
-                        "--loss",
-                        str(loss),
-                        "--duplicate",
-                        str(duplicate),
-                        "--corrupt",
-                        str(corrupt),
-                        "--reordering",
-                        str(reordering),
-                    ],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-            except Exception as e:
-                logging.exception(f"🌐  Network simulation error: {e}")
-                return
-        else:
-            logging.info("🌐  Network simulation is disabled. Using default network conditions...")
-
-    def _reset_network_conditions(self):
-        interface = self.config.participant["network_args"]["interface"]
-        logging.info("🌐  Resetting network conditions")
-        try:
-            results = subprocess.run(
-                ["tcdel", str(interface), "--all"],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        except Exception as e:
-            logging.exception(f"❗️  Network simulation error: {e}")
-            return
-
-    def set_network_conditions(
-        self,
-        interface="eth0",
-        network="192.168.50.2",
-        bandwidth="5Gbps",
-        delay="0ms",
-        delay_distro="0ms",
-        delay_distribution="normal",
-        loss="0%",
-        duplicate="0%",
-        corrupt="0%",
-        reordering="0%",
-    ):
-        self._set_network_conditions(self, interface, network, bandwidth, delay, delay_distro, delay_distribution, loss, duplicate, corrupt, reordering)
-
-    def _set_network_conditions(
-        self,
-        interface="eth0",
-        network="192.168.50.2",
-        bandwidth="5Gbps",
-        delay="0ms",
-        delay_distro="0ms",
-        delay_distribution="normal",
-        loss="0%",
-        duplicate="0%",
-        corrupt="0%",
-        reordering="0%",
-    ):
-        logging.info(
-            f"🌐  Changing network conditions | Interface: {interface} | Network: {network} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
-        )
-        try:
-            results = subprocess.run(
-                [
-                    "tcset",
-                    str(interface),
-                    "--network",
-                    str(network) if network is not None else "",
-                    "--rate",
-                    str(bandwidth),
-                    "--delay",
-                    str(delay),
-                    "--delay-distro",
-                    str(delay_distro),
-                    "--delay-distribution",
-                    str(delay_distribution),
-                    "--loss",
-                    str(loss),
-                    "--duplicate",
-                    str(duplicate),
-                    "--corrupt",
-                    str(corrupt),
-                    "--reordering",
-                    str(reordering),
-                    "--change",
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        except Exception as e:
-            logging.exception(f"❗️  Network simulation error: {e}")
-            return
         
-    def _set_multicast_conditions(
-        self,
-        interface="eth0",
-        network="192.168.50.2",
-        bandwidth="5Gbps",
-        delay="0ms",
-        delay_distro="0ms",
-        delay_distribution="normal",
-        loss="0%",
-        duplicate="0%",
-        corrupt="0%",
-        reordering="0%",
-    ):
-        pass  
 
     async def include_received_message_hash(self, hash_message):
         try:

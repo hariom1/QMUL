@@ -3,32 +3,40 @@ from abc import ABC, abstractmethod
 
 class NetworkSimulator(ABC):
 
-    @abstractmethod 
-    async def set_thresholds(self, threshold : dict):
+    @abstractmethod
+    async def start(self):
+        pass
+    
+    @abstractmethod
+    async def stop(self):
         pass
 
     @abstractmethod 
-    def set_network_conditions(self, dest_addr, distance):
+    async def set_thresholds(self, thresholds : dict):
+        pass
+
+    @abstractmethod 
+    async def set_network_conditions(self, dest_addr, distance):
         pass
     
     @abstractmethod 
-    def clear_network_conditions(self):
+    def clear_network_conditions(self, interface):
         pass
     
 
 class NetworkSimulatorException(Exception):
     pass 
 
-def factory_connection_service(net_sim, cm, addr) -> NetworkSimulator:
+def factory_network_simulator(net_sim, communication_manager, changing_interval, interface, verbose) -> NetworkSimulator:
     from nebula.core.network.networksimulation.nebulanetworksimulator import NebulaNS
     
     SIMULATION_SERVICES = {
         "nebula": NebulaNS,
     }
     
-    con_serv = SIMULATION_SERVICES.get(net_sim, NebulaNS)
+    net_serv = SIMULATION_SERVICES.get(net_sim, NebulaNS)
     
-    if con_serv:
-        return con_serv(cm, addr)
+    if net_serv:
+        return net_serv(communication_manager, changing_interval, interface, verbose)
     else:
          raise NetworkSimulatorException(f"Network Simulator {net_sim} not found")
