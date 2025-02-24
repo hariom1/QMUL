@@ -903,7 +903,7 @@ class Reputation:
                     prev_percentil_25 = np.percentile(all_latencies, 25) if all_latencies else 0
                     prev_percentil_75 = np.percentile(all_latencies, 75) if all_latencies else 0
 
-                k = 0.15
+                k = 0.2
                 prev_mean_latency += k * (prev_percentil_75 - prev_percentil_25)
 
                 if latency == 0.0:
@@ -963,7 +963,7 @@ class Reputation:
     @staticmethod
     def manage_metric_time_message(messages_time_message, addr, nei, current_round, scenario):
         """
-        Manage the time_message metric using percentiles for normalization, considering the last 4 rounds dynamically.
+        Manage the time_message metric using percentiles for normalization, considering the last 5 rounds dynamically.
 
         Args:
             messages_time_message (list): List of messages time_message.

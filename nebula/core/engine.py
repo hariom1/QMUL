@@ -641,9 +641,9 @@ class Engine:
                     if self.reputation[nei]["reputation"] < 0.6:
                         self.rejected_nodes.add(nei)
                         logging.info(f"Rejected nodes: {self.rejected_nodes}")
-                    elif 0.6 < self.reputation[nei]["reputation"] < 0.8:
-                        logging.info(f"Change weight node: {nei}")
-                        self.change_weight_nodes.add(nei)
+                    # elif 0.6 < self.reputation[nei]["reputation"] < 0.8:
+                    #     logging.info(f"Change weight node: {nei}")
+                    #     self.change_weight_nodes.add(nei)
         else:
             # logging.info(f"No weights calculated at round {self.round}")
             if self.with_reputation:
@@ -901,6 +901,9 @@ class MaliciousNode(Engine):
 
     async def _extended_learning_cycle(self):
         try:
+            if self.with_reputation:
+                self.with_reputation = False
+            logging.info(f"Reputation: {self.with_reputation}")
             await self.attack.attack()
         except:
             attack_name = self.config.participant["adversarial_args"]["attacks"]

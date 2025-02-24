@@ -237,114 +237,116 @@ class CommunicationsManager:
             current_round = self.get_round()
             await self.engine.get_round_lock().release_async()
 
-            if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
-                decoded_model = self.engine.trainer.deserialize_model(message.parameters)
-                if self.config.participant["adaptive_args"]["model_similarity"]:
-                    logging.info("🤖  handle_model_message | Checking model similarity")
-                    cosine_value = cosine_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    euclidean_value = euclidean_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    minkowski_value = minkowski_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        p=2,
-                        similarity=True,
-                    )
-                    manhattan_value = manhattan_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    pearson_correlation_value = pearson_correlation_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    jaccard_value = jaccard_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    file = f"{self.engine.log_dir}/participant_{self.engine.idx}_similarity.csv"
-                    directory = os.path.dirname(file)
-                    os.makedirs(directory, exist_ok=True)
-                    if not os.path.isfile(file):
-                        with open(file, "w") as f:
-                            f.write(
-                                "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
-                            )
-                    with open(file, "a") as f:
-                        f.write(
-                            f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
+            if self._engine.with_reputation:
+                if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
+                    decoded_model = self.engine.trainer.deserialize_model(message.parameters)
+                    if self.config.participant["adaptive_args"]["model_similarity"]:
+                        logging.info("🤖  handle_model_message | Checking model similarity")
+                        cosine_value = cosine_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            similarity=True,
                         )
+                        euclidean_value = euclidean_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            similarity=True,
+                        )
+                        minkowski_value = minkowski_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            p=2,
+                            similarity=True,
+                        )
+                        manhattan_value = manhattan_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            similarity=True,
+                        )
+                        pearson_correlation_value = pearson_correlation_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            similarity=True,
+                        )
+                        jaccard_value = jaccard_metric(
+                            self.engine.trainer.get_model_parameters(),
+                            decoded_model,
+                            similarity=True,
+                        )
+                        file = f"{self.engine.log_dir}/participant_{self.engine.idx}_similarity.csv"
+                        directory = os.path.dirname(file)
+                        os.makedirs(directory, exist_ok=True)
+                        if not os.path.isfile(file):
+                            with open(file, "w") as f:
+                                f.write(
+                                    "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
+                                )
+                        with open(file, "a") as f:
+                            f.write(
+                                f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
+                            )
 
-                if cosine_value < 0.6:
-                    logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
-                    self.engine.rejected_nodes.add(source)
+                    # Manage parameters of models
+                    parameters_local = self.engine.trainer.get_model_parameters()
+                    self.fraction_of_parameters_changed(source, parameters_local, decoded_model, message.round)
 
-                # Manage parameters of models
-                parameters_local = self.engine.trainer.get_model_parameters()
-                self.fraction_of_parameters_changed(source, parameters_local, decoded_model, message.round)
+                    # Manage model_arrival_latency latency
+                    start_time = time.time()
+                    round_id = message.round
+                    if round_id not in self._model_arrival_latency_data:
+                        self._model_arrival_latency_data[round_id] = {}
 
-                # Manage model_arrival_latency latency
-                start_time = time.time()
-                round_id = message.round
-                if round_id not in self._model_arrival_latency_data:
-                    self._model_arrival_latency_data[round_id] = {}
+                    if "time_0" not in self._model_arrival_latency_data[round_id]:
+                        self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
+                        # logging.info(f"start_time: {start_time} of source {source} for round {round_id}")
 
-                if "time_0" not in self._model_arrival_latency_data[round_id]:
-                    self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
-                    # logging.info(f"start_time: {start_time} of source {source} for round {round_id}")
+                    relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
+                    # federation_nodes = await self.get_addrs_current_connections(only_direct=True, myself=True)
+                    # if len(self._model_arrival_latency_data[round_id]) >= len(federation_nodes) / 2:
+                    #     relative_times = [
+                    #         data["relative_time"]
+                    #         for key, data in self._model_arrival_latency_data[round_id].items()
+                    #         if "relative_time" in data
+                    #     ]
+                    #     mean_time = np.mean(relative_times)
+                    #     std_time = np.std(relative_times)
+                    #     threshold = mean_time + 2 * std_time
 
-                relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
-                # federation_nodes = await self.get_addrs_current_connections(only_direct=True, myself=True)
-                # if len(self._model_arrival_latency_data[round_id]) >= len(federation_nodes) / 2:
-                #     relative_times = [
-                #         data["relative_time"]
-                #         for key, data in self._model_arrival_latency_data[round_id].items()
-                #         if "relative_time" in data
-                #     ]
-                #     mean_time = np.mean(relative_times)
-                #     std_time = np.std(relative_times)
-                #     threshold = mean_time + 2 * std_time
+                    #     logging.info(f"mean_time: {mean_time} | std_time: {std_time} | threshold: {threshold}")
+                    #     if relative_time > threshold:
+                    #         self.engine.rejected_nodes.add(source)
+                    #         logging.info(f"🤖  handle_model_message | Latency of source = {source} is higher than the mean: {relative_time:.3f} seconds")
+                    # else:
+                    #     logging.info("🤖  handle_model_message | Waiting for at least 50 percent of models to calculate mean latency.")
 
-                #     logging.info(f"mean_time: {mean_time} | std_time: {std_time} | threshold: {threshold}")
-                #     if relative_time > threshold:
-                #         self.engine.rejected_nodes.add(source)
-                #         logging.info(f"🤖  handle_model_message | Latency of source = {source} is higher than the mean: {relative_time:.3f} seconds")
-                # else:
-                #     logging.info("🤖  handle_model_message | Waiting for at least 50 percent of models to calculate mean latency.")
+                    if source not in self._model_arrival_latency_data[round_id]:
+                        self._model_arrival_latency_data[round_id][source] = {
+                            "start_time": start_time,
+                            "relative_time": relative_time,
+                        }
+                        # logging.info(f"self.model_arrival_latency_data: {self._model_arrival_latency_data}")
+                        logging.info(f"Node {source} | Time taken relative to time_0: {relative_time:.3f} seconds")
 
-                if source not in self._model_arrival_latency_data[round_id]:
-                    self._model_arrival_latency_data[round_id][source] = {
-                        "start_time": start_time,
-                        "relative_time": relative_time,
-                    }
-                    # logging.info(f"self.model_arrival_latency_data: {self._model_arrival_latency_data}")
-                    logging.info(f"Node {source} | Time taken relative to time_0: {relative_time:.3f} seconds")
+                    if message.round == current_round:
+                        logging.info(f"🤖  handle_model_message | message_round == current_round to node {source}")
+                    elif message.round < current_round:
+                        logging.info(f"🤖  handle_model_message | message_round <= current_round to node {source}")
+                    else:
+                        logging.info(f"🤖  handle_model_message | message_round > current_round to node {source}")
 
-                if message.round == current_round:
-                    logging.info(f"🤖  handle_model_message | message_round == current_round to node {source}")
-                elif message.round < current_round:
-                    logging.info(f"🤖  handle_model_message | message_round <= current_round to node {source}")
-                else:
-                    logging.info(f"🤖  handle_model_message | message_round > current_round to node {source}")
+                    save_data(
+                        self.config.participant["scenario_args"]["name"],
+                        "model_arrival_latency",
+                        source,
+                        self.get_addr(),
+                        num_round=message.round,
+                        latency=relative_time,
+                    )
 
-                save_data(
-                    self.config.participant["scenario_args"]["name"],
-                    "model_arrival_latency",
-                    source,
-                    self.get_addr(),
-                    num_round=message.round,
-                    latency=relative_time,
-                )
+                    if cosine_value < 0.6:
+                        logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
+                        self.engine.rejected_nodes.add(source)
+                        return
 
             if message.round != current_round and message.round != -1:
                 logging.info(

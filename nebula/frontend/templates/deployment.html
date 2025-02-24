@@ -168,6 +168,9 @@
                             <label>
                                 <input type="checkbox" id="mod-delayer" value='DelayerAttack' style="margin-right: 10px;">Delayer
                             </label>
+                            <label>
+                                <input type="checkbox" id="mod-flooding" value="FloodingAttack" style="margin-right: 10px;">Flooding
+                            </label>
                         </div>
                     </div>
                 </form>
@@ -507,6 +510,7 @@
                             <option>Noise Injection</option>
                             <option>Swapping Weights</option>
                             <option>Delayer</option>
+                            <option>Flooding</option>
                         </select>
                         <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">% Malicious nodes</h5>
                         <div class="form-check form-check-inline" style="display: none;" id="poisoned-node-percent-container">
@@ -1998,7 +2002,7 @@
         });
         document.getElementById("mod-robustness").addEventListener("change", function() {
             selectALL(['mod-noattack', 'mod-labelflipping', 'mod-samplepoisoning', 'mod-modelpoisoning', 'mod-neuroninversion', 'mod-noiseinjection',
-             'mod-swappingweights', 'mod-delayer'], document.getElementById("mod-robustness").checked);
+             'mod-swappingweights', 'mod-delayer', 'mod-flooding'], document.getElementById("mod-robustness").checked);
         });
 
         //Generate a scenario
@@ -2023,7 +2027,7 @@
             }
 
             var attacks = ['mod-noattack', 'mod-labelflipping', 'mod-samplepoisoning', 'mod-modelpoisoning', 'mod-neuroninversion', 'mod-noiseinjection',
-             'mod-swappingweights', 'mod-delayer'];
+             'mod-swappingweights', 'mod-delayer', 'mod-flooding'];
             if (!atLeastOneChecked(attacks)) {
                 alert("Please, select one robustness option at least.");
                 return;
@@ -2848,6 +2852,32 @@
                 document.getElementById("layer_idx-container").style.display = "none";
                 document.getElementById("delay-title").style.display = "block";
                 document.getElementById("delay-container").style.display = "block";
+                document.getElementById("start-attack-title").style.display = "block";
+                document.getElementById("start-attack-container").style.display = "block";
+                document.getElementById("stop-attack-title").style.display = "block";
+                document.getElementById("stop-attack-container").style.display = "block";
+            }
+            else if(this.value == "Flooding"){
+                document.getElementById("poisoned-node-title").style.display = "none";
+                document.getElementById("poisoned-node-percent-container").style.display = "none";
+                document.getElementById("poisoned-sample-title").style.display = "none";
+                document.getElementById("poisoned-sample-percent-container").style.display = "none";
+                document.getElementById("poisoned-noise-title").style.display = "none";
+                document.getElementById("poisoned-noise-percent-container").style.display = "none";
+                document.getElementById("noise-type-title").style.display = "none";
+                document.getElementById("noise-type-container").style.display = "none";
+                document.getElementById("targeted-title").style.display = "none";
+                document.getElementById("targeted-container").style.display = "none";
+                document.getElementById("target_label-title").style.display = "none";
+                document.getElementById("target_label-container").style.display = "none";
+                document.getElementById("target_changed_label-title").style.display = "none";
+                document.getElementById("target_changed_label-container").style.display = "none";
+                document.getElementById("strength-title").style.display = "none";
+                document.getElementById("strength-container").style.display = "none";
+                document.getElementById("layer_idx-title").style.display = "none";
+                document.getElementById("layer_idx-container").style.display = "none";
+                document.getElementById("delay-title").style.display = "none";
+                document.getElementById("delay-container").style.display = "none";
                 document.getElementById("start-attack-title").style.display = "block";
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
