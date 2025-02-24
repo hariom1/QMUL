@@ -3,7 +3,6 @@ import logging
 from abc import ABC, abstractmethod
 from functools import partial
 
-from nebula.core.pb import nebula_pb2
 from nebula.core.utils.locker import Locker
 
 
@@ -138,8 +137,8 @@ class Aggregator(ABC):
         elif source not in self.get_nodes_pending_models_to_aggregate():
             if source in self.engine.rejected_nodes:
                 logging.info("🔄  _add_pending_model | Ignoring model from rejected node...")
-                #await self._add_model_lock.release_async()
-                #return None
+                # await self._add_model_lock.release_async()
+                # return None
             else:
                 self._pending_models_to_aggregate.update({source: (model, weight)})
                 logging.info(
@@ -181,7 +180,9 @@ class Aggregator(ABC):
         logging.info(f"🔄  _add_pending_model | federation_nodes={self._federation_nodes}")
         logging.info(f"🔄  _add_pending_model | rejected_nodes={self.engine.rejected_nodes}")
         logging.info(f"🔄  _add_pending_model | valid_federation_nodes={valid_federation_nodes}")
-        logging.info(f"🔄  _add_pending_model | tam_get_nodes_pending_models_to_aggregate={len(self.get_nodes_pending_models_to_aggregate())}")
+        logging.info(
+            f"🔄  _add_pending_model | tam_get_nodes_pending_models_to_aggregate={len(self.get_nodes_pending_models_to_aggregate())}"
+        )
         logging.info(f"🔄  _add_pending_model | tam_valid_federation_nodes={len(valid_federation_nodes)}")
         if len(self.get_nodes_pending_models_to_aggregate()) >= len(valid_federation_nodes):
             logging.info("🔄  _add_pending_model | All models were added in the aggregation buffer. Run aggregation...")
@@ -230,9 +231,12 @@ class Aggregator(ABC):
             logging.info(
                 f"🔄  include_model_in_buffer | Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
             )
-            message = self.cm.mm.generate_federation_message(
-                nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
-                [self.engine.get_round()],
+            # message = self.cm.mm.generate_federation_message(
+            #     nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED,
+            #     [self.engine.get_round()],
+            # )
+            message = self.cm.create_message(
+                "federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]]
             )
             await self.cm.send_message_to_neighbors(message)
 

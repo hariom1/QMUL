@@ -364,7 +364,7 @@ class Connection:
             try:
                 while remaining > 0:
                     chunk = await self.reader.read(min(remaining, self.BUFFER_SIZE))
-                    if not chunk:
+                    if not chunk and not self.cm.learning_finished():
                         raise ConnectionError("Connection closed while reading")
                     data += chunk
                     remaining -= len(chunk)
