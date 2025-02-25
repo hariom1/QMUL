@@ -45,11 +45,14 @@ class NebulaGPS(GPSModule):
 
     async def stop(self):
         """Detiene el servicio de GPS."""
-        #logging.info("Stopping NebulaGPS service...")
+        logging.info("Stopping NebulaGPS service...")
         self.running = False
         if self._broadcast_socket:
             self._broadcast_socket.close()
             self._broadcast_socket = None
+            
+    async def is_running(self):
+        return self.running        
 
     async def _send_location_loop(self):
         """Envia la geolocalización periódicamente por broadcast."""

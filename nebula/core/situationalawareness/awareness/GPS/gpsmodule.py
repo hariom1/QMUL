@@ -10,6 +10,10 @@ class GPSModule(ABC):
     @abstractmethod
     async def stop(self):
         pass
+    
+    @abstractmethod
+    async def is_running(self):
+        pass
 
 class GPSModuleException(Exception):
     pass

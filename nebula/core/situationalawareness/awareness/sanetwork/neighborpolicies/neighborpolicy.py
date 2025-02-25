@@ -36,10 +36,10 @@ class NeighborPolicy(ABC):
         pass
 
 def factory_NeighborPolicy(topology) -> NeighborPolicy:
-    from nebula.core.situationalawareness.awareness.neighborpolicies.idleneighborpolicy import IDLENeighborPolicy
-    from nebula.core.situationalawareness.awareness.neighborpolicies.fcneighborpolicy import FCNeighborPolicy
-    from nebula.core.situationalawareness.awareness.neighborpolicies.ringneighborpolicy import RINGNeighborPolicy
-    from nebula.core.situationalawareness.awareness.neighborpolicies.starneighborpolicy import STARNeighborPolicy
+    from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.idleneighborpolicy import IDLENeighborPolicy
+    from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.fcneighborpolicy import FCNeighborPolicy
+    from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.ringneighborpolicy import RINGNeighborPolicy
+    from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.starneighborpolicy import STARNeighborPolicy
     
     options = {
         "random": IDLENeighborPolicy, # default value

@@ -273,7 +273,7 @@ class Mobility:
                 # Get neighbor closer to me
                 selected_neighbor = await self.cm.get_nearest_connections(top=1)
                 if selected_neighbor:
-                    logging.info(f"📍  Selected neighbor: {selected_neighbor}")
+                    #logging.info(f"📍  Selected neighbor: {selected_neighbor}")
                     try:
                         (
                             neighbor_latitude,

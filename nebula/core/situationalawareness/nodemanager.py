@@ -30,7 +30,7 @@ class NodeManager:
         self._aditional_participant = aditional_participant
         self.topology = topology
         print_msg_box(
-            msg=f"Starting NodeManager module...\nTopology: {self.topology}", indent=2, title="NodeManager module"
+            msg=f"Starting NodeManager module...", indent=2, title="NodeManager module"
         )
         logging.info("🌐  Initializing Node Manager")
         self._engine = engine
@@ -109,6 +109,12 @@ class NodeManager:
         if self._fast_reboot_status:
             self._fastreboot = FastReboot(self)
             
+    async def get_geoloc(self):
+        return await self.sam.get_geoloc()
+
+    async def mobility_actions(self):
+        await self.sam.mobility_actions()        
+            
     async def experiment_finish(self):
         await self.sam.experiment_finish()        
 
@@ -123,7 +129,7 @@ class NodeManager:
 
     async def register_late_neighbor(self, addr, joinning_federation=False):
         logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
-        self.meet_node(addr)
+        self.sam.meet_node(addr)
         await self.update_neighbors(addr)
         if joinning_federation:
             if self.fast_reboot_on():
@@ -193,7 +199,7 @@ class NodeManager:
         return self.sam.get_actions()
 
     async def update_neighbors(self, node, remove=False):
-        logging.info(f"Update neighbor | node addr: {node} | remove: {remove}")
+        #logging.info(f"Update neighbor | node addr: {node} | remove: {remove}")
         await self._update_neighbors_lock.acquire_async()
         self.sam.update_neighbors(node, remove)
         if remove:
@@ -298,7 +304,7 @@ class NodeManager:
             self.candidate_selector.remove_candidates()
             if not self._desc_done: #TODO remove
                 self._desc_done = True
-                asyncio.create_task(self.sam.stop_connections_with_federation())
+                asyncio.create_task(self.sam.san.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
             logging.info("❗️  No Candidates found...")
@@ -308,16 +314,5 @@ class NodeManager:
                 logging.info("❗️  repeating process...")
                 await self.start_late_connection_process(connected, msg_type, addrs_known)
                 
-    """
-                    ##############################
-                    #         ROBUSTNESS         #
-                    ##############################
-    """
 
-    async def get_geoloc(self):
-        return await self.sam.get_geoloc()
-
-    async def mobility_actions(self):
-        await self.sam.check_external_connection_service_status()
-        await self.sam.analize_topology_robustness()
 

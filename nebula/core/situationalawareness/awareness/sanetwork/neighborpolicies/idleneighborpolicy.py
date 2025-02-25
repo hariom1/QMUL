@@ -1,8 +1,9 @@
-from nebula.core.situationalawareness.awareness.neighborpolicies.neighborpolicy import NeighborPolicy
+from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.neighborpolicy import NeighborPolicy
 from nebula.core.utils.locker import Locker
+import logging
 
-class FCNeighborPolicy(NeighborPolicy):
-    
+class IDLENeighborPolicy(NeighborPolicy):
+
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()
@@ -17,7 +18,7 @@ class FCNeighborPolicy(NeighborPolicy):
             if there are more nodes known that self.neighbors, more neighbors are required
         """
         self.neighbors_lock.acquire()
-        need_more = (len(self.neighbors) < len(self.nodes_known))
+        need_more = (len(self.neighbors) <= 0)
         self.neighbors_lock.release()
         return need_more
     
@@ -29,6 +30,7 @@ class FCNeighborPolicy(NeighborPolicy):
             config[2] -> self addr
             config[3] -> NodeManager reference
         """
+        logging.info("Initializing Random Topology Neighbor Policy")
         self.neighbors_lock.acquire()
         self.neighbors = config[0] 
         self.neighbors_lock.release()
@@ -51,6 +53,7 @@ class FCNeighborPolicy(NeighborPolicy):
         """
         self.nodes_known_lock.acquire()
         if node != self.addr:
+            if not node in self.nodes_known: logging.info(f"Update nodes known | addr: {node}")
             self.nodes_known.add(node)
         self.nodes_known_lock.release()
         
@@ -104,8 +107,10 @@ class FCNeighborPolicy(NeighborPolicy):
         if remove:
             try:
                 self.neighbors.remove(node)
+                logging.info(f"Remove neighbor | addr: {node}")
             except KeyError:
                 pass    
         else:
             self.neighbors.add(node)
-        self.neighbors_lock.release() 
+            logging.info(f"Add neighbor | addr: {node}")
+        self.neighbors_lock.release()

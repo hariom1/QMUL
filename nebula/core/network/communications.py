@@ -77,7 +77,7 @@ class CommunicationsManager:
         
         # Network simulator service to deplay realistic network conditions
         refresh_conditions_interval = 5
-        self._network_simulator = factory_network_simulator("nebula", self, refresh_conditions_interval, "eth0", verbose=True)
+        self._network_simulator = factory_network_simulator("nebula", self, refresh_conditions_interval, "eth0", verbose=False)
 
     @property
     def engine(self):
@@ -601,7 +601,8 @@ class CommunicationsManager:
        # self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
-            await self.ns.start()
+            if False:
+                await self.ns.start()
             # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
