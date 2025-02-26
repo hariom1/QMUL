@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from nebula.core.utils.locker import Locker
+from nebula.core.situationalawareness.awareness.satraining.trainingpolicy.trainingpolicy import factory_training_policy
 from nebula.addons.functions import print_msg_box
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -21,5 +22,5 @@ class SATraining():
             title="Training SA module",
         )
         self._sam = sam
-        self._trainning_policy = training_policy
+        self._trainning_policy = factory_training_policy(training_policy)
         self._weight_strategies = weight_strategies

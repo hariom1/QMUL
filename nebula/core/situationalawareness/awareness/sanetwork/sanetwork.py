@@ -65,8 +65,8 @@ class SANetwork():
         ])
         
     async def module_actions(self):
-        await self.check_external_connection_service_status()
-        await self.analize_topology_robustness()    
+        await self._check_external_connection_service_status()
+        await self._analize_topology_robustness()    
         
      
     """                                                     ###############################
@@ -108,7 +108,7 @@ class SANetwork():
                                                             ###############################
     """
     
-    async def check_external_connection_service_status(self):
+    async def _check_external_connection_service_status(self):
         if not await self.cm.is_external_connection_service_running():
             logging.info("🔄 External Service not running | Starting service...")
             await self.cm.init_external_connection_service()
@@ -140,7 +140,7 @@ class SANetwork():
     def get_restructure_process_lock(self):
         return self._restructure_process_lock    
     
-    async def analize_topology_robustness(self):
+    async def _analize_topology_robustness(self):
         logging.info("🔄 Analizing node network robustness...")
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
