@@ -406,13 +406,14 @@ class CommunicationsManager:
             #logging.info("Update geolocs to simulate network conditions")
             for source in geoloc.keys():
                 latitude, longitude = geoloc[source]
-                logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
+                #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
                 if source in self.connections:
                     self.connections[source].update_geolocation(latitude, longitude)
                 else: # When not connected to device yet
-                    logging.info(f"Update conditions for not already connected source: {source})")
-                    distance = await self.engine.calculate_distance(latitude, longitude)
-                    await self.ns.set_network_conditions(source, distance)
+                    #logging.info(f"Update conditions for not already connected source: {source})")
+                    if self.config.participant["network_args"]["simulation"]:
+                        distance = await self.engine.calculate_distance(latitude, longitude)
+                        await self.ns.set_network_conditions(source, distance)
 
     def get_connections_lock(self):
         return self.connections_lock
@@ -605,7 +606,7 @@ class CommunicationsManager:
        # self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
-            if False:
+            if self.config.participant["network_args"]["simulation"]:
                 await self.ns.start()
             # await self._discoverer.start()
         # await self._health.start()

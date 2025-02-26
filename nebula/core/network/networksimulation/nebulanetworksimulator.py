@@ -55,7 +55,8 @@ class NebulaNS(NetworkSimulator):
                         addr_ip = addr.split(":")[0]
                         self._set_network_condition_for_addr(self._node_interface, addr_ip, conditions["bandwidth"], conditions["delay"])
                         self._set_network_condition_for_multicast(self._node_interface, addr_ip, self.IP_MULTICAST, conditions["bandwidth"], conditions["delay"])
-                        self._current_network_conditions[addr] = conditions
+                        async with self._network_conditions_lock:
+                            self._current_network_conditions[addr] = conditions
                     else:
                         logging.info("network conditions havent changed since last time")
             except KeyError:
@@ -67,22 +68,24 @@ class NebulaNS(NetworkSimulator):
         async with self._network_conditions_lock:
             self._network_conditions = thresholds
 
-    async def set_network_conditions(self, dest_addr, distance):
+    async def set_network_conditions(self, dest_addr : str, distance):
         conditions = await self._calculate_network_conditions(distance)
-        self._set_network_condition_for_addr(self,
-                                            interface=self._node_interface,
-                                            network=dest_addr,
-                                            bandwidth=conditions["bandwidth"],
-                                            delay=conditions["delay"]
-                                            )
-        
-        self._set_network_condition_for_multicast(self,
-                                                  interface=self._node_interface,
-                                                  src_network=dest_addr,
-                                                  dst_network=self.IP_MULTICAST,
-                                                  bandwidth=conditions["bandwidth"],
-                                                  delay=conditions["delay"]
-                                                  )
+        addr_ip = dest_addr.split(":")[0]
+        if (dest_addr not in self._current_network_conditions or self._current_network_conditions[dest_addr] != conditions):
+            self._set_network_condition_for_addr(interface=self._node_interface,
+                                                network=addr_ip,
+                                                bandwidth=conditions["bandwidth"],
+                                                delay=conditions["delay"]
+                                                )
+            
+            self._set_network_condition_for_multicast(interface=self._node_interface,
+                                                    src_network=addr_ip,
+                                                    dst_network=self.IP_MULTICAST,
+                                                    bandwidth=conditions["bandwidth"],
+                                                    delay=conditions["delay"]
+                                                    )
+            async with self._network_conditions_lock:
+                self._current_network_conditions[dest_addr] = conditions
     
     def _set_network_condition_for_addr(
         self,
