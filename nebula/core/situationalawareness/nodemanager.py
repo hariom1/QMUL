@@ -111,6 +111,9 @@ class NodeManager:
             
     async def get_geoloc(self):
         return await self.sam.get_geoloc()
+    
+    async def calculate_distance(self, latitude, longitude):
+        return await self.sam.calculate_distance(latitude, longitude)
 
     async def mobility_actions(self):
         await self.sam.mobility_actions()        

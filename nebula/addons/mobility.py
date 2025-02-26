@@ -132,7 +132,7 @@ class Mobility:
         """
         if not self.mobility:
             return
-        await asyncio.sleep(self.grace_time)
+        #await asyncio.sleep(self.grace_time)
         while True:
             await self.change_geo_location()
             #await self.change_connections_based_on_distance()

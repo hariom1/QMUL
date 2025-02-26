@@ -3,6 +3,7 @@ import logging
 from nebula.core.situationalawareness.awareness.GPS.gpsmodule import GPSModule
 import socket
 from nebula.core.utils.locker import Locker
+from geopy import distance
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -53,6 +54,10 @@ class NebulaGPS(GPSModule):
             
     async def is_running(self):
         return self.running        
+    
+    async def calculate_distance(self, self_lat, self_long, other_lat, other_long):
+        distance_m = distance.distance((self_lat, self_long), (other_lat, other_long)).m
+        return distance_m
 
     async def _send_location_loop(self):
         """Envia la geolocalización periódicamente por broadcast."""

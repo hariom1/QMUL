@@ -14,6 +14,10 @@ class GPSModule(ABC):
     @abstractmethod
     async def is_running(self):
         pass
+    
+    @abstractmethod
+    async def calculate_distance(self, self_lat, self_long, other_lat, other_long):
+        pass
 
 class GPSModuleException(Exception):
     pass

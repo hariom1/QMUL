@@ -576,6 +576,10 @@ class Engine:
 
     async def get_geoloc(self):
         return await self.nm.get_geoloc()
+    
+    async def calculate_distance(self, latitude, longitude):
+        return await self.nm.calculate_distance(latitude, longitude)
+    
 
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)

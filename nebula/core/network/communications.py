@@ -77,7 +77,7 @@ class CommunicationsManager:
         
         # Network simulator service to deplay realistic network conditions
         refresh_conditions_interval = 5
-        self._network_simulator = factory_network_simulator("nebula", self, refresh_conditions_interval, "eth0", verbose=False)
+        self._network_simulator = factory_network_simulator("nebula", self, refresh_conditions_interval, "eth0", verbose=True)
 
     @property
     def engine(self):
@@ -406,9 +406,13 @@ class CommunicationsManager:
             #logging.info("Update geolocs to simulate network conditions")
             for source in geoloc.keys():
                 latitude, longitude = geoloc[source]
-                #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
+                logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
                 if source in self.connections:
                     self.connections[source].update_geolocation(latitude, longitude)
+                else: # When not connected to device yet
+                    logging.info(f"Update conditions for not already connected source: {source})")
+                    distance = await self.engine.calculate_distance(latitude, longitude)
+                    await self.ns.set_network_conditions(source, distance)
 
     def get_connections_lock(self):
         return self.connections_lock
