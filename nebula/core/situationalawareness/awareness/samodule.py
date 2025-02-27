@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
 from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
-from nebula.core.situationalawareness.awareness.GPS.gpsmodule import factory_gpsmodule
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -34,7 +33,6 @@ class SAModule:
         self._situational_awareness_trainning = SATraining(self, "hybrid", "fastreboot")
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
-        self._gpsmodule = factory_gpsmodule("nebula", self, self._addr)
 
     @property
     def nm(self):
@@ -48,13 +46,9 @@ class SAModule:
     def cm(self):
         return self.nm.engine.cm
     
-    @property
-    def gps(self):
-        return self._gpsmodule
 
     async def init(self):
         #if not self.is_additional_participant():
-        await self.gps.start()
         await self.san.init()
           
     def is_additional_participant(self):
@@ -69,21 +63,8 @@ class SAModule:
         return (latitude, longitude)    
     
     async def mobility_actions(self):
-        await self.verify_gps_service()
         await self.san.module_actions()    
 
-    """                                                     ###############################
-                                                            #         GPS SERVICE         #
-                                                            ###############################
-    """
-    
-    async def calculate_distance(self, other_latitude, other_longitude):
-        self_lat, self_long = await self.get_geoloc()
-        return await self.gps.calculate_distance(self_lat, self_long, other_latitude, other_longitude)
-
-    async def verify_gps_service(self):
-        if not await self.gps.is_running():
-            await self.gps.start()
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #

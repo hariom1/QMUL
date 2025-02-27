@@ -22,5 +22,5 @@ class SATraining():
             title="Training SA module",
         )
         self._sam = sam
-        self._trainning_policy = factory_training_policy(training_policy)
+        #self._trainning_policy = factory_training_policy(training_policy)
         self._weight_strategies = weight_strategies

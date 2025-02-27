@@ -3,16 +3,17 @@ import logging
 import math
 import random
 import time
-from typing import TYPE_CHECKING
-
+from nebula.core.eventmanager import EventManager
+from nebula.addons.GPS.gpsmodule import GPSEvent
+from nebula.core.utils.locker import Locker
 from nebula.addons.functions import print_msg_box
-
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
 
 
 class Mobility:
-    def __init__(self, config, cm: "CommunicationsManager"):
+    def __init__(self, config, cm: "CommunicationsManager", event_manager: EventManager):
         """
         Initializes the mobility module with specified configuration and communication manager.
 
@@ -62,18 +63,12 @@ class Mobility:
         self.max_movement_random_strategy = 100  # meters
         self.max_movement_nearest_strategy = 100  # meters
         self.max_initiate_approximation = self.max_distance_with_direct_connections * 1.2
-        # Network conditions based on distance
-        self.network_conditions = {
-            100: {"bandwidth": "5Gbps", "delay": "5ms"},
-            200: {"bandwidth": "2Gbps", "delay": "50ms"},
-            300: {"bandwidth": "100Mbps", "delay": "200ms"},
-            float("inf"): {"bandwidth": "10Mbps", "delay": "1000ms"},
-        }
-        # Current network conditions of each connection {addr: {bandwidth: "5Gbps", delay: "0ms"}}
-        self.current_network_conditions = {}
         # Logging box with mobility information
         mobility_msg = f"Mobility: {self.mobility}\nMobility type: {self.mobility_type}\nRadius federation: {self.radius_federation}\nScheme mobility: {self.scheme_mobility}\nEach {self.round_frequency} rounds"
         print_msg_box(msg=mobility_msg, indent=2, title="Mobility information")
+        self._event_manager = event_manager
+        self._nodes_distances = {}
+        self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
 
     @property
     def round(self):
@@ -103,8 +98,14 @@ class Mobility:
             asyncio.Task: An asyncio Task object representing the scheduled
                            `run_mobility` operation.
         """
+        await self._event_manager.subscribe_addonevent(GPSEvent, self.update_nodes_distances)
         task = asyncio.create_task(self.run_mobility())
         return task
+
+    async def update_nodes_distances(self, gpsevent : GPSEvent):
+        distances = await gpsevent.get_event_data()
+        async with self._nodes_distances_lock:
+            self._nodes_distances = dict(distances)
 
     async def run_mobility(self):
         """
@@ -135,7 +136,6 @@ class Mobility:
         #await asyncio.sleep(self.grace_time)
         while True:
             await self.change_geo_location()
-            #await self.change_connections_based_on_distance()
             await asyncio.sleep(self.period)
 
     async def change_geo_location_random_strategy(self, latitude, longitude):
@@ -268,214 +268,35 @@ class Mobility:
             random.seed(time.time() + self.config.participant["device_args"]["idx"])
             latitude = float(self.config.participant["mobility_args"]["latitude"])
             longitude = float(self.config.participant["mobility_args"]["longitude"])
-
             if True:
                 # Get neighbor closer to me
-                selected_neighbor = await self.cm.get_nearest_connections(top=1)
+                async with self._nodes_distances_lock:
+                    sorted_list = sorted(self._nodes_distances.items(), key=lambda item: item[1][0])
+                    # Transformamos la lista para obtener solo dirección y coordenadas
+                    result = [(addr, dist, coords) for addr, (dist, coords) in sorted_list]
+                    
+                selected_neighbor = result[0] if result else None
                 if selected_neighbor:
                     #logging.info(f"📍  Selected neighbor: {selected_neighbor}")
-                    try:
-                        (
-                            neighbor_latitude,
-                            neighbor_longitude,
-                        ) = selected_neighbor.get_geolocation()
-                        distance = selected_neighbor.get_neighbor_distance()
-                        if distance > self.max_initiate_approximation:
-                            # If the distance is too big, we move towards the neighbor
-                            await self.change_geo_location_nearest_neighbor_strategy(
-                                distance,
-                                latitude,
-                                longitude,
-                                neighbor_latitude,
-                                neighbor_longitude,
-                            )
-                        else:
-                            await self.change_geo_location_random_strategy(latitude, longitude)
-                    except Exception as e:
-                        logging.info(f"📍  Neighbor location/distance not found for {selected_neighbor.get_addr()}: {e}")
+                    addr, dist, (lat, long) = selected_neighbor
+                    if dist > self.max_initiate_approximation:
+                        # If the distance is too big, we move towards the neighbor
+                        logging.info(f"Moving towards nearest neighbor: {addr}")
+                        await self.change_geo_location_nearest_neighbor_strategy(
+                            dist,
+                            latitude,
+                            longitude,
+                            lat,
+                            long,
+                        )
+                    else:
                         await self.change_geo_location_random_strategy(latitude, longitude)
                 else:
-                     await self.change_geo_location_random_strategy(latitude, longitude)
+                    await self.change_geo_location_random_strategy(latitude, longitude)
             else:
                 await self.change_geo_location_random_strategy(latitude, longitude)
         else:
             logging.error(f"📍  Mobility type {self.mobility_type} not implemented")
             return
 
-    async def change_connections_based_on_distance(self):
-        """
-        Changes the connections of the entity based on the distance to neighboring nodes.
 
-        This coroutine evaluates the current connections in the topology and adjusts their status to
-        either direct or undirected based on their distance from the entity. If a neighboring node is
-        within a certain distance, it is marked as a direct connection; otherwise, it is marked as
-        undirected.
-
-        Additionally, it updates the network conditions for each connection based on the distance,
-        ensuring that the current state is reflected accurately.
-
-        Args:
-            None: This function does not take any arguments.
-
-        Raises:
-            KeyError: If a connection address is not found during the process.
-            Exception: For any other errors that may occur while changing connections.
-
-        Notes:
-            - The method expects the mobility type to be either "topology" or "both".
-            - It logs the distance evaluations and changes made for tracking and debugging purposes.
-        """
-        if self.mobility and (self.mobility_type == "topology" or self.mobility_type == "both"):
-            try:
-                # logging.info(f"📍  Checking connections based on distance")
-                connections_topology = await self.cm.get_addrs_current_connections()
-                # logging.info(f"📍  Connections of the topology: {connections_topology}")
-                if len(connections_topology) < 1:
-                    # logging.error(f"📍  Not enough connections for mobility")
-                    return
-                # Nodes that are too far away should be marked as undirected connections, and closer nodes should be marked as directed connections.
-                for addr in connections_topology:
-                    distance = self.cm.connections[addr].get_neighbor_distance()
-                    if distance is None:
-                        # If the distance is not found, we skip the node
-                        continue
-                    conditions = await self.calculate_network_conditions(distance)
-                    #logging.info(f"Conditions for source: {addr}, | {conditions}")
-                    # Only update the network conditions if they have changed
-                    if (
-                        addr not in self.current_network_conditions or self.current_network_conditions[addr] != conditions
-                    ):
-                        # eth1 is the interface of the container that connects to the node network - eth0 is the interface of the container that connects to the frontend/backend
-                        self.cm.set_network_conditions(
-                            interface="eth0",
-                            network=addr.split(":")[0],
-                            bandwidth=conditions["bandwidth"],
-                            delay=conditions["delay"],
-                            delay_distro="10ms",
-                            delay_distribution="normal",
-                            loss="0%",
-                            duplicate="0%",
-                            corrupt="0%",
-                            reordering="0%",
-                        )
-                        self.current_network_conditions[addr] = conditions
-                    else:
-                        logging.info("network conditions havent changed since last time")
-            except KeyError:
-                # Except when self.cm.connections[addr] is not found (disconnected during the process)
-                logging.exception(f"📍  Connection {addr} not found")
-                return
-            except Exception:
-                logging.exception("📍  Error changing connections based on distance")
-                return
-
-    async def calculate_network_conditions(self, distance):
-        logging.info(f"Calculating conditions for distance: {distance}")
-        def extract_number(value):
-            import re
-            match = re.match(r"([\d.]+)", value)
-            if not match:
-                raise ValueError(f"Formato inválido: {value}")
-            return float(match.group(1))
-        
-        thresholds = sorted(self.network_conditions.keys())
-
-        # Si la distancia es menor que el primer umbral, devolver la mejor condición
-        if distance < thresholds[0]:
-            return {
-                "bandwidth": self.network_conditions[thresholds[0]]["bandwidth"],
-                "delay": self.network_conditions[thresholds[0]]["delay"]
-            }
-
-        # Encontrar el tramo en el que se encuentra la distancia
-        for i in range(len(thresholds) - 1):
-            lower_bound = thresholds[i]
-            upper_bound = thresholds[i + 1]
-
-            if upper_bound == float("inf"):
-                break
-
-            if lower_bound <= distance < upper_bound:
-                #logging.info(f"Bounds | lower: {lower_bound} | upper: {upper_bound}")
-                lower_cond = self.network_conditions[lower_bound]
-                upper_cond = self.network_conditions[upper_bound]
-
-                # Extraer valores numéricos y unidades
-                lower_bandwidth_value = extract_number(lower_cond["bandwidth"])
-                upper_bandwidth_value = extract_number(upper_cond["bandwidth"])
-                lower_bandwidth_unit = lower_cond["bandwidth"].replace(str(lower_bandwidth_value), "")
-                upper_bandwidth_unit = upper_cond["bandwidth"].replace(str(upper_bandwidth_value), "")
-
-                lower_delay_value = extract_number(lower_cond["delay"])
-                upper_delay_value = extract_number(upper_cond["delay"])
-                delay_unit = lower_cond["delay"].replace(str(lower_delay_value), "")
-
-                # Calcular el progreso en el tramo (0 a 1)
-                progress = (distance - lower_bound) / (upper_bound - lower_bound)
-                #logging.info(f"Progress between the bounds: {progress}")
-
-                # Interpolación lineal de valores
-                bandwidth_value = lower_bandwidth_value - progress * (lower_bandwidth_value - upper_bandwidth_value)
-                delay_value = lower_delay_value + progress * (upper_delay_value - lower_delay_value)
-
-                # Reconstruir valores con unidades originales
-                bandwidth = f"{round(bandwidth_value, 2)}{lower_bandwidth_unit}"
-                delay = f"{round(delay_value, 2)}{delay_unit}"
-
-                return {"bandwidth": bandwidth, "delay": delay}
-
-        # Si la distancia es infinita, devolver el último valor
-        return {
-            "bandwidth": self.network_conditions[float("inf")]["bandwidth"],
-            "delay": self.network_conditions[float("inf")]["delay"]
-        }
-
-    async def change_connections(self):
-        """
-        Changes the connections of the entity based on the specified mobility scheme.
-
-        This coroutine evaluates the current and potential connections at specified intervals (based
-        on the round frequency) and makes adjustments according to the mobility scheme in use. If
-        the mobility type is appropriate and the current round is a multiple of the round frequency,
-        it will proceed to change connections.
-
-        Args:
-            None: This function does not take any arguments.
-
-        Raises:
-            None: This function does not raise exceptions, but it logs errors related to connection counts
-            and unsupported mobility schemes.
-
-        Notes:
-            - The function currently supports a "random" mobility scheme, where it randomly selects
-            a current connection to disconnect and a potential connection to connect.
-            - If there are insufficient connections available, an error will be logged.
-            - All actions and decisions made by the function are logged for tracking purposes.
-        """
-        if (
-            self.mobility
-            and (self.mobility_type == "topology" or self.mobility_type == "both")
-            and self.round % self.round_frequency == 0
-        ):
-            logging.info("📍  Changing connections")
-            current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
-            potential_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
-            logging.info(
-                f"📍  Current connections: {current_connections} | Potential future connections: {potential_connections}"
-            )
-            if len(current_connections) < 1 or len(potential_connections) < 1:
-                logging.error("📍  Not enough connections for mobility")
-                return
-
-            if self.scheme_mobility == "random":
-                random_neighbor = random.choice(current_connections)  # noqa: S311
-                random_potential_neighbor = random.choice(potential_connections)  # noqa: S311
-                logging.info(f"📍  Selected node(s) to disconnect: {random_neighbor}")
-                logging.info(f"📍  Selected node(s) to connect: {random_potential_neighbor}")
-                await self.cm.disconnect(random_neighbor, mutual_disconnection=True)
-                await self.cm.connect(random_potential_neighbor, direct=True)
-                logging.info(f"📍  New connections: {self.get_current_connections(only_direct=True)}")
-                logging.info(f"📍  Neighbors in config: {self.config.participant['network_args']['neighbors']}")
-            else:
-                logging.error(f"📍  Mobility scheme {self.scheme_mobility} not implemented")
-                return

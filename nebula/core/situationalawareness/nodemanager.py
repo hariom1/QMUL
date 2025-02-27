@@ -7,7 +7,6 @@ from nebula.core.situationalawareness.candidateselection.candidateselector impor
 from nebula.core.situationalawareness.fastreboot import FastReboot
 from nebula.core.situationalawareness.modelhandlers.modelhandler import factory_ModelHandler
 from nebula.core.situationalawareness.momentum import Momentum
-#from nebula.core.situationalawareness.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.core.situationalawareness.awareness.samodule import SAModule
 from nebula.core.utils.locker import Locker
 
@@ -112,9 +111,6 @@ class NodeManager:
     async def get_geoloc(self):
         return await self.sam.get_geoloc()
     
-    async def calculate_distance(self, latitude, longitude):
-        return await self.sam.calculate_distance(latitude, longitude)
-
     async def mobility_actions(self):
         await self.sam.mobility_actions()        
             

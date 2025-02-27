@@ -27,8 +27,8 @@ class NetworkSimulator(ABC):
 class NetworkSimulatorException(Exception):
     pass 
 
-def factory_network_simulator(net_sim, communication_manager, changing_interval, interface, verbose) -> NetworkSimulator:
-    from nebula.core.network.networksimulation.nebulanetworksimulator import NebulaNS
+def factory_network_simulator(net_sim, event_manager, communication_manager, changing_interval, interface, verbose) -> NetworkSimulator:
+    from nebula.addons.networksimulation.nebulanetworksimulator import NebulaNS
     
     SIMULATION_SERVICES = {
         "nebula": NebulaNS,
@@ -37,6 +37,6 @@ def factory_network_simulator(net_sim, communication_manager, changing_interval,
     net_serv = SIMULATION_SERVICES.get(net_sim, NebulaNS)
     
     if net_serv:
-        return net_serv(communication_manager, changing_interval, interface, verbose)
+        return net_serv(event_manager, communication_manager, changing_interval, interface, verbose)
     else:
          raise NetworkSimulatorException(f"Network Simulator {net_sim} not found")

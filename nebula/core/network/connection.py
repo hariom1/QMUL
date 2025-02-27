@@ -58,8 +58,6 @@ class Connection:
         self.config = config
 
         self.federated_round = Connection.DEFAULT_FEDERATED_ROUND
-        self.latitude = None
-        self.longitude = None
         self.loop = asyncio.get_event_loop()
         self.read_task = None
         self.process_task = None
@@ -111,32 +109,6 @@ class Connection:
 
     def update_round(self, federated_round):
         self.federated_round = federated_round
-
-    def update_geolocation(self, latitude, longitude):
-        self.latitude = latitude
-        self.longitude = longitude
-        self.config.participant["mobility_args"]["neighbors_distance"][self.addr] = self.compute_distance_myself()
-
-    def get_geolocation(self):
-        if self.latitude is None or self.longitude is None:
-            raise ValueError("Geo-location not set for this neighbor")
-        return self.latitude, self.longitude
-
-    def get_neighbor_distance(self):
-        if self.addr not in self.config.participant["mobility_args"]["neighbors_distance"]:
-            return None
-        return self.config.participant["mobility_args"]["neighbors_distance"][self.addr]
-
-    def compute_distance(self, latitude, longitude):
-        distance_m = distance.distance((self.latitude, self.longitude), (latitude, longitude)).m
-        return distance_m
-
-    def compute_distance_myself(self):
-        distance_m = self.compute_distance(
-            self.config.participant["mobility_args"]["latitude"],
-            self.config.participant["mobility_args"]["longitude"],
-        )
-        return distance_m
 
     def get_ready(self):
         return True if self.federated_round != Connection.DEFAULT_FEDERATED_ROUND else False

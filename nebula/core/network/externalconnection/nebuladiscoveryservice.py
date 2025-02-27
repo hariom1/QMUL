@@ -129,9 +129,9 @@ class NebulaBeacon:
         logging.info("[NebulaBeacon]: Starting sending pressence beacon")
         self.running = True
         while self.running:
-            await self.send_beacon()
             await asyncio.sleep(self.interval)
-
+            await self.send_beacon()
+            
     async def stop(self):
         logging.info("[NebulaBeacon]: Stop existance beacon")
         self.running = False

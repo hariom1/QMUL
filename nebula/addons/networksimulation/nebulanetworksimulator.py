@@ -1,8 +1,10 @@
 import asyncio
 import subprocess
 import logging
-from nebula.core.network.networksimulation.networksimulator import NetworkSimulator
+from nebula.addons.networksimulation.networksimulator import NetworkSimulator
 from nebula.core.utils.locker import Locker
+from nebula.core.eventmanager import EventManager
+from nebula.addons.GPS.gpsmodule import GPSEvent
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -12,11 +14,12 @@ class NebulaNS(NetworkSimulator):
         100: {"bandwidth": "5Gbps", "delay": "5ms"},
         200: {"bandwidth": "2Gbps", "delay": "50ms"},
         300: {"bandwidth": "100Mbps", "delay": "200ms"},
-        float("inf"): {"bandwidth": "10Mbps", "delay": "100000ms"},
+        float("inf"): {"bandwidth": "10Mbps", "delay": "10000ms"},
     }
     IP_MULTICAST = "239.255.255.250"
     
-    def __init__(self, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
+    def __init__(self, event_manager : EventManager, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
+        self._event_manager = event_manager
         self._cm = communication_manager
         self._refresh_interval = changing_interval
         self._node_interface = interface
@@ -26,43 +29,74 @@ class NebulaNS(NetworkSimulator):
         self._current_network_conditions = {}
         self._running = False
         
+    @property
+    def em(self):
+        return self._event_manager    
+        
     async def start(self):
         logging.info("🌐  Nebula Network Simulator starting...")
         self._running = True
-        asyncio.create_task(self._change_network_conditions_based_on_distances()) 
+        grace_time = self._cm.config.participant["mobility_args"]["grace_time_mobility"]
+        # if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
+        # await asyncio.sleep(grace_time)
+        await self.em.subscribe_addonevent(GPSEvent, self._change_network_conditions_based_on_distances)
     
     async def stop(self):
         self._running = False
         
-    async def _change_network_conditions_based_on_distances(self):
-        grace_time = self._cm.config.participant["mobility_args"]["grace_time_mobility"]
-        if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
-        await asyncio.sleep(grace_time)
+    async def _change_network_conditions_based_on_distances(self, gpsevent : GPSEvent):
+        distances = await gpsevent.get_event_data()
+        await asyncio.sleep(self._refresh_interval)
+        if self._verbose: logging.info("Refresh | conditions based on distances...")
+        try:
+            for addr, (distance, _) in distances.items():
+                if distance is None:
+                     # If the distance is not found, we skip the node
+                    continue
+                conditions = await self._calculate_network_conditions(distance)
+                # Only update the network conditions if they have changed
+                if (addr not in self._current_network_conditions or self._current_network_conditions[addr] != conditions):
+                    addr_ip = addr.split(":")[0]
+                    self._set_network_condition_for_addr(self._node_interface, addr_ip, conditions["bandwidth"], conditions["delay"])
+                    self._set_network_condition_for_multicast(self._node_interface, addr_ip, self.IP_MULTICAST, conditions["bandwidth"], conditions["delay"])
+                    async with self._network_conditions_lock:
+                        self._current_network_conditions[addr] = conditions
+                else:
+                    if self._verbose: logging.info("network conditions havent changed since last time")
+        except KeyError:
+            logging.exception(f"📍  Connection {addr} not found")
+        except Exception:
+            logging.exception("📍  Error changing connections based on distance")    
         
-        while self._running:
-            await asyncio.sleep(self._refresh_interval)
-            if self._verbose: logging.info("Refresh | conditions based on distances...")
-            current_connections = await self._cm.get_addrs_current_connections()
-            try:
-                for addr in current_connections:
-                    distance = self._cm.connections[addr].get_neighbor_distance()
-                    if distance is None:
-                        # If the distance is not found, we skip the node
-                        continue
-                    conditions = await self._calculate_network_conditions(distance)
-                    # Only update the network conditions if they have changed
-                    if (addr not in self._current_network_conditions or self._current_network_conditions[addr] != conditions):
-                        addr_ip = addr.split(":")[0]
-                        self._set_network_condition_for_addr(self._node_interface, addr_ip, conditions["bandwidth"], conditions["delay"])
-                        self._set_network_condition_for_multicast(self._node_interface, addr_ip, self.IP_MULTICAST, conditions["bandwidth"], conditions["delay"])
-                        async with self._network_conditions_lock:
-                            self._current_network_conditions[addr] = conditions
-                    else:
-                        logging.info("network conditions havent changed since last time")
-            except KeyError:
-                logging.exception(f"📍  Connection {addr} not found")
-            except Exception:
-                logging.exception("📍  Error changing connections based on distance")
+    # async def _change_network_conditions_based_on_distances(self):
+    #     grace_time = self._cm.config.participant["mobility_args"]["grace_time_mobility"]
+    #     if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
+    #     await asyncio.sleep(grace_time)
+        
+    #     while self._running:
+    #         await asyncio.sleep(self._refresh_interval)
+    #         if self._verbose: logging.info("Refresh | conditions based on distances...")
+    #         current_connections = await self._cm.get_addrs_current_connections()
+    #         try:
+    #             for addr in current_connections:
+    #                 distance = self._cm.connections[addr].get_neighbor_distance()
+    #                 if distance is None:
+    #                     # If the distance is not found, we skip the node
+    #                     continue
+    #                 conditions = await self._calculate_network_conditions(distance)
+    #                 # Only update the network conditions if they have changed
+    #                 if (addr not in self._current_network_conditions or self._current_network_conditions[addr] != conditions):
+    #                     addr_ip = addr.split(":")[0]
+    #                     self._set_network_condition_for_addr(self._node_interface, addr_ip, conditions["bandwidth"], conditions["delay"])
+    #                     self._set_network_condition_for_multicast(self._node_interface, addr_ip, self.IP_MULTICAST, conditions["bandwidth"], conditions["delay"])
+    #                     async with self._network_conditions_lock:
+    #                         self._current_network_conditions[addr] = conditions
+    #                 else:
+    #                     logging.info("network conditions havent changed since last time")
+    #         except KeyError:
+    #             logging.exception(f"📍  Connection {addr} not found")
+    #         except Exception:
+    #             logging.exception("📍  Error changing connections based on distance")
         
     async def set_thresholds(self, thresholds : dict):
         async with self._network_conditions_lock:
@@ -273,3 +307,51 @@ class NebulaNS(NetworkSimulator):
         except Exception as e:
             logging.exception(f"❗️  Network simulation error: {e}")
             return   
+        
+    def _generate_network_conditions(self):
+        # TODO: Implement selection of network conditions from frontend
+        if self.config.participant["network_args"]["simulation"]:
+            interface = self.config.participant["network_args"]["interface"]
+            bandwidth = self.config.participant["network_args"]["bandwidth"]
+            delay = self.config.participant["network_args"]["delay"]
+            delay_distro = self.config.participant["network_args"]["delay-distro"]
+            delay_distribution = self.config.participant["network_args"]["delay-distribution"]
+            loss = self.config.participant["network_args"]["loss"]
+            duplicate = self.config.participant["network_args"]["duplicate"]
+            corrupt = self.config.participant["network_args"]["corrupt"]
+            reordering = self.config.participant["network_args"]["reordering"]
+            logging.info(
+                f"🌐  Network simulation is enabled | Interface: {interface} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
+            )
+            try:
+                results = subprocess.run(
+                    [
+                        "tcset",
+                        str(interface),
+                        "--rate",
+                        str(bandwidth),
+                        "--delay",
+                        str(delay),
+                        "--delay-distro",
+                        str(delay_distro),
+                        "--delay-distribution",
+                        str(delay_distribution),
+                        "--loss",
+                        str(loss),
+                        "--duplicate",
+                        str(duplicate),
+                        "--corrupt",
+                        str(corrupt),
+                        "--reordering",
+                        str(reordering),
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except Exception as e:
+                logging.exception(f"🌐  Network simulation error: {e}")
+                return
+        else:
+            logging.info("🌐  Network simulation is disabled. Using default network conditions...")    

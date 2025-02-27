@@ -12,6 +12,7 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
+from nebula.core.addonmanager import AddondManager
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -159,7 +160,7 @@ class Engine:
                 engine=self,
             )
 
-        self._event_manager = EventManager()
+        self._event_manager = EventManager(verbose=True)
 
         logging.info("Registering callbacks for MessageEvents...")
         self.register_message_events_callbacks()
@@ -167,6 +168,8 @@ class Engine:
         # Additional callbacks not registered automatically
         self.register_message_callback(("model", "initialization"), "model_initialization_callback")
         self.register_message_callback(("model", "update"), "model_update_callback")
+        
+        self._addon_manager = AddondManager(self, self.config)
 
     @property
     def cm(self):
@@ -545,7 +548,7 @@ class Engine:
             await self.nm.update_neighbors(addr, remove=True)
 
     """                                                     ##############################
-                                                            #    ENGINE FUNCTIONALITY    #
+                                                            #    REGISTERING CALLBACKS   #
                                                             ##############################
     """
 
@@ -577,9 +580,11 @@ class Engine:
     async def get_geoloc(self):
         return await self.nm.get_geoloc()
     
-    async def calculate_distance(self, latitude, longitude):
-        return await self.nm.calculate_distance(latitude, longitude)
     
+    """                                                     ##############################
+                                                            #    ENGINE FUNCTIONALITY    #
+                                                            ##############################
+    """
 
     async def _aditional_node_start(self):
         self.update_sinchronized_status(False)
@@ -684,6 +689,7 @@ class Engine:
             await self.nm.set_configs()
         await self._reporter.start()
         await self.cm.deploy_additional_services()
+        await self._addon_manager.deploy_additional_services()
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
 
     async def deploy_federation(self):
