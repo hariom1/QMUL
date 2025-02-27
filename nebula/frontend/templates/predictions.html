@@ -1,0 +1,813 @@
+{% extends "layout.html" %}
+{% block body %}
+{{ super() }}
+
+<section id="predictions" class="base">
+    <div class="container-fluid px-4">
+        <div class="row p-3">
+            <div class="col-12 mb-4 text-center">
+                <h1 class="logo" style="text-align: center">Predictions</h1>
+                {% if scenario_name %}
+                <p style="text-align: center" class="fst-italic"><b id="scenario-name" data-name="{{ scenario_name }}">{{ scenario_name}}</b></p>
+                {% else %}
+                <p style="text-align: center" class="fst-italic"><b id="scenario-name">No scenario selected</b>.</p>
+                {% endif %}
+                <p class="lead text-secondary">Real-time visualization of model predictions from participants</p>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">Total Predictions</h6>
+                            <h2 class="card-text" id="totalPredictions">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">Average Accuracy</h6>
+                            <h2 class="card-text" id="avgAccuracy">0%</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">Active Participants</h6>
+                            <h2 class="card-text" id="activeParticipants">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">Current Round</h6>
+                            <h2 class="card-text" id="currentRound">0</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">Accuracy Trends</h5>
+                            <div class="chart-wrapper">
+                                <canvas id="accuracyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">Participant Performance</h5>
+                            <div class="chart-wrapper">
+                                <canvas id="participantChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">Class Distribution</h5>
+                            <div class="chart-wrapper">
+                                <canvas id="distributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">Prediction Accuracy Timeline</h5>
+                            <div class="chart-wrapper">
+                                <canvas id="timelineChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Predictions Panel -->
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Live Predictions</h5>
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary btn-sm" id="showAllPredictions">Show All</button>
+                                <button class="btn btn-outline-primary btn-sm" id="showCorrectOnly">Show Correct</button>
+                                <button class="btn btn-outline-primary btn-sm" id="showIncorrectOnly">Show Incorrect</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="prediction-stream" id="predictionStream">
+                            <!-- Predictions will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+.prediction-stream {
+    height: 400px;
+    overflow-y: auto;
+    padding: 1rem;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+.prediction-card {
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 8px;
+    transition: transform 0.2s;
+    animation: slidein 0.3s ease-out;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+@keyframes slidein {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 1rem;
+    height: auto !important;
+}
+
+.card-header {
+    border-bottom: none;
+    background-color: transparent;
+    padding: 1.5rem 1.5rem 0;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px !important;
+    margin-bottom: 1rem;
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.prediction-details {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(0,0,0,0.02);
+    border-radius: 6px;
+}
+
+.prediction-details.show {
+    display: block;
+}
+
+.prediction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+    background: white;
+    transition: background-color 0.2s;
+}
+
+.prediction-item:hover {
+    background: rgba(0,0,0,0.01);
+}
+
+.prediction-item.correct {
+    border-left: 3px solid #28a745;
+}
+
+.prediction-item.incorrect {
+    border-left: 3px solid #dc3545;
+}
+
+.toggle-details {
+    cursor: pointer;
+    color: #0d6efd;
+    text-decoration: underline;
+    font-size: 0.9rem;
+}
+
+.predictions-table {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.predictions-table th {
+    font-weight: 600;
+    text-align: left;
+    padding: 0.5rem;
+    background: rgba(0,0,0,0.03);
+}
+
+.predictions-table td {
+    padding: 0.5rem;
+}
+
+.predictions-table tr:nth-child(even) {
+    background: rgba(0,0,0,0.01);
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment"></script>
+
+<script type="text/javascript">
+// Constants for data limitations
+const MAX_DATA_POINTS = 100;
+const MAX_PREDICTIONS_SHOWN = 100;
+const CHART_UPDATE_INTERVAL = 100; // ms
+
+// Store prediction data
+const predictionData = {
+    participants: new Map(),
+    distribution: {
+        correct: Array(10).fill(0),
+        incorrect: Array(10).fill(0)
+    },
+    timeline: {
+        timestamps: [],
+        accuracies: []
+    },
+    totalPredictions: 0,
+    lastUpdate: Date.now(),
+    realtimeData: new Map() // Add new structure for real-time data
+};
+
+// Initialize charts with improved styling and fixed heights
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: {
+        duration: 750,
+        easing: 'easeInOutQuart'
+    },
+    plugins: {
+        legend: {
+            position: 'top',
+        },
+        tooltip: {
+            mode: 'index',
+            intersect: false,
+            backgroundColor: 'rgba(255,255,255,0.9)',
+            titleColor: '#000',
+            bodyColor: '#000',
+            borderColor: '#ddd',
+            borderWidth: 1
+        }
+    }
+};
+
+// Accuracy Chart
+const accuracyChart = new Chart(document.getElementById('accuracyChart'), {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: []
+    },
+    options: {
+        ...chartOptions,
+        plugins: {
+            ...chartOptions.plugins,
+            title: {
+                display: true,
+                text: 'Participant Accuracy Over Time'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                grid: {
+                    color: 'rgba(0,0,0,0.05)'
+                }
+            }
+        }
+    }
+});
+
+// Participant Chart
+const participantChart = new Chart(document.getElementById('participantChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [],
+        datasets: [{
+            data: [],
+            backgroundColor: []
+        }]
+    },
+    options: {
+        ...chartOptions,
+        cutout: '60%',
+        plugins: {
+            ...chartOptions.plugins,
+            title: {
+                display: true,
+                text: 'Participant Distribution'
+            }
+        }
+    }
+});
+
+// Distribution Chart
+const distributionChart = new Chart(document.getElementById('distributionChart'), {
+    type: 'bar',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Correct',
+            data: [],
+            backgroundColor: 'rgba(40, 167, 69, 0.5)',
+            borderColor: 'rgb(40, 167, 69)',
+            borderWidth: 1
+        }, {
+            label: 'Incorrect',
+            data: [],
+            backgroundColor: 'rgba(220, 53, 69, 0.5)',
+            borderColor: 'rgb(220, 53, 69)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        ...chartOptions,
+        plugins: {
+            ...chartOptions.plugins,
+            title: {
+                display: true,
+                text: 'Prediction Distribution by Class'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(0,0,0,0.05)'
+                }
+            }
+        }
+    }
+});
+
+// Timeline Chart
+const timelineChart = new Chart(document.getElementById('timelineChart'), {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Accuracy',
+            data: [],
+            borderColor: 'rgb(13, 110, 253)',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            fill: true,
+            tension: 0.4
+        }]
+    },
+    options: {
+        ...chartOptions,
+        plugins: {
+            ...chartOptions.plugins,
+            title: {
+                display: true,
+                text: 'Real-time Accuracy Timeline'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                grid: {
+                    color: 'rgba(0,0,0,0.05)'
+                }
+            }
+        }
+    }
+});
+
+function updateDashboard(data, isHistorical = false) {
+    const now = Date.now();
+    if (!isHistorical && now - predictionData.lastUpdate < CHART_UPDATE_INTERVAL) {
+        return;
+    }
+    predictionData.lastUpdate = now;
+
+    const participantId = data.participant_id;
+    const predictions = data.predictions;
+    const round = parseInt(data.round);
+    
+    // Update summary cards
+    predictionData.totalPredictions += predictions.length;
+    document.getElementById('totalPredictions').textContent = predictionData.totalPredictions;
+    document.getElementById('currentRound').textContent = round;
+    document.getElementById('activeParticipants').textContent = predictionData.participants.size + 1;
+    
+    // Calculate accuracy for current round
+    let correct = 0;
+    predictions.forEach(pred => {
+        const groundTruth = parseInt(pred.ground_truth);
+        const prediction = parseInt(pred.prediction);
+        
+        if (groundTruth === prediction) {
+            correct++;
+            predictionData.distribution.correct[groundTruth]++;
+        } else {
+            predictionData.distribution.incorrect[groundTruth]++;
+        }
+    });
+    
+    const accuracy = (correct / predictions.length) * 100;
+    
+    // Initialize participant data
+    if (!predictionData.participants.has(participantId)) {
+        predictionData.participants.set(participantId, {
+            lastRoundAccuracy: 0,
+            roundData: new Map(),
+            color: getRandomColor()
+        });
+        
+        // Initialize realtime data for new participant
+        predictionData.realtimeData.set(participantId, {
+            timestamps: [],
+            accuracies: [],
+            currentRound: round
+        });
+        
+        // Add new dataset to accuracy chart
+        accuracyChart.data.datasets.push({
+            label: `Participant ${participantId}`,
+            data: [],
+            borderColor: predictionData.participants.get(participantId).color,
+            backgroundColor: `${predictionData.participants.get(participantId).color}33`,
+            fill: false,
+            tension: 0.4
+        });
+    }
+    
+    const participant = predictionData.participants.get(participantId);
+    participant.lastRoundAccuracy = accuracy;
+    participant.roundData.set(round, accuracy);
+    
+    // Update realtime data if not historical
+    if (!isHistorical) {
+        const realtimeParticipant = predictionData.realtimeData.get(participantId);
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // If round changed, add a marker point
+        if (realtimeParticipant.currentRound !== round) {
+            realtimeParticipant.timestamps.push(`Round ${round}`);
+            realtimeParticipant.accuracies.push(accuracy);
+            realtimeParticipant.currentRound = round;
+        } else {
+            realtimeParticipant.timestamps.push(timestamp);
+            realtimeParticipant.accuracies.push(accuracy);
+        }
+        
+        // Keep only last N points for performance
+        if (realtimeParticipant.timestamps.length > MAX_DATA_POINTS) {
+            realtimeParticipant.timestamps = realtimeParticipant.timestamps.slice(-MAX_DATA_POINTS);
+            realtimeParticipant.accuracies = realtimeParticipant.accuracies.slice(-MAX_DATA_POINTS);
+        }
+    }
+    
+    // Calculate average accuracy for current round only
+    let totalCurrentRoundAccuracy = 0;
+    let participantsInCurrentRound = 0;
+    
+    predictionData.participants.forEach((participant) => {
+        if (participant.roundData.has(round)) {
+            totalCurrentRoundAccuracy += participant.lastRoundAccuracy;
+            participantsInCurrentRound++;
+        }
+    });
+    
+    const currentRoundAvgAccuracy = participantsInCurrentRound > 0 
+        ? totalCurrentRoundAccuracy / participantsInCurrentRound 
+        : 0;
+        
+    document.getElementById('avgAccuracy').textContent = `${currentRoundAvgAccuracy.toFixed(1)}%`;
+    
+    // Update timeline data
+    predictionData.timeline.timestamps.push(new Date().toLocaleTimeString());
+    predictionData.timeline.accuracies.push(accuracy);
+    
+    if (predictionData.timeline.timestamps.length > MAX_DATA_POINTS) {
+        predictionData.timeline.timestamps = predictionData.timeline.timestamps.slice(-MAX_DATA_POINTS);
+        predictionData.timeline.accuracies = predictionData.timeline.accuracies.slice(-MAX_DATA_POINTS);
+    }
+    
+    requestAnimationFrame(() => {
+        updateCharts(isHistorical);
+    });
+    
+    updatePredictionStream(data, accuracy);
+}
+
+function updateCharts(isHistorical = false) {
+    const currentRound = parseInt(document.getElementById('currentRound').textContent);
+    
+    // Update accuracy chart based on data type
+    if (isHistorical) {
+        // For historical data, show only round-based data points
+        const maxRounds = Math.max(...Array.from(predictionData.participants.values())
+            .map(p => Math.max(...p.roundData.keys())));
+            
+        accuracyChart.data.labels = Array.from({length: maxRounds}, (_, i) => `Round ${i}`);
+        
+        predictionData.participants.forEach((participant, id) => {
+            const datasetIndex = Array.from(predictionData.participants.keys()).indexOf(id);
+            const roundAccuracies = Array.from({length: maxRounds}, (_, i) => 
+                participant.roundData.get(i) || null
+            );
+            accuracyChart.data.datasets[datasetIndex].data = roundAccuracies;
+        });
+    } else {
+        // For real-time data, show all data points including inter-round markers
+        predictionData.participants.forEach((participant, id) => {
+            const datasetIndex = Array.from(predictionData.participants.keys()).indexOf(id);
+            const realtimeData = predictionData.realtimeData.get(id);
+            
+            if (realtimeData) {
+                accuracyChart.data.labels = realtimeData.timestamps;
+                accuracyChart.data.datasets[datasetIndex].data = realtimeData.accuracies;
+            }
+        });
+    }
+    
+    // Update participant chart
+    participantChart.data.labels = Array.from(predictionData.participants.keys())
+        .map(id => `Participant ${id}`);
+    participantChart.data.datasets[0].data = Array.from(predictionData.participants.values())
+        .map(p => p.lastRoundAccuracy);
+    participantChart.data.datasets[0].backgroundColor = Array.from(predictionData.participants.values())
+        .map(p => p.color);
+    
+    // Update other charts
+    distributionChart.data.labels = [...Array(10).keys()];
+    distributionChart.data.datasets[0].data = predictionData.distribution.correct;
+    distributionChart.data.datasets[1].data = predictionData.distribution.incorrect;
+    
+    timelineChart.data.labels = predictionData.timeline.timestamps;
+    timelineChart.data.datasets[0].data = predictionData.timeline.accuracies;
+    
+    // Batch render all charts
+    requestAnimationFrame(() => {
+        accuracyChart.update('none');
+        participantChart.update('none');
+        distributionChart.update('none');
+        timelineChart.update('none');
+    });
+}
+
+async function loadHistoricalData() {
+    console.log('Loading historical data...');
+    const currentScenario = document.getElementById('scenario-name')?.dataset.name;
+    if (!currentScenario) {
+        console.log('No scenario name found, skipping historical data load');
+        return;
+    }
+
+    try {
+        console.log(`Fetching historical data for scenario: ${currentScenario}`);
+        const response = await fetch(`/platform/dashboard/${currentScenario}/historical_predictions`);
+        
+        if (!response.ok) {
+            console.error(`Failed to fetch historical data: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('Error details:', errorText);
+            return;
+        }
+        
+        const predictions = await response.json();
+        console.log(`Loaded ${predictions.length} historical prediction records`);
+        
+        if (predictions.length === 0) {
+            console.log('No historical predictions found for this scenario');
+            return;
+        }
+
+        // Reset prediction data before loading historical data
+        predictionData.participants.clear();
+        predictionData.distribution.correct = Array(10).fill(0);
+        predictionData.distribution.incorrect = Array(10).fill(0);
+        predictionData.timeline.timestamps = [];
+        predictionData.timeline.accuracies = [];
+        predictionData.totalPredictions = 0;
+
+        // Process historical predictions in chronological order
+        predictions.sort((a, b) => parseInt(a.round) - parseInt(b.round));
+        console.log(`Processing predictions from round ${predictions[0].round} to ${predictions[predictions.length-1].round}`);
+        
+        // Update dashboard with each prediction batch, marking them as historical
+        for (const prediction of predictions) {
+            console.log(`Processing predictions for participant ${prediction.participant_id} round ${prediction.round}`);
+            updateDashboard(prediction, true);
+        }
+        
+        console.log('Historical data loading complete');
+    } catch (error) {
+        console.error('Error loading historical data:', error);
+    }
+}
+
+function updatePredictionStream(data, accuracy) {
+    const stream = document.getElementById('predictionStream');
+    const predictionCard = document.createElement('div');
+    predictionCard.className = `prediction-card bg-light ${accuracy >= 50 ? 'correct' : 'incorrect'}`;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    const detailsId = `details-${Date.now()}-${data.participant_id}`;
+    
+    // Create a table with individual predictions
+    const predictionRows = data.predictions.map((pred, i) => {
+        const isCorrect = parseInt(pred.ground_truth) === parseInt(pred.prediction);
+        return `
+            <tr class="${isCorrect ? 'correct' : 'incorrect'}">
+                <td>${i + 1}</td>
+                <td>${pred.index}</td>
+                <td>${pred.ground_truth}</td>
+                <td>${pred.prediction}</td>
+                <td>
+                    <span class="badge ${isCorrect ? 'bg-success' : 'bg-danger'}">
+                        ${isCorrect ? 'Correct' : 'Incorrect'}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-primary view-image" data-index="${pred.index}">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    predictionCard.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <span class="badge ${accuracy >= 50 ? 'bg-success' : 'bg-danger'} mb-2">
+                    ${accuracy.toFixed(1)}% Accuracy
+                </span>
+                <h6 class="mb-1">Participant ${data.participant_id} (${data.ip})</h6>
+                <small class="text-muted">Round ${data.round} - ${timestamp}</small>
+                <div class="mt-2">
+                    <span class="toggle-details" data-target="${detailsId}">
+                        Show individual predictions
+                    </span>
+                </div>
+            </div>
+            <div class="text-end">
+                <div class="badge bg-primary">${data.predictions.length} predictions</div>
+            </div>
+        </div>
+        <div id="${detailsId}" class="prediction-details">
+            <table class="predictions-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Test Set Index</th>
+                        <th>Ground Truth</th>
+                        <th>Prediction</th>
+                        <th>Result</th>
+                        <th>Image</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${predictionRows}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    // Add click handler for toggling details
+    const toggleButton = predictionCard.querySelector('.toggle-details');
+    const detailsSection = predictionCard.querySelector('.prediction-details');
+    
+    toggleButton.addEventListener('click', () => {
+        detailsSection.classList.toggle('show');
+        toggleButton.textContent = detailsSection.classList.contains('show') 
+            ? 'Hide individual predictions' 
+            : 'Show individual predictions';
+    });
+    
+    stream.insertBefore(predictionCard, stream.firstChild);
+    
+    // Keep only last N prediction cards for better performance
+    while (stream.children.length > MAX_PREDICTIONS_SHOWN) {
+        stream.removeChild(stream.lastChild);
+    }
+
+    // Add event handler for image buttons
+    predictionCard.querySelectorAll('.view-image').forEach(button => {
+        button.addEventListener('click', async () => {
+            const index = button.dataset.index;
+            const currentScenario = document.getElementById('scenario-name')?.dataset.name;
+            if (!currentScenario) return;
+            
+            // Create and show modal
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Test Image #${index}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="/platform/dashboard/${currentScenario}/predictions/test_image/${index}" 
+                                 class="img-fluid" alt="Test image">
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            modal.addEventListener('hidden.bs.modal', () => {
+                modal.remove();
+            });
+        });
+    });
+}
+
+function getRandomColor() {
+    const hue = Math.random() * 360;
+    return `hsl(${hue}, 70%, 50%)`;
+}
+
+// Filter buttons functionality
+document.getElementById('showAllPredictions').addEventListener('click', () => {
+    document.querySelectorAll('.prediction-card').forEach(card => card.style.display = 'block');
+});
+
+document.getElementById('showCorrectOnly').addEventListener('click', () => {
+    document.querySelectorAll('.prediction-card').forEach(card => {
+        card.style.display = card.classList.contains('correct') ? 'block' : 'none';
+    });
+});
+
+document.getElementById('showIncorrectOnly').addEventListener('click', () => {
+    document.querySelectorAll('.prediction-card').forEach(card => {
+        card.style.display = card.classList.contains('incorrect') ? 'block' : 'none';
+    });
+});
+
+// Load historical data when the page loads
+document.addEventListener('DOMContentLoaded', loadHistoricalData);
+
+// WebSocket event listener for real-time updates
+socket.addEventListener('message', function(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'predictions_update') {
+        const currentScenario = document.getElementById('scenario-name')?.dataset.name;
+        if (!currentScenario || data.scenario_name === currentScenario) {
+            updateDashboard(data);
+        }
+    }
+});
+
+// Debounce window resize events
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        accuracyChart.resize();
+        participantChart.resize();
+        distributionChart.resize();
+        timelineChart.resize();
+    }, 250);
+});
+
+</script>
+
+{% endblock %}

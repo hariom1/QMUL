@@ -151,6 +151,8 @@ async def main(config):
         config.participant["aggregator_args"]["algorithm"] = "DualHistAgg"
     else:
         raise ValueError(f"Trainer {trainer_str} not supported")
+    
+    model.set_config(config)
 
     if config.participant["device_args"]["malicious"]:
         node_cls = MaliciousNode

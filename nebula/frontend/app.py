@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import datetime
+import glob
 import io
 import json
 import logging
@@ -1432,6 +1433,109 @@ async def nebula_dashboard_deployment_run(
     )
     return RedirectResponse(url="/platform/dashboard", status_code=303)
     # return Response(content="Success", status_code=200)
+
+
+@app.post("/platform/dashboard/predictions/update")
+async def update_predictions(request: Request):
+    if request.headers.get("content-type") == "application/json":
+        data = await request.json()
+        message = {
+            "type": "predictions_update",
+            "participant_id": data["participant_id"],
+            "ip": data["ip"],
+            "round": data["round"],
+            "scenario_name": data.get("scenario_name", "unknown"),
+            "predictions": data["predictions"]
+        }
+        await manager.broadcast(json.dumps(message))
+        return JSONResponse({"status": "success"}, status_code=200)
+    else:
+        raise HTTPException(status_code=400)
+
+
+@app.get("/platform/dashboard/{scenario_name}/historical_predictions")
+async def get_historical_predictions(scenario_name: str, session: dict = Depends(get_session)):
+    if "user" not in session:
+        raise HTTPException(status_code=401)
+        
+    try:
+        predictions_path = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, "predictions"))
+        predictions_data = []
+        
+        if os.path.exists(predictions_path):
+            prediction_files = glob.glob(os.path.join(predictions_path, "predictions_*.json"))
+            
+            for file_path in prediction_files:
+                try:
+                    with open(file_path, 'r') as f:
+                        prediction_data = json.load(f)
+                        predictions_data.append(prediction_data)
+                except json.JSONDecodeError:
+                    logging.error(f"Error decoding JSON from {file_path}")
+                    continue
+                except Exception as e:
+                    logging.error(f"Error processing prediction file {file_path}: {e}")
+                    continue
+        
+        predictions_data.sort(key=lambda x: int(x.get('round', 0)))
+        return JSONResponse(predictions_data)
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical predictions: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/platform/dashboard/predictions", response_class=HTMLResponse)
+@app.get("/platform/dashboard/{scenario_name}/predictions", response_class=HTMLResponse)
+async def nebula_dashboard_predictions(request: Request, scenario_name: str = None, session: dict = Depends(get_session)):
+    if "user" in session:
+        return templates.TemplateResponse(
+            "predictions.html",
+            {
+                "request": request,
+                "user_logged_in": session.get("user"),
+                "user_role": session.get("role"),
+                "scenario_name": scenario_name,
+                "scenario": get_scenario_by_name(scenario_name) if scenario_name else None
+            },
+        )
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+@app.get("/platform/dashboard/{scenario_name}/predictions/test_image/{index}")
+async def get_test_image(scenario_name: str, index: int, session: dict = Depends(get_session)):
+    if "user" not in session:
+        raise HTTPException(status_code=401)
+        
+    try:
+        import h5py
+        import numpy as np
+        from PIL import Image
+        import io
+        
+        dataset_path = os.path.join(settings.config_dir, scenario_name, f"global_test.h5")
+        
+        if not os.path.exists(dataset_path):
+            raise HTTPException(status_code=404, detail="Dataset file not found")
+            
+        with h5py.File(dataset_path, 'r') as f:
+            test_data = f['test_data'][int(index)]
+            
+            if test_data.shape[-1] == 1:  # Grayscale
+                img = Image.fromarray(test_data.squeeze() * 255).convert('L')
+            else:  # RGB/RGBA
+                img = Image.fromarray((test_data * 255).astype(np.uint8))
+            
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            
+            return Response(content=img_byte_arr.getvalue(), media_type="image/png")
+            
+    except Exception as e:
+        logging.error(f"Error serving test image: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

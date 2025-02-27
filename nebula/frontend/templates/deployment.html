@@ -2187,6 +2187,8 @@
                                 case 503:
                                     errorMessage = "Not enough resources to run a scenario. Please try again later.";
                                 break;
+                                default:
+                                    errorMessage = "An error occurred while running the scenario. Please try again.";
                             }
                             // If the user is a demo, show a modal with a message
                             $('#confirm-modal').on('hidden.bs.modal', function () {

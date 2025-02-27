@@ -108,7 +108,7 @@ class NebulaPartitionHandler(Dataset, ABC):
             except Exception as e:
                 raise RuntimeError(f"[NebulaPartitionHandler] Error reading index {idx} from file {self.file_path}: {e}")
 
-        return data, target
+        return data, target, idx
 
 
 class NebulaPartition:

@@ -22,7 +22,7 @@ class CIFAR10PartitionHandler(NebulaPartitionHandler):
         ])
 
     def __getitem__(self, idx):
-        img, target = super().__getitem__(idx)
+        img, target, index = super().__getitem__(idx)
 
         img = Image.fromarray(img)
 
@@ -32,7 +32,7 @@ class CIFAR10PartitionHandler(NebulaPartitionHandler):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img, target
+        return img, target, index
 
 
 class CIFAR10Dataset(NebulaDataset):

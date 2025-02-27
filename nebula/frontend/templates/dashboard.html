@@ -164,6 +164,8 @@
                                 class="label btn btn-dark">Monitor</a>
                             <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=name) }}"
                                 class="label btn btn-dark">Real-time metrics</a>
+                            <a href="{{ url_for('nebula_dashboard_predictions', scenario_name=name) }}"
+                                class="label btn btn-dark">Predictions</a>
                             <a id="note-btn-{{ name }}" title="Save Note" data-scenario-name="{{ name }}" class="label btn btn-dark"><i
                                     class="fa fa-sticky-note" style="color: white;"></i></a>
                             <a id="config-btn-{{ name }}" title="Scenario Config" data-scenario-name="{{ name }}" class="label btn btn-dark"><i

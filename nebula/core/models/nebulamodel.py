@@ -5,6 +5,10 @@ import lightning as pl
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
+import os
+import aiohttp
+import json
 import torch
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
@@ -97,9 +101,11 @@ class NebulaModel(pl.LightningModule, ABC):
 
     def generate_confusion_matrix(self, phase, print_cm=False, plot_cm=False):
         """
-        Generate and plot the confusion matrix for the given phase.
+        Generate and plot confusion matrix.
         Args:
-            phase (str): One of 'Train', 'Validation', 'Test (Local)', or 'Test (Global)'
+            phase (str): One of 'Test (Local)' or 'Test (Global)'
+            print_cm (bool): Whether to print the confusion matrix
+            plot_cm (bool): Whether to plot the confusion matrix
         """
         if phase == "Test (Local)":
             if self.cm is None:
@@ -121,8 +127,8 @@ class NebulaModel(pl.LightningModule, ABC):
             fig, ax = plt.subplots(figsize=(12, 12))
             sns.heatmap(
                 cm_numpy,
-                annot=False,
-                fmt="",
+                annot=True,  # Show values in cells
+                fmt="d",     # Use integer format
                 cmap="Blues",
                 ax=ax,
                 xticklabels=classes,
@@ -132,21 +138,95 @@ class NebulaModel(pl.LightningModule, ABC):
             ax.set_xlabel("Predicted labels", fontsize=12)
             ax.set_ylabel("True labels", fontsize=12)
             ax.set_title(f"{phase} Confusion Matrix", fontsize=16)
-            plt.xticks(rotation=90, fontsize=6)
-            plt.yticks(rotation=0, fontsize=6)
+            plt.xticks(rotation=90, fontsize=8)
+            plt.yticks(rotation=0, fontsize=8)
             plt.tight_layout()
             self.logger.log_figure(fig, step=self.round, name=f"{phase}/CM")
             plt.close()
 
             del cm_numpy, classes, fig, ax
 
-        # Restablecer la matriz de confusión
+        # Reset the confusion matrix
         if phase == "Test (Local)":
             self.cm.reset()
         else:
             self.cm_global.reset()
 
         del cm
+
+    def save_predictions(self, phase, indices, ground_truth, predictions):
+        """
+        Save predictions to JSON files and send to frontend visualization
+        Args:
+            phase: Test phase ('Test (Local)' or 'Test (Global)')
+            indices: Sample indices from the test set
+            ground_truth: True labels
+            predictions: Model predictions
+        """
+        try:
+            scenario_name = self.config.participant["scenario_args"]["name"]
+            participant_id = self.config.participant["device_args"]["idx"]
+            round_num = self.round if hasattr(self, 'round') else 0
+            ip = self.config.participant["network_args"]["ip"]
+            
+            pred_classes = torch.argmax(predictions, dim=1).cpu().numpy()
+            
+            predictions_data = []
+            for idx, gt, pred in zip(indices.cpu().numpy(), 
+                                   ground_truth.cpu().numpy(), 
+                                   pred_classes):
+                predictions_data.append({
+                    "index": int(idx),
+                    "ground_truth": int(gt),
+                    "prediction": int(pred)
+                })
+            
+            logging_training.info(f"Predictions: {predictions_data}")
+            
+            json_data = {
+                "type": "predictions_update",
+                "participant_id": participant_id,
+                "ip": ip,
+                "round": round_num,
+                "scenario_name": scenario_name,
+                "predictions": predictions_data,
+                "phase": phase,
+                "timestamp": pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            dir_predictions = os.path.join(self.config.participant["tracking_args"]["log_dir"],
+                                         scenario_name, 
+                                         "predictions")
+            os.makedirs(dir_predictions, exist_ok=True)
+            
+            json_filepath = os.path.join(dir_predictions,
+                                       f"predictions_{participant_id}_round_{round_num}.json")
+            with open(json_filepath, 'w') as f:
+                json.dump(json_data, f)
+            
+            url = f"http://{self.config.participant['scenario_args']['controller']}/platform/dashboard/predictions/update"
+            
+            data = {
+                "participant_id": participant_id,
+                "scenario_name": scenario_name,
+                "ip": ip,
+                "round": round_num,
+                "predictions": predictions_data
+            }
+
+            async def send_predictions():
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        async with session.post(url, json=data, timeout=5) as response:
+                            await response.text()
+                    except Exception as e:
+                        logging.error(f"Failed to send predictions to frontend: {e}")
+
+            loop = self.get_communication_manager().loop
+            loop.create_task(send_predictions())
+
+        except Exception as e:
+            logging.error(f"Failed to save predictions or send to frontend: {e}")
 
     def __init__(
         self,
@@ -192,11 +272,21 @@ class NebulaModel(pl.LightningModule, ABC):
             "Test (Local)": 0,
             "Test (Global)": 0,
         }
+        
+        self.config = None
 
         # Communication manager for sending messages from the model (e.g., prototypes, gradients)
         # Model parameters are sent by default using network.propagator
         self.communication_manager = None
 
+    def set_config(self, config):
+        self.config = config
+        
+    def get_config(self):
+        if self.config is None:
+            raise ValueError("Config not set.")
+        return self.config
+    
     def set_communication_manager(self, communication_manager):
         self.communication_manager = communication_manager
 
@@ -217,7 +307,8 @@ class NebulaModel(pl.LightningModule, ABC):
 
     def step(self, batch, batch_idx, phase):
         """Training/validation/test step."""
-        x, y = batch
+        # Unpack the batch which now includes indices
+        x, y, _ = batch
         y_pred = self.forward(x)
         loss = self.criterion(y_pred, y)
         self.process_metrics(phase, y_pred, y, loss)
@@ -270,15 +361,24 @@ class NebulaModel(pl.LightningModule, ABC):
         """
         Test step for the model.
         Args:
-            batch:
-            batch_idx:
-
+            batch: Tuple containing (inputs, targets, indices)
+            batch_idx: Index of the batch
+            dataloader_idx: Index of the dataloader (0 for local, 1 for global)
         Returns:
+            loss: The loss value for this batch
         """
+        x, y, indices = batch
+        y_pred = self.forward(x)
+        loss = self.criterion(y_pred, y)
+        
         if dataloader_idx == 0:
-            return self.step(batch, batch_idx=batch_idx, phase="Test (Local)")
+            self.process_metrics("Test (Local)", y_pred, y)
         else:
-            return self.step(batch, batch_idx=batch_idx, phase="Test (Global)")
+            self.process_metrics("Test (Global)", y_pred, y)
+            if hasattr(self, 'save_predictions'):
+                self.save_predictions("Test (Global)", indices, y, y_pred)
+
+        return loss
 
     def on_test_start(self):
         logging_training.info(f"{'=' * 10} [Testing] Started {'=' * 10}")
