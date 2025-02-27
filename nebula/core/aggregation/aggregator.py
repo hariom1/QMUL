@@ -4,15 +4,30 @@ from abc import ABC, abstractmethod
 from functools import partial
 from nebula.core.utils.locker import Locker
 from nebula.core.aggregation.updatehandlers.updatehandler import factory_update_handler
+from nebula.core.eventmanager import NodeEvent
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
 
+class AggregationEvent(NodeEvent):
+    def __init__(self, updates : dict, expected_nodes : set, missing_nodes : set):
+        self._updates = updates
+        self._expected_nodes = expected_nodes
+        self._missing_nodes = missing_nodes
+        
+    def __str__(self):
+        return "Aggregation Ready"
+        
+    async def get_event_data(self) -> tuple[dict, set, set]:
+        return (self._updates, self._expected_nodes, self._missing_nodes)
+    
+    async def is_concurrent(self) -> bool:
+        return False   
+
 class AggregatorException(Exception):
     pass
-
 
 def create_target_aggregator(config, engine):
     from nebula.core.aggregation.fedavg import FedAvg
@@ -94,16 +109,6 @@ class Aggregator(ABC):
     def set_waiting_global_update(self):
         self._waiting_global_update = True
 
-    # async def reset(self):
-    #     await self._add_model_lock.acquire_async()
-    #     self._federation_nodes.clear()
-    #     self._pending_models_to_aggregate.clear()
-    #     try:
-    #         await self._aggregation_done_lock.release_async()
-    #     except:
-    #         pass
-    #     await self._add_model_lock.release_async()
-
     async def get_aggregation(self):
         try:
             timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
@@ -154,7 +159,8 @@ class Aggregator(ABC):
             )
         await self.cm.send_message_to_neighbors(message)
        
-        updates = await self.engine.apply_weight_strategy(updates)
+        agg_event = AggregationEvent(updates, self._federation_nodes, missing_nodes)
+        await self.engine.event_manager.publish_nodeevent(agg_event)
         aggregated_result = self.run_aggregation(updates)
         return aggregated_result
 

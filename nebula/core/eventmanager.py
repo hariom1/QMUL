@@ -11,12 +11,24 @@ class AddonEvent(ABC):
     @abstractmethod
     async def get_event_data(self):
         pass
+    
+class NodeEvent(ABC):
+    @abstractmethod
+    async def get_event_data(self):
+        pass
+    
+    @abstractmethod
+    async def is_concurrent(self):
+        pass
 
+#TODO pto unico de llamada
 class EventManager:
     def __init__(self, verbose=False):
         self._subscribers: dict[tuple[str, str], list] = {}
         self._addons_events_subs : dict [AddonEvent, list] = {}
         self._addons_event_lock = Locker("addons_event_lock", async_lock=True)
+        self._node_events_subs : dict [NodeEvent, list] = {}
+        self._node_events_lock = Locker("node_events_lock", async_lock=True)
         self._verbose = verbose
 
     def subscribe(self, event_type: tuple[str, str], callback: callable):
@@ -69,5 +81,35 @@ class EventManager:
                         callback(addonevent)
                     if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
                 except Exception as e:
-                    logging.exception(f"EventManager | Error in callback for AddonEvent {event_type.__name__}: {e}")              
+                    logging.exception(f"EventManager | Error in callback for AddonEvent {event_type.__name__}: {e}")
+                    
+                  
+    async def subscribe_nodeevent(self, nodeEventType: type[NodeEvent], callback: callable):
+        """Register a callback for a specific type of AddonEvent."""
+        async with self._node_events_lock:
+            if nodeEventType not in self._node_events_subs:
+                self._node_events_subs[nodeEventType] = []
+            self._node_events_subs[nodeEventType].append(callback)
+        logging.info(f"EventManager | Subscribed callback for NodeEvent type: {nodeEventType.__name__}")
+        
+    async def publish_nodeevent(self, nodeevent: NodeEvent):
+        """Trigger all callbacks registered for a specific type of AddonEvent."""
+        if self._verbose: logging.info(f"Publishing NodeEvent: {nodeevent}")
+        async with self._node_events_lock:
+            event_type = type(nodeevent)
+            if event_type not in self._node_events_subs:
+                if self._verbose: logging.error(f"EventManager | No subscribers for NodeEvent type: {event_type.__name__}")
+                return
 
+            for callback in self._node_events_subs[event_type]:
+                try:
+                    if asyncio.iscoroutinefunction(callback) or inspect.iscoroutine(callback):
+                        if await nodeevent.is_concurrent():
+                            asyncio.create_task(callback(nodeevent))
+                        else:
+                            await callback(nodeevent)
+                    else:
+                        callback(nodeevent)
+                    if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
+                except Exception as e:
+                    logging.exception(f"EventManager | Error in callback for NodeEvent {event_type.__name__}: {e}")

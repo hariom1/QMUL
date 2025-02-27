@@ -41,7 +41,7 @@
     "addr": "",
     "neighbors": "",
     "interface": "eth0",
-    "simulation": true,
+    "simulation": false,
     "bandwidth": "5Gbps",
     "delay": "0ms",
     "delay-distro": "0ms",

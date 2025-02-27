@@ -261,21 +261,7 @@ class CommunicationsManager:
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
-
-    # async def update_geolocalization(self, geoloc : dict):
-    #     async with self.get_connections_lock():
-    #         #logging.info("Update geolocs to simulate network conditions")
-    #         for source in geoloc.keys():
-    #             latitude, longitude = geoloc[source]
-    #             #logging.info(f"Update geolocs for source: {source}, geoloc: ({latitude},{longitude})")
-    #             if source in self.connections:
-    #                 self.connections[source].update_geolocation(latitude, longitude)
-    #             else: # When not connected to device yet
-    #                 #logging.info(f"Update conditions for not already connected source: {source})")
-    #                 if self.config.participant["network_args"]["simulation"]:
-    #                     distance = await self.engine.calculate_distance(latitude, longitude)
-    #                     await self.ns.set_network_conditions(source, distance)
-
+    
     def get_connections_lock(self):
         return self.connections_lock
 
