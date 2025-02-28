@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from nebula.addons.GPS.gpsmodule import GPSModule, GPSEvent
+from nebula.addons.GPS.gpsmodule import GPSModule
+from nebula.core.nebulaevents import GPSEvent
 import socket
 from nebula.core.utils.locker import Locker
 from geopy import distance
@@ -11,21 +12,16 @@ class NebulaGPS(GPSModule):
     BROADCAST_PORT = 50001              # Poort used for GPS
     INTERFACE = "eth2"                  # Interface to avoid network conditions
 
-    def __init__(self, config, event_manager : EventManager, addr, update_interval: float = 5.0, verbose=False):
+    def __init__(self, config, addr, update_interval: float = 5.0, verbose=False):
         self._config = config
         self._addr = addr
-        self._event_manager = event_manager
         self.update_interval = update_interval  # Frecuencia de emisión
         self.running = False
         self._node_locations = {}  # Diccionario para almacenar ubicaciones de nodos
         self._broadcast_socket = None
         self._nodes_location_lock = Locker("nodes_location_lock", async_lock=True)
         self._verbose = verbose
-
-    @property
-    def em(self):
-        return self._event_manager
-       
+   
     async def start(self):
         """Inicia el servicio de GPS, enviando y recibiendo ubicaciones."""
         logging.info("Starting NebulaGPS service...")
@@ -102,5 +98,5 @@ class NebulaGPS(GPSModule):
                     dist = await self.calculate_distance(self_lat, self_long, lat, long)
                     distances[addr] = (dist,(lat, long))
                 gpsevent = GPSEvent(distances)
-                asyncio.create_task(self.em.publish_addonevent(gpsevent))
+                asyncio.create_task(EventManager.get_instance().publish_addonevent(gpsevent))
         

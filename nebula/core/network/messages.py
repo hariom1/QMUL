@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from nebula.core.network.actions import factory_message_action, get_action_name_from_value, get_actions_names
 from nebula.core.pb import nebula_pb2
+from nebula.core.nebulaevents import MessageEvent
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -194,9 +195,3 @@ class MessagesManager:
         data = message_wrapper.SerializeToString()
         return data
 
-
-class MessageEvent:
-    def __init__(self, message_type, source, message):
-        self.source = source
-        self.message_type = message_type
-        self.message = message

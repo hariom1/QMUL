@@ -65,6 +65,7 @@ class SANetwork():
         ])
         
     async def module_actions(self):
+        logging.info("SA Network evaluating current scenario")
         await self._check_external_connection_service_status()
         await self._analize_topology_robustness()    
         

@@ -146,6 +146,9 @@ class Engine:
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
+        event_manager = EventManager.get_instance()
+        event_manager._initialize(verbose=True)
+
         # Mobility setup
         self._node_manager = None
         self.mobility = self.config.participant["mobility_args"]["mobility"]
@@ -160,15 +163,6 @@ class Engine:
                 engine=self,
             )
 
-        self._event_manager = EventManager(verbose=True)
-
-        logging.info("Registering callbacks for MessageEvents...")
-        self.register_message_events_callbacks()
-
-        # Additional callbacks not registered automatically
-        self.register_message_callback(("model", "initialization"), "model_initialization_callback")
-        self.register_message_callback(("model", "update"), "model_update_callback")
-        
         self._addon_manager = AddondManager(self, self.config)
 
     @property
@@ -178,10 +172,6 @@ class Engine:
     @property
     def reporter(self):
         return self._reporter
-
-    @property
-    def event_manager(self):
-        return self._event_manager
 
     @property
     def aggregator(self):
@@ -251,6 +241,14 @@ class Engine:
         logging.info(f"🤖  Update round count | from: {self.round} | to round: {new_round}")
         self.round = new_round
         self.trainer.set_current_round(new_round)
+
+    async def init_message_callbacks(self):
+        logging.info("Registering callbacks for MessageEvents...")
+        await self.register_message_events_callbacks()
+
+        # Additional callbacks not registered automatically
+        await self.register_message_callback(("model", "initialization"), "model_initialization_callback")
+        await self.register_message_callback(("model", "update"), "model_update_callback")
 
     """                                                     ##############################
                                                             #       MODEL CALLBACKS      #
@@ -552,7 +550,7 @@ class Engine:
                                                             ##############################
     """
 
-    def register_message_events_callbacks(self):
+    async def register_message_events_callbacks(self):
         me_dict = self.cm.get_messages_events()
         message_events = [
             (message_name, message_action)
@@ -566,16 +564,13 @@ class Engine:
             method = getattr(self, callback_name, None)
 
             if callable(method):
-                self.event_manager.subscribe((event_type, action), method)
+                await EventManager.get_instance().subscribe((event_type, action), method)
 
-    def register_message_callback(self, message_event: tuple[str, str], callback: str):
+    async def register_message_callback(self, message_event: tuple[str, str], callback: str):
         event_type, action = message_event
         method = getattr(self, callback, None)
         if callable(method):
-            self.event_manager.subscribe((event_type, action), method)
-
-    async def trigger_event(self, message_event):
-        await self.event_manager.publish(message_event)
+            await EventManager.get_instance().subscribe((event_type, action), method)
 
     async def get_geoloc(self):
         return await self.nm.get_geoloc()
@@ -669,6 +664,7 @@ class Engine:
         logging.info("Started trainer module...")
 
     async def start_communications(self):
+        await self.init_message_callbacks()
         logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
         logging.info(
             f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"

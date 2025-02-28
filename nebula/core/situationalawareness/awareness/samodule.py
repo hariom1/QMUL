@@ -30,7 +30,7 @@ class SAModule:
         self._topology = topology
         self._node_manager: NodeManager = nodemanager
         self._situational_awareness_network = SANetwork(self, self.cm, self._addr, self._topology)
-        self._situational_awareness_trainning = SATraining(self, "hybrid", "fastreboot")
+        self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot")
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
 
@@ -41,6 +41,10 @@ class SAModule:
     @property
     def san(self):
         return self._situational_awareness_network
+    
+    @property
+    def sat(self):
+        return self._situational_awareness_training
 
     @property
     def cm(self):
@@ -50,6 +54,7 @@ class SAModule:
     async def init(self):
         #if not self.is_additional_participant():
         await self.san.init()
+        await self.sat.init()
           
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
@@ -63,7 +68,8 @@ class SAModule:
         return (latitude, longitude)    
     
     async def mobility_actions(self):
-        await self.san.module_actions()    
+        await self.san.module_actions()
+        await self.sat.module_actions()    
 
 
     """                                                     ###############################

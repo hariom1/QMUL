@@ -12,9 +12,11 @@ from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.externalconnection.externalconnectionservice import factory_connection_service
 from nebula.core.network.forwarder import Forwarder
-from nebula.core.network.messages import MessageEvent, MessagesManager
+from nebula.core.network.messages import MessagesManager
+from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.propagator import Propagator
 from nebula.core.utils.locker import Locker
+from nebula.core.eventmanager import EventManager
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -141,16 +143,16 @@ class CommunicationsManager:
         await self.forwarder.forward(data, addr_from=addr_from)
 
     async def handle_message(self, message_event):
-        await self.engine.trigger_event(message_event)
+        asyncio.create_task(EventManager.get_instance().publish(message_event))
 
     async def handle_model_message(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
         if message.round == -1:
             model_init_event = MessageEvent(("model", "initialization"), source, message)
-            await self.engine.trigger_event(model_init_event)
+            asyncio.create_task(EventManager.get_instance().publish(model_init_event))
         else:
             model_updt_event = MessageEvent(("model", "update"), source, message)
-            await self.engine.trigger_event(model_updt_event)
+            asyncio.create_task(EventManager.get_instance().publish(model_updt_event))
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
         return self.mm.create_message(message_type, action, *args, **kwargs)

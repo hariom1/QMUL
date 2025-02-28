@@ -4,7 +4,7 @@ import logging
 from nebula.addons.networksimulation.networksimulator import NetworkSimulator
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
-from nebula.addons.GPS.gpsmodule import GPSEvent
+from nebula.core.nebulaevents import GPSEvent
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -18,8 +18,7 @@ class NebulaNS(NetworkSimulator):
     }
     IP_MULTICAST = "239.255.255.250"
     
-    def __init__(self, event_manager : EventManager, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
-        self._event_manager = event_manager
+    def __init__(self, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
         self._cm = communication_manager
         self._refresh_interval = changing_interval
         self._node_interface = interface
@@ -28,18 +27,14 @@ class NebulaNS(NetworkSimulator):
         self._network_conditions_lock = Locker("network_conditions_lock", async_lock=True)
         self._current_network_conditions = {}
         self._running = False
-        
-    @property
-    def em(self):
-        return self._event_manager    
-        
+  
     async def start(self):
         logging.info("🌐  Nebula Network Simulator starting...")
         self._running = True
         grace_time = self._cm.config.participant["mobility_args"]["grace_time_mobility"]
         # if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
         # await asyncio.sleep(grace_time)
-        await self.em.subscribe_addonevent(GPSEvent, self._change_network_conditions_based_on_distances)
+        await EventManager.get_instance().subscribe_addonevent(GPSEvent, self._change_network_conditions_based_on_distances)
     
     async def stop(self):
         self._running = False

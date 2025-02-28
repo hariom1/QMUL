@@ -4,7 +4,7 @@ import math
 import random
 import time
 from nebula.core.eventmanager import EventManager
-from nebula.addons.GPS.gpsmodule import GPSEvent
+from nebula.core.nebulaevents import GPSEvent
 from nebula.core.utils.locker import Locker
 from nebula.addons.functions import print_msg_box
 from typing import TYPE_CHECKING
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class Mobility:
-    def __init__(self, config, cm: "CommunicationsManager", event_manager: EventManager):
+    def __init__(self, config, cm: "CommunicationsManager"):
         """
         Initializes the mobility module with specified configuration and communication manager.
 
@@ -66,7 +66,6 @@ class Mobility:
         # Logging box with mobility information
         mobility_msg = f"Mobility: {self.mobility}\nMobility type: {self.mobility_type}\nRadius federation: {self.radius_federation}\nScheme mobility: {self.scheme_mobility}\nEach {self.round_frequency} rounds"
         print_msg_box(msg=mobility_msg, indent=2, title="Mobility information")
-        self._event_manager = event_manager
         self._nodes_distances = {}
         self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
 
@@ -98,7 +97,7 @@ class Mobility:
             asyncio.Task: An asyncio Task object representing the scheduled
                            `run_mobility` operation.
         """
-        await self._event_manager.subscribe_addonevent(GPSEvent, self.update_nodes_distances)
+        await EventManager.get_instance().subscribe_addonevent(GPSEvent, self.update_nodes_distances)
         task = asyncio.create_task(self.run_mobility())
         return task
 

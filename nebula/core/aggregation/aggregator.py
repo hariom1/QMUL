@@ -4,27 +4,12 @@ from abc import ABC, abstractmethod
 from functools import partial
 from nebula.core.utils.locker import Locker
 from nebula.core.aggregation.updatehandlers.updatehandler import factory_update_handler
-from nebula.core.eventmanager import NodeEvent
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import AggregationEvent
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
-
-
-class AggregationEvent(NodeEvent):
-    def __init__(self, updates : dict, expected_nodes : set, missing_nodes : set):
-        self._updates = updates
-        self._expected_nodes = expected_nodes
-        self._missing_nodes = missing_nodes
-        
-    def __str__(self):
-        return "Aggregation Ready"
-        
-    async def get_event_data(self) -> tuple[dict, set, set]:
-        return (self._updates, self._expected_nodes, self._missing_nodes)
-    
-    async def is_concurrent(self) -> bool:
-        return False   
 
 class AggregatorException(Exception):
     pass
@@ -143,9 +128,7 @@ class Aggregator(ABC):
 
         await self.us.stop_notifying_updates()
         updates = await self.us.get_round_updates()
-        
         missing_nodes = await self.us.get_round_missing_nodes()
-        
         if missing_nodes:
             logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
         else:
@@ -154,13 +137,11 @@ class Aggregator(ABC):
         logging.info(
                 f"🔄  Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
             )    
-        message = self.cm.create_message(
-                "federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]]
-            )
+        message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]])
         await self.cm.send_message_to_neighbors(message)
        
         agg_event = AggregationEvent(updates, self._federation_nodes, missing_nodes)
-        await self.engine.event_manager.publish_nodeevent(agg_event)
+        await EventManager.get_instance().publish_node_event(agg_event)
         aggregated_result = self.run_aggregation(updates)
         return aggregated_result
 
