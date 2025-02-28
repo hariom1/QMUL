@@ -10,7 +10,6 @@ from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.network.communications import CommunicationsManager
-from nebula.core.pb import nebula_pb2
 from nebula.core.reputation.Reputation import Reputation
 from nebula.core.utils.locker import Locker
 
@@ -304,7 +303,9 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+            logging.info(
+                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
+            )
             self.cm.store_receive_timestamp(source, "reputation", message.round)
 
             current_node = self.addr
@@ -723,10 +724,14 @@ class Engine:
                         # )
 
                         for neighbor in neighbors_to_send:
-                            message = self.cm.create_message("reputation", "share", node_id=nei, score=data["reputation"], round=self.round)
+                            message = self.cm.create_message(
+                                "reputation", "share", node_id=nei, score=data["reputation"], round=self.round
+                            )
                             await self.cm.send_message(neighbor, message)
-                            logging.info(f"Sending reputation to node {nei} from node {neighbor} with reputation {data['reputation']}")
-                            #await self.cm.send_message_to_neighbors(message_data, [neighbor])
+                            logging.info(
+                                f"Sending reputation to node {nei} from node {neighbor} with reputation {data['reputation']}"
+                            )
+                            # await self.cm.send_message_to_neighbors(message_data, [neighbor])
 
                 else:
                     logging.info(f"Reputation already sent to node {nei}")

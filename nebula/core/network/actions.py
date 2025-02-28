@@ -28,6 +28,7 @@ class ControlAction(Enum):
     RECOVERY = nebula_pb2.ControlMessage.Action.RECOVERY
     WEAK_LINK = nebula_pb2.ControlMessage.Action.WEAK_LINK
 
+
 class ReputationAction(Enum):
     SHARE = nebula_pb2.ReputationMessage.Action.SHARE
 

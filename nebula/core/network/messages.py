@@ -53,7 +53,7 @@ class MessagesManager:
                 "defaults": {
                     "round": None,
                 },
-            }
+            },
             # Add additional message types here
         }
 

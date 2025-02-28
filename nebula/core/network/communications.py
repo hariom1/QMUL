@@ -139,7 +139,6 @@ class CommunicationsManager:
 
     async def handle_incoming_message(self, data, addr_from):
         await self.mm.process_message(data, addr_from)
-        
 
     async def forward_message(self, data, addr_from):
         await self.forwarder.forward(data, addr_from=addr_from)
