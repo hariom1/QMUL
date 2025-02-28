@@ -48,14 +48,19 @@ class MessagesManager:
                     "weight": 1,
                 },
             },
-            "reputation": {"parameters": ["reputation"], "defaults": {}},
+            "reputation": {
+                "parameters": ["node_id", "score", "round", "action"],
+                "defaults": {
+                    "round": None,
+                },
+            }
             # Add additional message types here
         }
 
     def get_messages_events(self):
         message_events = {}
         for message_name in self._message_templates.keys():
-            if message_name != "model" and message_name != "reputation":
+            if message_name != "model":
                 message_events[message_name] = get_actions_names(message_name)
         return message_events
 
@@ -78,6 +83,8 @@ class MessagesManager:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
             logging.info(f"Message type received: {message_type}")
+
+            self.cm.store_receive_timestamp(addr_from, message_type, round=self.cm.get_round())
 
             message_data = getattr(message_wrapper, message_type)
 

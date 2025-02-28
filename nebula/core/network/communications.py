@@ -85,7 +85,6 @@ class CommunicationsManager:
         # Reputation
         self.reputation_instance = Reputation(self.engine)
         self._model_arrival_latency_data = self.reputation_instance.model_arrival_latency_data
-        self.reputation_with_all_feedback = {}
         self.message_timestamps = {}
         self.fraction_of_params_changed = {}
 
@@ -140,6 +139,7 @@ class CommunicationsManager:
 
     async def handle_incoming_message(self, data, addr_from):
         await self.mm.process_message(data, addr_from)
+        
 
     async def forward_message(self, data, addr_from):
         await self.forwarder.forward(data, addr_from=addr_from)
@@ -351,40 +351,14 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"🔗  handle_connection_message | Error while processing: {message.action} | {e}")
 
-    async def handle_reputation_message(self, source, message):
-        try:
-            logging.info(
-                f"handle_reputation_message | Reputation message received from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
-            )
-
-            self.store_receive_timestamp(source, "reputation", message.round)
-
-            current_node = self.addr
-            nei = message.node_id
-
-            # Manage reputation
-            if current_node != nei:
-                key = (current_node, nei, message.round)
-
-                if key not in self.reputation_with_all_feedback:
-                    self.reputation_with_all_feedback[key] = []
-
-                self.reputation_with_all_feedback[key].append(message.score)
-                # logging.info(
-                #     f"handle_reputation_message | Reputation with all feedback: {self.reputation_with_all_feedback}"
-                # )
-
-        except Exception as e:
-            logging.exception(f"Error handling reputation message: {e}")
-
-    async def handle_flooding_attack_message(self, source, message):
-        try:
-            logging.info(
-                f"🔥  handle_flooding_attack_message | Received flooding attack message from {source} | Attacker: {message.attacker_id} | Frequency: {message.frequency} | Duration: {message.duration} | Target node: {message.target_node}"
-            )
-            self.store_receive_timestamp(source, "flooding_attack", self.engine.get_round())
-        except Exception as e:
-            logging.exception(f"🔥  handle_flooding_attack_message | Error while processing: {e}")
+    # async def handle_flooding_attack_message(self, source, message):
+    #     try:
+    #         logging.info(
+    #             f"🔥  handle_flooding_attack_message | Received flooding attack message from {source} | Attacker: {message.attacker_id} | Frequency: {message.frequency} | Duration: {message.duration} | Target node: {message.target_node}"
+    #         )
+    #         self.store_receive_timestamp(source, "flooding_attack", self.engine.get_round())
+    #     except Exception as e:
+    #         logging.exception(f"🔥  handle_flooding_attack_message | Error while processing: {e}")
 
     def fraction_of_parameters_changed(self, source, parameters_local, parameters_received, current_round):
         # logging.info(f"🤖  fraction_of_parameters_changed | Managing parameters of models")
@@ -774,16 +748,6 @@ class CommunicationsManager:
             logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
             await self.disconnect(dest_addr, mutual_disconnection=False)
 
-    # def store_send_timestamp(self, dest_addr, round_number, type_message):
-    #     send_timestamp = datetime.now().strftime("%H:%M:%S")
-    #     self.message_timestamps[(self.addr, dest_addr, type_message)] = {
-    #         "send": send_timestamp,
-    #         "receive": None,
-    #         "latency": None,
-    #         "round": round_number,
-    #         "type": type_message,
-    #     }
-
     def store_receive_timestamp(self, source, type_message, round=None):
         current_time = time.time()
         current_round = self.get_round()
@@ -800,41 +764,6 @@ class CommunicationsManager:
                 type_message=type_message,
                 current_round=current_round,
             )
-
-    #     receive_timestamp = datetime.now().strftime("%H:%M:%S")
-    #     if (self.addr, source, type_message) in self.message_timestamps:
-    #         self.message_timestamps[(self.addr, source, type_message)]["receive"] = receive_timestamp
-
-    # def calculate_latency(self, source, type_message):
-    #     if (self.addr, source, type_message) in self.message_timestamps:
-    #         send_time = self.message_timestamps[(self.addr, source, type_message)]["send"]
-    #         receive_time = self.message_timestamps[(self.addr, source, type_message)]["receive"]
-    #         round_number = self.message_timestamps[(self.addr, source, type_message)]["round"]
-    #         current_round = self.get_round()
-
-    #         if send_time and receive_time and type_message == "model":
-    #             send_time = datetime.strptime(send_time, "%H:%M:%S")
-    #             receive_time = datetime.strptime(receive_time, "%H:%M:%S")
-
-    #             latency = (receive_time - send_time).total_seconds()
-    #             logging.info(
-    #                 f"🕒  Latency from {source} with type message {type_message} in round {round_number}: {latency}"
-    #             )
-
-    #             self.message_timestamps[(self.addr, source, type_message)]["latency"] = latency
-    #             save_data(
-    #                 self.config.participant["scenario_args"]["name"],
-    #                 "communication",
-    #                 source,
-    #                 self.addr,
-    #                 num_round=round_number,
-    #                 time=latency,
-    #                 type_message=type_message,
-    #                 current_round=current_round,
-    #             )
-
-    #             return latency
-    #     return None
 
     async def send_model(self, dest_addr, round, serialized_model, weight=1):
         async with self.semaphore_send_model:
