@@ -14,7 +14,7 @@ class NebulaNS(NetworkSimulator):
         100: {"bandwidth": "5Gbps", "delay": "5ms"},
         200: {"bandwidth": "2Gbps", "delay": "50ms"},
         300: {"bandwidth": "100Mbps", "delay": "200ms"},
-        float("inf"): {"bandwidth": "10Mbps", "delay": "10000ms"},
+        float("inf"): {"bandwidth": "10Mbps", "delay": "100000ms"},
     }
     IP_MULTICAST = "239.255.255.250"
     

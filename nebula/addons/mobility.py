@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class Mobility:
-    def __init__(self, config, cm: "CommunicationsManager"):
+    def __init__(self, config, cm: "CommunicationsManager", verbose=False):
         """
         Initializes the mobility module with specified configuration and communication manager.
 
@@ -68,6 +68,7 @@ class Mobility:
         print_msg_box(msg=mobility_msg, indent=2, title="Mobility information")
         self._nodes_distances = {}
         self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
+        self._verbose = verbose
 
     @property
     def round(self):
@@ -158,7 +159,7 @@ class Mobility:
             - The calculated radius is converted from meters to degrees based on an approximate
               conversion factor (1 degree is approximately 111 kilometers).
         """
-        logging.info("📍  Changing geo location randomly")
+        if self._verbose: logging.info("📍  Changing geo location randomly")
         # radius_in_degrees = self.radius_federation / 111000
         max_radius_in_degrees = self.max_movement_random_strategy / 111000
         radius = random.uniform(0, max_radius_in_degrees)  # noqa: S311
@@ -239,7 +240,7 @@ class Mobility:
 
         self.config.participant["mobility_args"]["latitude"] = latitude
         self.config.participant["mobility_args"]["longitude"] = longitude
-        logging.info(f"📍  New geo location: {latitude}, {longitude}")
+        if self._verbose: logging.info(f"📍  New geo location: {latitude}, {longitude}")
 
     async def change_geo_location(self):
         """

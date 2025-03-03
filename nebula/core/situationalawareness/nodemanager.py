@@ -81,10 +81,6 @@ class NodeManager:
     def fast_reboot_on(self):
         return self._fast_reboot_status
 
-    async def set_rounds_pushed(self, rp):
-        if self.fast_reboot_on():
-            self.fr.set_rounds_pushed(rp)
-
     def is_additional_participant(self):
         return self._aditional_participant
 
@@ -133,10 +129,6 @@ class NodeManager:
         if joinning_federation:
             if self.fast_reboot_on():
                 await self.fr.add_fastReboot_addr(addr)
-
-    async def apply_weight_strategy(self, updates: dict):
-        if self.fast_reboot_on():
-            await self.fr.apply_weight_strategy(updates)
 
     """
                 ##############################

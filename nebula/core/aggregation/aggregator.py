@@ -69,6 +69,9 @@ class Aggregator(ABC):
         if len(models) == 0:
             logging.error("Trying to aggregate models when there are no models")
             return None
+        
+    async def init(self):
+        await self.us.init()
 
     async def update_federation_nodes(self, federation_nodes: set):
         await self.us.round_expected_updates(federation_nodes=federation_nodes)
@@ -82,12 +85,6 @@ class Aggregator(ABC):
         else:
             raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
 
-    async def update_received_from_source(self, model, weight, source, round, local=False):
-        await self.us.storage_update(model, weight, source, round, local=False)
-
-    async def notify_federation_nodes_removed(self, federation_node, remove=False):
-        await self.us.notify_federation_update(federation_node, remove=remove)
-        
     def get_nodes_pending_models_to_aggregate(self):
         return self._federation_nodes
 

@@ -12,6 +12,10 @@ class UpdateHandler(ABC):
     """
 
     @abstractmethod
+    async def init():
+        raise NotImplementedError
+
+    @abstractmethod
     async def round_expected_updates(self, federation_nodes: set):
         """
         Initializes the expected updates for the current round.

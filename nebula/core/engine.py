@@ -9,6 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
@@ -146,8 +147,7 @@ class Engine:
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
-        event_manager = EventManager.get_instance()
-        event_manager._initialize(verbose=True)
+        event_manager = EventManager.get_instance(verbose=False)
 
         # Mobility setup
         self._node_manager = None
@@ -280,7 +280,8 @@ class Engine:
             logging.info("🤖  handle_model_message | There are no defined federation nodes")
             return
         decoded_model = self.trainer.deserialize_model(message.parameters)
-        await self.aggregator.update_received_from_source(decoded_model, message.weight, source, message.round)
+        updt_received_event = UpdateReceivedEvent(decoded_model, message.weight, source, message.round)
+        await EventManager.get_instance().publish_node_event(updt_received_event)
 
     """                                                     ##############################
                                                             #      General callbacks     #
@@ -590,21 +591,14 @@ class Engine:
         logging.info("Creating trainer service to start the federation process..")
         asyncio.create_task(self._start_learning_late())
 
-    async def set_pushed_done(self, rounds_push):
-        await self.nm.set_rounds_pushed(rounds_push)
-
-    async def apply_weight_strategy(self, pending_models):
-        if self.mobility:
-            await self.nm.apply_weight_strategy(pending_models)
-            return pending_models
-        else:
-            return pending_models
-
     async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
         if self.mobility:
             self.federation_nodes = neighbors
             await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
-            await self.aggregator.notify_federation_nodes_removed(removed_neighbor_addr, remove=remove)
+            updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
+            asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
+            
+            #await self.aggregator.notify_federation_nodes_removed(removed_neighbor_addr, remove=remove)
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()
@@ -665,6 +659,7 @@ class Engine:
 
     async def start_communications(self):
         await self.init_message_callbacks()
+        await self.aggregator.init()
         logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
         logging.info(
             f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"
@@ -997,20 +992,9 @@ class AggregatorNode(Engine):
         await self.trainer.train()
         await self.trainning_in_progress_lock.release_async()
 
-        # await self.aggregator.include_model_in_buffer(
-        #     self.trainer.get_model_parameters(),
-        #     self.trainer.get_model_weight(),
-        #     source=self.addr,
-        #     round=self.round,
-        # )
-
-        await self.aggregator.update_received_from_source(
-            self.trainer.get_model_parameters(),
-            self.trainer.get_model_weight(),
-            source=self.addr,
-            round=self.round,
-        )
-
+        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round)
+        await EventManager.get_instance().publish_node_event(self_update_event)
+        
         await self.cm.propagator.propagate("stable")
         await self._waiting_model_updates()
 
@@ -1035,21 +1019,9 @@ class ServerNode(Engine):
     async def _extended_learning_cycle(self):
         # Define the functionality of the server node
         await self.trainer.test()
-
-        # In the first round, the server node doest take into account the initial model parameters for the aggregation
-        # await self.aggregator.include_model_in_buffer(
-        #     self.trainer.get_model_parameters(),
-        #     self.trainer.BYPASS_MODEL_WEIGHT,
-        #     source=self.addr,
-        #     round=self.round,
-        # )
-
-        await self.aggregator.update_received_from_source(
-            self.trainer.get_model_parameters(),
-            self.trainer.BYPASS_MODEL_WEIGHT,
-            source=self.addr,
-            round=self.round,
-        )
+     
+        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round)
+        await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self._waiting_model_updates()
         await self.cm.propagator.propagate("stable")
@@ -1079,22 +1051,9 @@ class TrainerNode(Engine):
 
         await self.trainer.test()
         await self.trainer.train()
-
-        # await self.aggregator.include_model_in_buffer(
-        #     self.trainer.get_model_parameters(),
-        #     self.trainer.get_model_weight(),
-        #     source=self.addr,
-        #     round=self.round,
-        #     local=True,
-        # )
-
-        await self.aggregator.update_received_from_source(
-            self.trainer.get_model_parameters(),
-            self.trainer.get_model_weight(),
-            source=self.addr,
-            round=self.round,
-            local=True,
-        )
+      
+        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True)
+        await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self.cm.propagator.propagate("stable")
         await self._waiting_model_updates()

@@ -12,4 +12,4 @@ class BPSTrainingPolicy(TrainingPolicy):
         pass
     
     async def evaluate(self):
-        pass
+        return None

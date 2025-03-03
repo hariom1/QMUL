@@ -122,7 +122,7 @@ class SANetwork():
     async def beacon_received(self, addr, geoloc):
         latitude, longitude = geoloc
         self.meet_node(addr)
-        logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
+        #logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
         
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #

@@ -5,6 +5,8 @@ from typing import Dict, Tuple, Deque
 from nebula.core.utils.locker import Locker
 import time
 from nebula.core.aggregation.updatehandlers.updatehandler import UpdateHandler
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent
+from nebula.core.eventmanager import EventManager
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -50,7 +52,12 @@ class DFLUpdateHandler(UpdateHandler):
     
     @property
     def agg(self):
-        return self._aggregator  
+        return self._aggregator
+    
+    async def init(self):
+        await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
+        await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
+          
        
     async def round_expected_updates(self, federation_nodes: set):
         await self._update_federation_lock.acquire_async()
@@ -88,8 +95,9 @@ class DFLUpdateHandler(UpdateHandler):
                     logging.info(f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received")
                     self._sources_received.add(se)
         
-    async def storage_update(self, model, weight, source, round, local=False):
+    async def storage_update(self, updt_received_event : UpdateReceivedEvent):
         time_received = time.time()
+        (model, weight, source, round, _) = await updt_received_event.get_event_data()
         if source in self._sources_expected:
             updt = Update(model, weight, source, round, time_received)
             await self._updates_storage_lock.acquire_async()
@@ -137,7 +145,8 @@ class DFLUpdateHandler(UpdateHandler):
         await self._updates_storage_lock.release_async()
         return updates
        
-    async def notify_federation_update(self, source, remove=False):
+    async def notify_federation_update(self, updt_nei_event : UpdateNeighborEvent):
+        source, remove = await updt_nei_event.get_event_data()
         if not remove:
             if self._round_updates_lock.locked():
                 logging.info(f"Source: {source} will be count next round")

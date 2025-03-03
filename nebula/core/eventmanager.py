@@ -48,10 +48,10 @@ class EventManager:
         self._initialized = True  # Marca que ya se inicializó
 
     @staticmethod
-    def get_instance():
+    def get_instance(verbose=False):
         """Método estático para obtener la instancia única."""
         if EventManager._instance is None:
-            EventManager()
+            EventManager(verbose=verbose)
         return EventManager._instance
 
     async def subscribe(self, event_type: tuple[str, str], callback: callable):
@@ -64,7 +64,7 @@ class EventManager:
 
     async def publish(self, message_event: MessageEvent):
         """Trigger all callbacks registered for a specific event type."""
-        if self._verbose or True: logging.info(f"Publishing MessageEvent: {message_event.message_type}")
+        if self._verbose: logging.info(f"Publishing MessageEvent: {message_event.message_type}")
         async with self._message_events_lock:
             event_type = message_event.message_type
             callbacks = self._subscribers.get(event_type, [])
@@ -92,7 +92,7 @@ class EventManager:
         
     async def publish_addonevent(self, addonevent: AddonEvent):
         """Trigger all callbacks registered for a specific type of AddonEvent."""
-        if self._verbose or True: logging.info(f"Publishing AddonEvent: {addonevent}")
+        if self._verbose: logging.info(f"Publishing AddonEvent: {addonevent}")
         async with self._addons_event_lock:
             event_type = type(addonevent)
             callbacks = self._addons_events_subs.get(event_type, [])
@@ -122,7 +122,7 @@ class EventManager:
         
     async def publish_node_event(self, nodeevent: NodeEvent):
         """Trigger all callbacks registered for a specific type of AddonEvent."""
-        if self._verbose or True: logging.info(f"Publishing NodeEvent: {nodeevent}")
+        if self._verbose: logging.info(f"Publishing NodeEvent: {nodeevent}")
         async with self._node_events_lock:
             event_type = type(nodeevent)
             callbacks = self._node_events_subs.get(event_type, [])  # Extraer la lista de callbacks
