@@ -819,7 +819,7 @@ class Engine:
         while self.round is not None and self.round < self.total_rounds:
             current_time = time.time()
             rse = RoundStartEvent(self.round, current_time)
-            EventManager.get_instance().publish_node_event(rse)
+            await EventManager.get_instance().publish_node_event(rse)
             print_msg_box(
                 msg=f"Round {self.round} of {self.total_rounds} started.",
                 indent=2,

@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import asyncio
-import time
 
 class AddonEvent(ABC):
     @abstractmethod
@@ -28,12 +27,21 @@ class MessageEvent():
 """
 
 class RoundStartEvent(NodeEvent):
-    def __init__(self, round):
-        self._round_start_time = time.time()
+    def __init__(self, round, start_time):
+        """Event triggered when round is going to start.
+
+        Args:
+            round (int): Round number.
+            start_time (time): Current time when round is going to start.
+        """
+        self._round_start_time = start_time
         self._round = round
 
+    def __str__(self):
+        return "Round starting"
+
     async def get_event_data(self):
-        return (self._round, self._round_Start_time)
+        return (self._round, self._round_start_time)
     
     async def is_concurrent(self):
         return False

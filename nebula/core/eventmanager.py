@@ -6,21 +6,7 @@ from functools import wraps
 from abc import ABC, abstractmethod
 from nebula.core.network.messages import MessageEvent
 from nebula.core.utils.locker import Locker
-
-class AddonEvent(ABC):
-    @abstractmethod
-    async def get_event_data(self):
-        pass
-    
-class NodeEvent(ABC):
-    @abstractmethod
-    async def get_event_data(self):
-        pass
-    
-    @abstractmethod
-    async def is_concurrent(self):
-        pass
-
+from nebula.core.nebulaevents import AddonEvent, NodeEvent
 
 class EventManager:
     _instance = None
@@ -74,11 +60,11 @@ class EventManager:
 
         for callback in self._subscribers[event_type]:
             try:
+                if self._verbose: logging.info(f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}")
                 if asyncio.iscoroutinefunction(callback) or inspect.iscoroutine(callback):
                     await callback(message_event.source, message_event.message)
                 else:
-                    callback(message_event.source, message_event.message)
-                if self._verbose: logging.info(f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}")
+                    callback(message_event.source, message_event.message)   
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for event {event_type}: {e}")
                  
@@ -103,11 +89,11 @@ class EventManager:
 
         for callback in self._addons_events_subs[event_type]:
             try:
+                if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
                 if asyncio.iscoroutinefunction(callback) or inspect.iscoroutine(callback):
                     await callback(addonevent)
                 else:
-                    callback(addonevent)
-                if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
+                    callback(addonevent)       
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for AddonEvent {event_type.__name__}: {e}")
                     
@@ -134,14 +120,14 @@ class EventManager:
         
         for callback in self._node_events_subs[event_type]:
             try:
+                if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
                 if asyncio.iscoroutinefunction(callback) or inspect.iscoroutine(callback):
                     if await nodeevent.is_concurrent():
                         asyncio.create_task(callback(nodeevent))
                     else:
                         await callback(nodeevent)
                 else:
-                    callback(nodeevent)
-                if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
+                    callback(nodeevent)       
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for NodeEvent {event_type.__name__}: {e}")
 
