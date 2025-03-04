@@ -1,7 +1,9 @@
 import torch
 
+from nebula.addons.attacks.attacks import Attack
 
-class MembershipInferenceAttack:
+
+class MembershipInferenceAttack(Attack):
     """
     Base Class for conducting Membership Inference Attacks on a given model and dataset.
 
