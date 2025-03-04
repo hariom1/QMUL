@@ -144,3 +144,21 @@ class EventManager:
                 if self._verbose: logging.info(f"EventManager | Triggering callback for event type: {event_type.__name__}")
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for NodeEvent {event_type.__name__}: {e}")
+
+    async def unsubscribe_event(self, event_type, callback):
+        """Unsubscribe a callback from a given event type (MessageEvent, AddonEvent, or NodeEvent)."""
+        if isinstance(event_type, tuple):  # MessageEvent
+            async with self._message_events_lock:
+                if event_type in self._subscribers and callback in self._subscribers[event_type]:
+                    self._subscribers[event_type].remove(callback)
+                    logging.info(f"EventManager | Unsubscribed callback for MessageEvent: {event_type}")
+        elif issubclass(event_type, AddonEvent):  # AddonEvent
+            async with self._addons_event_lock:
+                if event_type in self._addons_events_subs and callback in self._addons_events_subs[event_type]:
+                    self._addons_events_subs[event_type].remove(callback)
+                    logging.info(f"EventManager | Unsubscribed callback for AddonEvent: {event_type.__name__}")
+        elif issubclass(event_type, NodeEvent):  # NodeEvent
+            async with self._node_events_lock:
+                if event_type in self._node_events_subs and callback in self._node_events_subs[event_type]:
+                    self._node_events_subs[event_type].remove(callback)
+                    logging.info(f"EventManager | Unsubscribed callback for NodeEvent: {event_type.__name__}")

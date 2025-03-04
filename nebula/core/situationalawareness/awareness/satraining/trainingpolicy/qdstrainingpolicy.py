@@ -7,9 +7,6 @@ import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent
 import random
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from nebula.core.eventmanager import EventManager
 
 # "Quality-Driven Selection"    (QDS)
 class QDSTrainingPolicy(TrainingPolicy):
@@ -79,7 +76,6 @@ class QDSTrainingPolicy(TrainingPolicy):
     
         result = set()     
         if self._last_check == 0:
-            self._last_check = 0
             nodes = await self._get_nodes()
             redundant_nodes = set()
             inactive_nodes = set()
@@ -98,14 +94,16 @@ class QDSTrainingPolicy(TrainingPolicy):
                             if self._verbose: logging.info(f"Node: {node} got a similarity value of: {last_sim} under threshold: {self.SIMILARITY_THRESHOLD}")
                         else:
                             if self._verbose: logging.info(f"Node: {node} got a redundant model, cossine simmilarity: {last_sim} over threshold: {self.SIMILARITY_THRESHOLD}")
-                            redundant_nodes.add(node)
+                            redundant_nodes.add((node, last_sim))
                         
             if self._verbose: logging.info(f"Inactive nodes on aggregations: {inactive_nodes}")
             if self._verbose: logging.info(f"Redundant nodes on aggregations: {redundant_nodes}")
             if inactive_nodes:
-                result = result.union(inactive_nodes)
+                result = result.union(inactive_nodes)    
             if len(redundant_nodes) > 1:
-                discard_nodes = set(random.sample(list(redundant_nodes), int(len(redundant_nodes)/2)))
+                sorted_redundant_nodes = sorted(redundant_nodes, key=lambda x: x[1])
+                n_discarded = int(len(redundant_nodes)/2)
+                discard_nodes = sorted_redundant_nodes[-n_discarded:]
                 if self._verbose: logging.info(f"Discarded redundant nodes: {discard_nodes}")
                 result = result.union(discard_nodes)
         else:

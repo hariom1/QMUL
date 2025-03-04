@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-
+import time
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
@@ -9,7 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
@@ -817,6 +817,9 @@ class Engine:
 
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
+            current_time = time.time()
+            rse = RoundStartEvent(self.round, current_time)
+            EventManager.get_instance().publish_node_event(rse)
             print_msg_box(
                 msg=f"Round {self.round} of {self.total_rounds} started.",
                 indent=2,
