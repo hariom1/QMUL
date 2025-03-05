@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent
 
 class UpdateHandlerException(Exception):
     pass 
@@ -12,7 +13,7 @@ class UpdateHandler(ABC):
     """
 
     @abstractmethod
-    async def init():
+    async def init(self, config : dict):
         raise NotImplementedError
 
     @abstractmethod
@@ -30,7 +31,7 @@ class UpdateHandler(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def storage_update(self, model, weight, source, round, local=False):
+    async def storage_update(self, updt_received_event : UpdateReceivedEvent):
         """
         Stores an update from a source in the update storage.
 
@@ -61,7 +62,7 @@ class UpdateHandler(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def notify_federation_update(self, source, remove=False):
+    async def notify_federation_update(self, updt_nei_event : UpdateNeighborEvent):
         """
         Notifies the system of a change in the federation regarding a specific source.
 
@@ -104,10 +105,12 @@ class UpdateHandler(ABC):
 def factory_update_handler(updt_handler, aggregator, addr) -> UpdateHandler:
     from nebula.core.aggregation.updatehandlers.dflupdatehandler import DFLUpdateHandler
     from nebula.core.aggregation.updatehandlers.cflupdatehandler import CFLUpdateHandler
+    from nebula.core.aggregation.updatehandlers.sdflupdatehandler import SFDLUpdateHandler
     
     UPDATE_HANDLERS = {
         "DFL": DFLUpdateHandler,
         "CFL": CFLUpdateHandler,
+        "SDFL": SFDLUpdateHandler
     }
     
     update_handler = UPDATE_HANDLERS.get(updt_handler, None)

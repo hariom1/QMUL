@@ -9,7 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
@@ -241,14 +241,6 @@ class Engine:
         logging.info(f"🤖  Update round count | from: {self.round} | to round: {new_round}")
         self.round = new_round
         self.trainer.set_current_round(new_round)
-
-    async def init_message_callbacks(self):
-        logging.info("Registering callbacks for MessageEvents...")
-        await self.register_message_events_callbacks()
-
-        # Additional callbacks not registered automatically
-        await self.register_message_callback(("model", "initialization"), "model_initialization_callback")
-        await self.register_message_callback(("model", "update"), "model_update_callback")
 
     """                                                     ##############################
                                                             #       MODEL CALLBACKS      #
@@ -551,6 +543,17 @@ class Engine:
                                                             ##############################
     """
 
+    async def register_events_callbacks(self):
+        await self.init_message_callbacks()
+        await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.broadcast_models_include)
+
+    async def init_message_callbacks(self):
+        logging.info("Registering callbacks for MessageEvents...")
+        await self.register_message_events_callbacks()
+        # Additional callbacks not registered automatically
+        await self.register_message_callback(("model", "initialization"), "model_initialization_callback")
+        await self.register_message_callback(("model", "update"), "model_update_callback")
+
     async def register_message_events_callbacks(self):
         me_dict = self.cm.get_messages_events()
         message_events = [
@@ -598,7 +601,10 @@ class Engine:
             updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
             asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
             
-            #await self.aggregator.notify_federation_nodes_removed(removed_neighbor_addr, remove=remove)
+    async def broadcast_models_include(self, age : AggregationEvent):
+        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")    
+        message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.get_round()]])
+        asyncio.create_task(self.cm.send_message_to_neighbors(message))        
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()
@@ -658,7 +664,7 @@ class Engine:
         logging.info("Started trainer module...")
 
     async def start_communications(self):
-        await self.init_message_callbacks()
+        await self.register_events_callbacks()
         await self.aggregator.init()
         logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
         logging.info(
@@ -850,7 +856,7 @@ class Engine:
             )  # Set current round in config (send to the controller)
             await self.get_round_lock().release_async()
 
-        await self.nm.experiment_finish()
+        if self.mobility: await self.nm.experiment_finish()
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()
@@ -1050,7 +1056,6 @@ class TrainerNode(Engine):
     async def _extended_learning_cycle(self):
         # Define the functionality of the trainer node
         logging.info("Waiting global update | Assign _waiting_global_update = True")
-        self.aggregator.set_waiting_global_update()
 
         await self.trainer.test()
         await self.trainer.train()
@@ -1082,5 +1087,4 @@ class IdleNode(Engine):
     async def _extended_learning_cycle(self):
         # Define the functionality of the idle node
         logging.info("Waiting global update | Assign _waiting_global_update = True")
-        self.aggregator.set_waiting_global_update()
         await self._waiting_model_updates()

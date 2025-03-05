@@ -7,17 +7,26 @@ from nebula.core.nebulaevents import UpdateReceivedEvent, AggregationEvent, Roun
 import time
 import asyncio
 
+class TimeStamp():
+        def __init__(self, time_received = None, time_since_last_event = None):
+            self.tr = time_received
+            self.tsle = time_since_last_event
+            
+        def reset(self):
+            self.tr = None
+            self.tsle = None
+
 # "Speed-Oriented Selection"    (SOS)
 class SOSTrainingPolicy(TrainingPolicy):
     MAX_HISTORIC_SIZE = 10
     INACTIVE_THRESHOLD = 3
     GRACE_ROUNDS = 0
     CHECK_COOLDOWN = 1
-    
+     
     def __init__(self, config):
         self._addr = config["addr"]
         self._verbose = config["verbose"]
-        self._nodes : dict[str, tuple[deque, int, float, float]] = {}  # _nodes estructura: {node_id: (deque updates epr round, inactivity, time gap between updates, time since last aggregation)}
+        self._nodes : dict[str, tuple[deque, int, deque[TimeStamp], TimeStamp]] = {}  # _nodes estructura: {node_id: (deque updates epr round, inactivity, time gaps between updates, time since last aggregation)}
         
         self._nodes_lock = Locker(name="nodes_lock", async_lock=True)
         self._grace_rounds = self.GRACE_ROUNDS
@@ -28,7 +37,7 @@ class SOSTrainingPolicy(TrainingPolicy):
     async def init(self, config):
         async with self._nodes_lock:
             nodes = config["nodes"]
-            self._nodes = {node_id: (deque(maxlen=self.MAX_HISTORIC_SIZE), 0, float('inf'), float('inf')) for node_id in nodes}
+            self._nodes = {node_id: (deque(maxlen=self.MAX_HISTORIC_SIZE), 0, deque(maxlen=self.MAX_HISTORIC_SIZE), TimeStamp()) for node_id in nodes}
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self._process_update_received_event)
         await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self._process_first_round_start)
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
@@ -60,6 +69,7 @@ class SOSTrainingPolicy(TrainingPolicy):
 
 
     async def _process_update_received_event(self, ure : UpdateReceivedEvent):
+        #TODO rehacer con timestamp
         time_received = time.time()
         if self._verbose: logging.info("Processing Update Received event")
         (_, _, source, _, _) = await ure.get_event_data()
@@ -68,7 +78,7 @@ class SOSTrainingPolicy(TrainingPolicy):
             if source not in self._nodes:
                 return  
 
-            history, missed_count, first_update_time, last_update_time = self._nodes[source]
+            history, missed_count, time_between_updts_historic, last_update_time = self._nodes[source]
 
             if history and history[-1][0] == self._internal_rounds_done:
                 num_updates = history[-1][1] + 1
@@ -76,19 +86,26 @@ class SOSTrainingPolicy(TrainingPolicy):
             else:
                 history.append((self._internal_rounds_done, 1))
 
-            if first_update_time == float('inf'):
+            if time_between_updts == float("inf"):
                 if self._last_aggregation_time:
-                    first_update_time = time_received - self._last_aggregation_time
+                    time_between_updts = time_received - self._last_aggregation_time
                 else:
-                    first_update_time = 0
+                    time_between_updts = 0
+            else:
+                pass
+                #time_between_updts = 
 
-            #TODO el error está aquí hay q comprobar con respecto a self_aggregation_time
+            #la cuestion es:
+            # en cada ronda se actualiza el tiempo de inicio desde la agregación
+            # por lo tanto habria que resetear los tiempos? seria un procedimiento sin memoria
+             
+             
             if last_update_time == float('inf'):
-                last_update_time = first_update_time
+                last_update_time = time_between_updts
             else:
                 last_update_time = time_received - last_update_time
 
-            self._nodes[source] = (history, missed_count, first_update_time, last_update_time)
+            self._nodes[source] = (history, missed_count, time_between_updts, last_update_time)
 
     async def update_neighbors(self, node, remove=False):
         async with self._nodes_lock:
@@ -119,3 +136,5 @@ class SOSTrainingPolicy(TrainingPolicy):
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
                              
         return result
+    
+    

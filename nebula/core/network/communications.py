@@ -102,18 +102,10 @@ class CommunicationsManager:
     def propagator(self):
         return self._propagator
 
-    # @property
-    # def mobility(self):
-    #     return self._mobility
-
     @property
     def ecs(self):
         return self._external_connection_service
     
-    # @property
-    # def ns(self):
-    #     return self._network_simulator
-
     @property
     def bl(self):
         return self._blacklist
@@ -452,16 +444,13 @@ class CommunicationsManager:
 
     async def deploy_additional_services(self):
         logging.info("🌐  Deploying additional services...")
-       # self._generate_network_conditions()
         await self._forwarder.start()
         if self.config.participant["mobility_args"]["mobility"]:
             if self.config.participant["network_args"]["simulation"]:
                 pass
-                #await self.ns.start()
             # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
-        #await self._mobility.start()
         
 
     async def include_received_message_hash(self, hash_message):

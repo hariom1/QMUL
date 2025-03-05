@@ -29,7 +29,7 @@ class DFLUpdateHandler(UpdateHandler):
     def __init__(
         self,
         aggregator,
-        addr, 
+        addr,
         buffersize=MAX_UPDATE_BUFFER_SIZE
     ):
        self._addr = addr 
@@ -54,7 +54,7 @@ class DFLUpdateHandler(UpdateHandler):
     def agg(self):
         return self._aggregator
     
-    async def init(self):
+    async def init(self, config=None):
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
           

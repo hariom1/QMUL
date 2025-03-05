@@ -41,7 +41,6 @@ class Aggregator(ABC):
         self._addr = config.participant["network_args"]["addr"]
         logging.info(f"[{self.__class__.__name__}] Starting Aggregator")
         self._federation_nodes = set()
-        self._waiting_global_update = False
         self._pending_models_to_aggregate = {}
         self._pending_models_to_aggregate_lock = Locker(name="pending_models_to_aggregate_lock", async_lock=True)
         self._aggregation_done_lock = Locker(name="aggregation_done_lock", async_lock=True)
@@ -55,11 +54,7 @@ class Aggregator(ABC):
 
     def __repr__(self):
         return self.__str__()
-
-    @property
-    def cm(self):
-        return self.engine.cm
-    
+  
     @property
     def us(self):
         return self._update_storage
@@ -71,7 +66,7 @@ class Aggregator(ABC):
             return None
         
     async def init(self):
-        await self.us.init()
+        await self.us.init(self.config)
 
     async def update_federation_nodes(self, federation_nodes: set):
         await self.us.round_expected_updates(federation_nodes=federation_nodes)
@@ -87,9 +82,6 @@ class Aggregator(ABC):
 
     def get_nodes_pending_models_to_aggregate(self):
         return self._federation_nodes
-
-    def set_waiting_global_update(self):
-        self._waiting_global_update = True
 
     async def get_aggregation(self):
         try:
@@ -130,13 +122,7 @@ class Aggregator(ABC):
             logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
         else:
             logging.info("🔄  get_aggregation | All models accounted for, proceeding with aggregation.")
-        
-        logging.info(
-                f"🔄  Broadcasting MODELS_INCLUDED for round {self.engine.get_round()}"
-            )    
-        message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.engine.get_round()]])
-        await self.cm.send_message_to_neighbors(message)
-       
+              
         agg_event = AggregationEvent(updates, self._federation_nodes, missing_nodes)
         await EventManager.get_instance().publish_node_event(agg_event)
         aggregated_result = self.run_aggregation(updates)
