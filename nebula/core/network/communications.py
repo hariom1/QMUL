@@ -7,10 +7,8 @@ from typing import TYPE_CHECKING
 
 import requests
 
-from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
-from nebula.core.network.externalconnection.externalconnectionservice import factory_connection_service
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
 from nebula.core.nebulaevents import MessageEvent
@@ -20,9 +18,6 @@ from nebula.core.eventmanager import EventManager
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
-
-BLACKLIST_EXPIRATION_TIME = 60
-
 
 class CommunicationsManager:
     def __init__(self, engine: "Engine"):
@@ -68,12 +63,7 @@ class CommunicationsManager:
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
-
-        self._blacklist = BlackList()
-
-        # Connection service to communicate with external devices
-        self._external_connection_service = factory_connection_service("nebula", self, self.addr)
-        
+    
     @property
     def engine(self):
         return self._engine
@@ -102,14 +92,6 @@ class CommunicationsManager:
     def propagator(self):
         return self._propagator
 
-    @property
-    def ecs(self):
-        return self._external_connection_service
-    
-    @property
-    def bl(self):
-        return self._blacklist
-
     async def check_federation_ready(self):
         # Check if all my connections are in ready_connections
         logging.info(
@@ -127,8 +109,7 @@ class CommunicationsManager:
     """
 
     async def handle_incoming_message(self, data, addr_from):
-        if not await self.bl.node_in_blacklist(addr_from):
-            await self.mm.process_message(data, addr_from)
+        await self.mm.process_message(data, addr_from)
 
     async def forward_message(self, data, addr_from):
         logging.info("Forwarding message... ")
@@ -151,106 +132,7 @@ class CommunicationsManager:
 
     def get_messages_events(self):
         return self.mm.get_messages_events()
-
-    """                                                     ##############################
-                                                            #          BLACKLIST         #
-                                                            ##############################
-    """
-
-    async def add_to_recently_disconnected(self, addr):
-        await self.bl.add_recently_disconnected(addr)
-
-    async def add_to_blacklist(self, addr):
-        await self.bl.add_to_blacklist(addr)
-
-    async def get_blacklist(self):
-        return await self.bl.get_blacklist()
-
-    async def apply_restrictions(self, nodes):
-        return await self.bl.apply_restrictions(nodes)
-
-    async def clear_restrictions(self):
-        await self.bl.clear_restrictions()
-
-    """                                                     ###############################
-                                                            # EXTERNAL CONNECTION SERVICE #
-                                                            ###############################
-    """
-
-    async def get_geoloc(self):
-        return await self.engine.get_geoloc()
-
-    async def start_external_connection_service(self, run_service=True):
-        if self.ecs == None:
-            self._external_connection_service = factory_connection_service(self, self.addr)
-        if run_service:
-            await self.ecs.start()
-
-    async def stop_external_connection_service(self):
-        await self.ecs.stop()
-
-    async def init_external_connection_service(self):
-        await self.start_external_connection_service()
-
-    async def is_external_connection_service_running(self):
-        return self.ecs.is_running()
-
-    async def start_beacon(self):
-        await self.ecs.start_beacon()
-
-    async def stop_beacon(self):
-        await self.ecs.stop_beacon()
-
-    async def subscribe_beacon_listener(self, listener):
-        await self.ecs.subscribe_beacon_listener(listener)
-
-    async def modify_beacon_frequency(self, frequency):
-        await self.ecs.modify_beacon_frequency(frequency)
-
-    async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None):
-        """
-        Using ExternalConnectionService to get addrs on local network, after that
-        stablishment of TCP connection and send the message broadcasted
-        """
-        addrs = []
-        if addrs_known == None:
-            logging.info("Searching federation process beginning...")
-            addrs = await self.ecs.find_federation()
-            logging.info(f"Found federation devices | addrs {addrs}")
-        else:
-            logging.info(f"Searching federation process beginning... | Using addrs previously known {addrs_known}")
-            addrs = addrs_known
-
-        msg = self.create_message("discover", msg_type)
-
-        # Remove neighbors
-        neighbors = await self.get_addrs_current_connections(only_undirected=True, myself=True)
-        addrs = set(addrs)
-        if neighbors:
-            addrs.difference_update(neighbors)
-
-        discovers_sent = 0
-        if addrs:
-            logging.info("Starting communications with devices found")
-            max_tries = 5
-            for addr in addrs:
-                await self.connect(addr, direct=False)
-                await asyncio.sleep(1)
-            for i in range(0, max_tries):
-                if self.verify_any_connections(addrs):
-                    break
-                await asyncio.sleep(1)
-            current_connections = await self.get_addrs_current_connections(only_undirected=True)
-            logging.info(f"Connections verified after searching: {current_connections}")
-
-            for addr in addrs:
-                logging.info(f"Sending {msg_type} to ---> {addr}")
-                asyncio.create_task(self.send_message(addr, msg))
-                await asyncio.sleep(1)
-                discovers_sent += 1
-        return discovers_sent
-
-       
+  
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
@@ -301,15 +183,6 @@ class CommunicationsManager:
                 logging.info(
                     f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
                 )
-
-                blacklist = await self.bl.get_blacklist()
-                if blacklist:
-                    logging.info(f"blacklist: {blacklist}, source trying to connect: {connection_addr}")
-                    if connection_addr in blacklist:
-                        logging.info(f"🔗  [incoming] Rejecting connection from {connection_addr}, it is blacklisted.")
-                        writer.close()
-                        await writer.wait_closed()
-                        return
 
                 if self.id == connected_node_id:
                     logging.info("🔗  [incoming] Connection with yourself is not allowed")
@@ -402,11 +275,6 @@ class CommunicationsManager:
                     self.incoming_connections.pop(connection_addr)
 
         await process_connection(reader, writer)
-
-    async def terminate_failed_reconnection(self, conn: Connection):
-        connected_with = conn.addr
-        await self.bl.add_recently_disconnected(connected_with)
-        await self.disconnect(connected_with, mutual_disconnection=False)
 
     async def stop(self):
         logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
@@ -705,9 +573,6 @@ class CommunicationsManager:
 
     async def disconnect(self, dest_addr, mutual_disconnection=True, forced=False):
         removed = False
-
-        if forced:
-            self.add_to_blacklist(dest_addr)
 
         logging.info(f"Trying to disconnect {dest_addr}")
         if dest_addr not in self.connections:

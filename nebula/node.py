@@ -309,10 +309,9 @@ async def main(config):
         logging.info(f"Waiting for round {additional_node_round} to start")
         logging.info("Waiting time to start finding federation")
 
-        #time.sleep(150)
-        await asyncio.sleep(150)
 
-        # time.sleep(6000)  # DEBUG purposes
+
+        time.sleep(6000)  # DEBUG purposes
         # import requests
 
         # url = f"http://{node.config.participant['scenario_args']['controller']}/platform/{node.config.participant['scenario_args']['name']}/round"
@@ -321,8 +320,6 @@ async def main(config):
         #    logging.info(f"Waiting for round {additional_node_round} to start")
         #    time.sleep(10)
         # logging.info(f"Round {additional_node_round} started, connecting to the network")
-
-        await node._aditional_node_start()
 
     if node.cm is not None:
         await node.cm.network_wait()

@@ -22,15 +22,6 @@ class MessagesManager:
     def _define_message_templates(self):
         # Dictionary that maps message types to their required parameters and default values
         self._message_templates = {
-            "offer": {
-                "parameters": ["action", "n_neighbors", "loss", "parameters", "rounds", "round", "epochs"],
-                "defaults": {
-                    "parameters": None,
-                    "rounds": 1,
-                    "round": -1,
-                    "epochs": 1,
-                },
-            },
             "connection": {"parameters": ["action"], "defaults": {}},
             "discovery": {
                 "parameters": ["action", "latitude", "longitude"],
@@ -59,8 +50,6 @@ class MessagesManager:
                 },
             },
             "reputation": {"parameters": ["reputation"], "defaults": {}},
-            "discover": {"parameters": ["action"], "defaults": {}},
-            "link": {"parameters": ["action", "addrs"], "defaults": {}},
             # Add additional message types here
         }
 

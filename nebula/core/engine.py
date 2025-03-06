@@ -11,7 +11,6 @@ from nebula.core.aggregation.aggregator import create_aggregator, create_target_
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent
 from nebula.core.network.communications import CommunicationsManager
-from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
 from nebula.core.addonmanager import AddondManager
 
@@ -142,26 +141,9 @@ class Engine:
 
         self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
 
-        self._sinchronized_status = True
-        self.sinchronized_status_lock = Locker(name="sinchronized_status_lock")
-
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
         event_manager = EventManager.get_instance(verbose=False)
-
-        # Mobility setup
-        self._node_manager = None
-        self.mobility = self.config.participant["mobility_args"]["mobility"]
-        if self.mobility == True:
-            topology = self.config.participant["mobility_args"]["topology_type"]
-            topology = topology.lower()
-            model_handler = "std"  # self.config.participant["mobility_args"]["model_handler"]
-            self._node_manager = NodeManager(
-                config.participant["mobility_args"]["additional_node"]["status"],
-                topology,
-                model_handler,
-                engine=self,
-            )
 
         self._addon_manager = AddondManager(self, self.config)
 
@@ -183,10 +165,6 @@ class Engine:
     @property
     def trainer(self):
         return self._trainer
-
-    @property
-    def nm(self):
-        return self._node_manager
 
     def get_addr(self):
         return self.addr
@@ -217,25 +195,6 @@ class Engine:
 
     def get_round_lock(self):
         return self.round_lock
-
-    def get_sinchronized_status(self):
-        with self.sinchronized_status_lock:
-            return True
-            return self._sinchronized_status
-
-    def get_synchronizing_rounds(self):
-        return False
-        return self.nm.get_syncrhonizing_rounds()
-
-    def update_sinchronized_status(self, status):
-        with self.sinchronized_status_lock:
-            logging.info(f"Update | synchronized status from: {self._sinchronized_status} to {status}")
-            self._sinchronized_status = status
-
-    def set_synchronizing_rounds(self, status):
-        if self.mobility:
-            logging.info(f"Set sinchronizing rounds: {status}")
-            self.nm.set_synchronizing_rounds(status)
 
     def set_round(self, new_round):
         logging.info(f"🤖  Update round count | from: {self.round} | to round: {new_round}")
@@ -280,7 +239,6 @@ class Engine:
                                                             ##############################
     """
 
-    # TODO llevar a communications
     async def _discovery_discover_callback(self, source, message):
         logging.info(
             f"🔍  handle_discovery_message | Trigger | Received discovery message from {source} (network propagation)"
@@ -374,171 +332,6 @@ class Engine:
             await self.cm.get_connections_lock().release_async()
 
     """                                                     ##############################
-                                                            #     Mobility callbacks     #
-                                                            ##############################
-    """
-
-    async def _connection_late_connect_callback(self, source, message):
-        logging.info(f"🔗  handle_connection_message | Trigger | Received late connect message from {source}")
-        # Verify if it's a confirmation message from a previous late connection message sent to source
-        if await self.nm.waiting_confirmation_from(source):
-            await self.nm.confirmation_received(source, confirmation=True)
-            return
-
-        if not self.get_initialization_status():
-            logging.info("❗️ Connection refused | Device not initialized yet...")
-            return
-
-        if self.nm.accept_connection(source, joining=True):
-            logging.info(f"🔗  handle_connection_message | Late connection accepted | source: {source}")
-            await self.cm.connect(source, direct=True)
-
-            # Verify conenction is accepted
-            conf_msg = self.cm.create_message("connection", "late_connect")
-            await self.cm.send_message(source, conf_msg)
-            await self.nm.register_late_neighbor(source, joinning_federation=True)
-
-            ct_actions, df_actions = self.nm.get_actions()
-            if len(ct_actions):
-                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
-                await self.cm.send_message(source, cnt_msg)
-
-            if len(df_actions):
-                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
-                await self.cm.send_message(source, df_msg)
-
-        else:
-            logging.info(f"❗️  Late connection NOT accepted | source: {source}")
-
-    async def _connection_restructure_callback(self, source, message):
-        logging.info(f"🔗  handle_connection_message | Trigger | Received restructure message from {source}")
-        # Verify if it's a confirmation message from a previous restructure connection message sent to source
-        if await self.nm.waiting_confirmation_from(source):
-            await self.nm.confirmation_received(source, confirmation=True)
-            return
-
-        if not self.get_initialization_status():
-            logging.info("❗️ Connection refused | Device not initialized yet...")
-            return
-
-        if self.nm.accept_connection(source, joining=False):
-            logging.info(f"🔗  handle_connection_message | Trigger | restructure connection accepted from {source}")
-            await self.cm.connect(source, direct=True)
-
-            conf_msg = self.cm.create_message("connection", "restructure")
-
-            await self.cm.send_message(source, conf_msg)
-
-            ct_actions, df_actions = self.nm.get_actions()
-            if len(ct_actions):
-                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
-                await self.cm.send_message(source, cnt_msg)
-
-            if len(df_actions):
-                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
-                await self.cm.send_message(source, df_msg)
-
-            await self.nm.register_late_neighbor(source, joinning_federation=False)
-        else:
-            logging.info(f"❗️  handle_connection_message | Trigger | restructure connection denied from {source}")
-            await asyncio.sleep(1)
-            # await self.cm.disconnect(source, mutual_disconnection=True)
-
-    async def _discover_discover_join_callback(self, source, message):
-        logging.info(f"🔍  handle_discover_message | Trigger | Received discover_join message from {source} ")
-        if len(self.get_federation_nodes()) > 0:
-            await self.trainning_in_progress_lock.acquire_async()
-            model, rounds, round = (
-                await self.cm.propagator.get_model_information(source, "stable")
-                if self.get_round() > 0
-                else await self.cm.propagator.get_model_information(source, "initialization")
-            )
-            await self.trainning_in_progress_lock.release_async()
-            if round != -1:
-                epochs = self.config.participant["training_args"]["epochs"]
-                msg = self.cm.create_message(
-                    "offer",
-                    "offer_model",
-                    len(self.get_federation_nodes()),
-                    0,
-                    parameters=model,
-                    rounds=rounds,
-                    round=round,
-                    epochs=epochs,
-                )
-                await self.cm.send_offer_model(source, msg)
-            else:
-                logging.info("Discover join received before federation is running..")
-                # starter node is going to send info to the new node
-        else:
-            logging.info(f"🔗  Dissmissing discover join from {source} | no active connections at the moment")
-
-    async def _discover_discover_nodes_callback(self, source, message):
-        logging.info(f"🔍  handle_discover_message | Trigger | Received discover_node message from {source} ")
-        # self.nm.meet_node(source)
-        if len(self.get_federation_nodes()) > 0:
-            # msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
-            msg = self.cm.create_message(
-                "offer",
-                "offer_metric",
-                n_neighbors=len(self.get_federation_nodes()),
-                loss=self.trainer.get_current_loss(),
-            )
-            await self.cm.send_message(source, msg)
-        else:
-            logging.info(f"🔗  Dissmissing discover nodes from {source} | no active connections at the moment")
-
-    async def _offer_offer_model_callback(self, source, message):
-        logging.info(f"🔍  handle_offer_message | Trigger | Received offer_model message from {source}")
-        self.nm.meet_node(source)
-        if self.nm.still_waiting_for_candidates():
-            try:
-                model_compressed = message.parameters
-                if self.nm.accept_model_offer(
-                    source,
-                    model_compressed,
-                    message.rounds,
-                    message.round,
-                    message.epochs,
-                    message.n_neighbors,
-                    message.loss,
-                ):
-                    logging.info(f"🔧 Model accepted from offer | source: {source}")
-                else:
-                    logging.info(f"❗️ Model offer discarded | source: {source}")
-                    self.nm.add_to_discarded_offers(source)
-            except RuntimeError:
-                logging.info(f"❗️ Error proccesing offer model from {source}")
-        else:
-            logging.info(
-                f"❗️ handfle_offer_message | NOT accepting offers | restructure: {self.nm.get_restructure_process_lock().locked()} | waiting candidates: {self.nm.still_waiting_for_candidates()}"
-            )
-            self.nm.add_to_discarded_offers(source)
-
-    async def _offer_offer_metric_callback(self, source, message):
-        logging.info(f"🔍  handle_offer_message | Trigger | Received offer_metric message from {source}")
-        self.nm.meet_node(source)
-        if self.nm.still_waiting_for_candidates():
-            n_neighbors = message.n_neighbors
-            loss = message.loss
-            self.nm.add_candidate(source, n_neighbors, loss)
-
-    async def _link_connect_to_callback(self, source, message):
-        logging.info(f"🔗  handle_link_message | Trigger | Received connect_to message from {source}")
-        addrs = message.addrs
-        for addr in addrs.split():
-            # await self.cm.connect(addr, direct=True)
-            # self.nm.update_neighbors(addr)
-            self.nm.meet_node(addr)
-
-    async def _link_disconnect_from_callback(self, source, message):
-        logging.info(f"🔗  handle_link_message | Trigger | Received disconnect_from message from {source}")
-        addrs = message.addrs
-        for addr in addrs.split():
-            await self.cm.disconnect(source, mutual_disconnection=False)
-            await self.nm.update_neighbors(addr, remove=True)
-
-    """                                                     ##############################
                                                             #    REGISTERING CALLBACKS   #
                                                             ##############################
     """
@@ -576,88 +369,20 @@ class Engine:
         if callable(method):
             await EventManager.get_instance().subscribe((event_type, action), method)
 
-    async def get_geoloc(self):
-        return await self.nm.get_geoloc()
-    
-    
     """                                                     ##############################
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ##############################
     """
 
-    async def _aditional_node_start(self):
-        self.update_sinchronized_status(False)
-        logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
-        await self.nm.start_late_connection_process()
-        # continue ..
-        # asyncio.create_task(self.nm.stop_not_selected_connections())
-        logging.info("Creating trainer service to start the federation process..")
-        asyncio.create_task(self._start_learning_late())
-
     async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
-        if self.mobility:
-            self.federation_nodes = neighbors
-            await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
-            updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
-            asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
+        self.federation_nodes = neighbors
+        updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
+        asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
             
     async def broadcast_models_include(self, age : AggregationEvent):
         logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")    
         message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.get_round()]])
         asyncio.create_task(self.cm.send_message_to_neighbors(message))        
-
-    async def update_model_learning_rate(self, new_lr):
-        await self.trainning_in_progress_lock.acquire_async()
-        logging.info("Update | learning rate modified...")
-        self.trainer.update_model_learning_rate(new_lr)
-        await self.trainning_in_progress_lock.release_async()
-
-    async def _start_learning_late(self):
-        await self.learning_cycle_lock.acquire_async()
-        try:
-            model_serialized, rounds, round, _epochs = await self.nm.get_trainning_info()
-            self.total_rounds = rounds
-            epochs = _epochs
-            await self.get_round_lock().acquire_async()
-            self.round = round
-            await self.get_round_lock().release_async()
-            await self.learning_cycle_lock.release_async()
-            print_msg_box(
-                msg="Starting Federated Learning process...",
-                indent=2,
-                title="Start of the experiment late",
-            )
-            logging.info(f"Trainning setup | total rounds: {rounds} | current round: {round} | epochs: {epochs}")
-            direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
-            logging.info(f"Initial DIRECT connections: {direct_connections}")
-            await asyncio.sleep(1)
-            try:
-                logging.info("🤖  Initializing model...")
-                await asyncio.sleep(1)
-                model = self.trainer.deserialize_model(model_serialized)
-                self.trainer.set_model_parameters(model, initialize=True)
-                logging.info("Model Parameters Initialized")
-                self.set_initialization_status(True)
-                await (
-                    self.get_federation_ready_lock().release_async()
-                )  # Enable learning cycle once the initialization is done
-                try:
-                    await (
-                        self.get_federation_ready_lock().release_async()
-                    )  # Release the lock acquired at the beginning of the engine
-                except RuntimeError:
-                    pass
-            except RuntimeError:
-                pass
-
-            self.trainer.set_epochs(epochs)
-            self.trainer.set_current_round(round)
-            self.trainer.create_trainer()
-            await self._learning_cycle()
-
-        finally:
-            if await self.learning_cycle_lock.locked_async():
-                await self.learning_cycle_lock.release_async()
 
     async def create_trainer_module(self):
         asyncio.create_task(self._start_learning())
@@ -681,9 +406,6 @@ class Engine:
             await asyncio.sleep(1)
         current_connections = await self.cm.get_addrs_current_connections()
         logging.info(f"Connections verified: {current_connections}")
-        if self.mobility:
-            logging.info("Building NodeManager configurations...")
-            await self.nm.set_configs()
         await self._reporter.start()
         await self.cm.deploy_additional_services()
         await self._addon_manager.deploy_additional_services()
@@ -840,7 +562,6 @@ class Engine:
             logging.info(f"[Role {self.role}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(self.federation_nodes)
             await self._extended_learning_cycle()
-            await self._additional_mobility_actions()
 
             await self.get_round_lock().acquire_async()
             print_msg_box(
@@ -856,7 +577,6 @@ class Engine:
             )  # Set current round in config (send to the controller)
             await self.get_round_lock().release_async()
 
-        if self.mobility: await self.nm.experiment_finish()
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()
@@ -892,12 +612,6 @@ class Engine:
         functionalities. The method is called in the _learning_cycle method.
         """
         pass
-
-    async def _additional_mobility_actions(self):
-        if not self.mobility:
-            return
-        logging.info("🔄 Starting additional mobility actions...")
-        await self.nm.mobility_actions()
 
     def reputation_calculation(self, aggregated_models_weights):
         cossim_threshold = 0.5
