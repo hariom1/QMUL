@@ -31,10 +31,6 @@ class ExternalConnectionService(ABC):
     async def modify_beacon_frequency(self, frequency):
         pass
     
-    @abstractmethod
-    async def subscribe_beacon_listener(self, listener):
-        pass
-
 class ExternalConnectionServiceException(Exception):
     pass 
 

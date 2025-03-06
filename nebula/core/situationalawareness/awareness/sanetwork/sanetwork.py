@@ -3,6 +3,8 @@ import logging
 from nebula.core.utils.locker import Locker
 from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.addons.functions import print_msg_box
+from nebula.core.nebulaevents import BeaconRecievedEvent
+from nebula.core.eventmanager import EventManager
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -49,7 +51,7 @@ class SANetwork():
         if not self.sam.is_additional_participant():
             logging.info("Deploying External Connection Service")
             await self.cm.start_external_connection_service()
-            await self.cm.subscribe_beacon_listener(self.beacon_received)
+            await EventManager.get_instance().subscribe_node_event(BeaconRecievedEvent, self.beacon_received)
             await self.cm.start_beacon()
         else:
             logging.info("Deploying External Connection Service | No running")
@@ -113,16 +115,17 @@ class SANetwork():
         if not await self.cm.is_external_connection_service_running():
             logging.info("🔄 External Service not running | Starting service...")
             await self.cm.init_external_connection_service()
-            await self.cm.subscribe_beacon_listener(self.beacon_received)
+            await EventManager.get_instance().subscribe_node_event(BeaconRecievedEvent, self.beacon_received)
             await self.cm.start_beacon()
     
     async def experiment_finish(self):
         await self.cm.stop_external_connection_service()
     
-    async def beacon_received(self, addr, geoloc):
+    async def beacon_received(self, beacon_recieved_event : BeaconRecievedEvent):
+        addr, geoloc = await beacon_recieved_event.get_event_data()
         latitude, longitude = geoloc
         self.meet_node(addr)
-        #logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
+        logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
         
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #

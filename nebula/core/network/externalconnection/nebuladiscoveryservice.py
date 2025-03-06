@@ -4,6 +4,8 @@ import socket
 import struct
 from nebula.core.network.externalconnection.externalconnectionservice import ExternalConnectionService
 from nebula.core.utils.locker import Locker
+from nebula.core.nebulaevents import BeaconRecievedEvent
+from nebula.core.eventmanager import EventManager
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -168,8 +170,6 @@ class NebulaConnectionService(ExternalConnectionService):
         self.client : NebulaClientProtocol = None
         self.beacon : NebulaBeacon = NebulaBeacon(self, self.addr)
         self.running = False
-        self._beacon_listeners_lock = Locker(name="beacon_listeners_lock", async_lock=True)
-        self._beacon_listeners = []
         
     @property
     def cm(self):
@@ -235,15 +235,8 @@ class NebulaConnectionService(ExternalConnectionService):
                     if addr not in self.nodes_found:
                         logging.info(f"Device address received: {addr}")
                         self.nodes_found.add(addr)
-                    
-    async def subscribe_beacon_listener(self, listener : callable):
-        await self._beacon_listeners_lock.acquire_async()
-        logging.info("Registering beacon listener...")
-        self._beacon_listeners.append(listener)
-        await self._beacon_listeners_lock.release_async()
-                                       
+                                                       
     async def notify_beacon_received(self, addr, geoloc):
-        await self._beacon_listeners_lock.acquire_async()
-        for bec_listener in self._beacon_listeners:
-            await bec_listener(addr, geoloc)
-        await self._beacon_listeners_lock.release_async()
+        beacon_event = BeaconRecievedEvent(addr, geoloc)
+        asyncio.create_task(EventManager.get_instance().publish_node_event(beacon_event))
+        

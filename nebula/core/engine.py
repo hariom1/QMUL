@@ -147,7 +147,7 @@ class Engine:
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
-        event_manager = EventManager.get_instance(verbose=False)
+        event_manager = EventManager.get_instance(verbose=True)
 
         # Mobility setup
         self._node_manager = None

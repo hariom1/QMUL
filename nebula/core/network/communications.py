@@ -201,9 +201,6 @@ class CommunicationsManager:
     async def stop_beacon(self):
         await self.ecs.stop_beacon()
 
-    async def subscribe_beacon_listener(self, listener):
-        await self.ecs.subscribe_beacon_listener(listener)
-
     async def modify_beacon_frequency(self, frequency):
         await self.ecs.modify_beacon_frequency(frequency)
 
@@ -445,9 +442,7 @@ class CommunicationsManager:
     async def deploy_additional_services(self):
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
-        if self.config.participant["mobility_args"]["mobility"]:
-            if self.config.participant["network_args"]["simulation"]:
-                pass
+
             # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()

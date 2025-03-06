@@ -41,6 +41,13 @@ class RoundStartEvent(NodeEvent):
         return "Round starting"
 
     async def get_event_data(self):
+        """Retrieves the round start event data.
+
+        Returns:
+            tuple[int, float]:
+                -round (int): Round number.
+                -start_time (time): Current time when round is going to start.
+        """
         return (self._round, self._round_start_time)
     
     async def is_concurrent(self):
@@ -125,7 +132,7 @@ class UpdateReceivedEvent(NodeEvent):
     def __str__(self):
         return f"Update received from source: {self._source}, round: {self._round}" 
     
-    async def get_event_data(self) -> tuple[str, bool]:
+    async def get_event_data(self) -> tuple[object, int, str, int, bool]:
         """
         Retrieves the event data.
 
@@ -141,6 +148,35 @@ class UpdateReceivedEvent(NodeEvent):
     
     async def is_concurrent(self) -> bool:
         return False       
+    
+class BeaconRecievedEvent(NodeEvent):
+    def __init__(self, source, geoloc):
+        """
+        Initializes an BeaconRecievedEvent.
+
+        Args:
+            source (str): The received beacon source.
+            geoloc (tuple): The geolocalzition associated with the received beacon source.
+        """ 
+        self._source = source
+        self._geoloc = geoloc
+        
+    def __str__(self):
+        return "Beacon recieved"
+    
+    async def get_event_data(self) -> tuple[str, tuple[float, float]]:
+        """
+        Retrieves the event data.
+
+        Returns:
+            tuple[str, tuple[float, float]]: A tuple containing:
+                - The beacon's source.
+                - the device geolocalization (latitude, longitude).
+        """
+        return (self._source, self._geoloc)    
+        
+    async def is_concurrent(self) -> bool:
+        return True         
     
     
 """                                                     ##############################
