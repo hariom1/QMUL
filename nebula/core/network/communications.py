@@ -1,23 +1,23 @@
 import asyncio
 import collections
 import logging
-import subprocess
 import sys
 from typing import TYPE_CHECKING
 
 import requests
 
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
-from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.propagator import Propagator
 from nebula.core.utils.locker import Locker
-from nebula.core.eventmanager import EventManager
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
+
 
 class CommunicationsManager:
     def __init__(self, engine: "Engine"):
@@ -29,10 +29,10 @@ class CommunicationsManager:
         self.config = engine.get_config()
         self.id = str(self.config.participant["device_args"]["idx"])
 
-        self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
-        self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
+        self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/platform/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
+        self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/platform/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
 
-        self._connections : dict[str, Connection] = {}
+        self._connections: dict[str, Connection] = {}
         self.connections_lock = Locker(name="connections_lock", async_lock=True)
         self.connections_manager_lock = Locker(name="connections_manager_lock", async_lock=True)
         self.connection_attempt_lock_incoming = Locker(name="connection_attempt_lock_incoming", async_lock=True)
@@ -63,7 +63,7 @@ class CommunicationsManager:
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
-    
+
     @property
     def engine(self):
         return self._engine
@@ -132,12 +132,12 @@ class CommunicationsManager:
 
     def get_messages_events(self):
         return self.mm.get_messages_events()
-  
+
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
-    
+
     def get_connections_lock(self):
         return self.connections_lock
 
@@ -319,7 +319,6 @@ class CommunicationsManager:
             # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
-        
 
     async def include_received_message_hash(self, hash_message):
         try:

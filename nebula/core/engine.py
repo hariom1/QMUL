@@ -2,17 +2,18 @@ import asyncio
 import logging
 import os
 import time
+
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
+from nebula.core.addonmanager import AddondManager
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent
+from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
-from nebula.core.addonmanager import AddondManager
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -301,15 +302,14 @@ class Engine:
 
     async def _federation_reputation_callback(self, source, message):
         malicious_nodes = message.arguments  # List of malicious nodes
-        if self.with_reputation:
-            if len(malicious_nodes) > 0 and not self._is_malicious:
-                if self.is_dynamic_topology:
-                    await self._disrupt_connection_using_reputation(malicious_nodes)
-                if self.is_dynamic_aggregation and self.aggregator != self.target_aggregation:
-                    await self._dynamic_aggregator(
-                        self.aggregator.get_nodes_pending_models_to_aggregate(),
-                        malicious_nodes,
-                    )
+        if self.with_reputation and len(malicious_nodes) > 0 and not self._is_malicious:
+            if self.is_dynamic_topology:
+                await self._disrupt_connection_using_reputation(malicious_nodes)
+            if self.is_dynamic_aggregation and self.aggregator != self.target_aggregation:
+                await self._dynamic_aggregator(
+                    self.aggregator.get_nodes_pending_models_to_aggregate(),
+                    malicious_nodes,
+                )
 
     async def _federation_federation_models_included_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received aggregation finished message from {source}")
@@ -378,11 +378,13 @@ class Engine:
         self.federation_nodes = neighbors
         updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
         asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
-            
-    async def broadcast_models_include(self, age : AggregationEvent):
-        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")    
-        message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.get_round()]])
-        asyncio.create_task(self.cm.send_message_to_neighbors(message))        
+
+    async def broadcast_models_include(self, age: AggregationEvent):
+        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
+        message = self.cm.create_message(
+            "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
+        )
+        asyncio.create_task(self.cm.send_message_to_neighbors(message))
 
     async def create_trainer_module(self):
         asyncio.create_task(self._start_learning())
@@ -512,7 +514,7 @@ class Engine:
             self.aggregator = self.target_aggregation
             await self.aggregator.update_federation_nodes(self.federation_nodes)
 
-            for subnodes in aggregated_models_weights.keys():
+            for subnodes in aggregated_models_weights:
                 sublist = subnodes.split()
                 (submodel, weights) = aggregated_models_weights[subnodes]
                 for node in sublist:
@@ -549,7 +551,7 @@ class Engine:
             rse = RoundStartEvent(self.round, current_time)
             await EventManager.get_instance().publish_node_event(rse)
             print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds} started.",
+                msg=f"Round {self.round} of {self.total_rounds - 1} started (max. {self.total_rounds} rounds)",
                 indent=2,
                 title="Round information",
             )
@@ -565,13 +567,13 @@ class Engine:
 
             await self.get_round_lock().acquire_async()
             print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds} finished.",
+                msg=f"Round {self.round} of {self.total_rounds - 1} finished (max. {self.total_rounds} rounds)",
                 indent=2,
                 title="Round information",
             )
             # await self.aggregator.reset()
             self.trainer.on_round_end()
-            self.round = self.round + 1
+            self.round += 1
             self.config.participant["federation_args"]["round"] = (
                 self.round
             )  # Set current round in config (send to the controller)
@@ -581,7 +583,7 @@ class Engine:
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()
         print_msg_box(
-            msg="Federated Learning process has been completed.",
+            msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,
             title="End of the experiment",
         )
@@ -618,7 +620,7 @@ class Engine:
         loss_threshold = 0.5
 
         current_models = {}
-        for subnodes in aggregated_models_weights.keys():
+        for subnodes in aggregated_models_weights:
             sublist = subnodes.split()
             submodel = aggregated_models_weights[subnodes][0]
             for node in sublist:
@@ -679,7 +681,7 @@ class MaliciousNode(Engine):
     async def _extended_learning_cycle(self):
         try:
             await self.attack.attack()
-        except:
+        except Exception:
             attack_name = self.config.participant["adversarial_args"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")
 
@@ -715,9 +717,11 @@ class AggregatorNode(Engine):
         await self.trainer.train()
         await self.trainning_in_progress_lock.release_async()
 
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round)
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
-        
+
         await self.cm.propagator.propagate("stable")
         await self._waiting_model_updates()
 
@@ -742,8 +746,10 @@ class ServerNode(Engine):
     async def _extended_learning_cycle(self):
         # Define the functionality of the server node
         await self.trainer.test()
-     
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round)
+
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self._waiting_model_updates()
@@ -773,8 +779,10 @@ class TrainerNode(Engine):
 
         await self.trainer.test()
         await self.trainer.train()
-      
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True)
+
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self.cm.propagator.propagate("stable")
