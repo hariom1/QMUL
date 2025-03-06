@@ -524,7 +524,7 @@ class ScenarioManagement:
 
         # Add role to the topology (visualization purposes)
         self.topologymanager.update_nodes(config_participants)
-        self.topologymanager.draw_graph(path=f"{self.log_dir}/{self.scenario_name}/topology.png", plot=False)
+        self.topologymanager.draw_graph(path=f"{self.config_dir}/topology.png", plot=False)
 
         # Include additional participants (if any) as copies of the last participant
         additional_participants_files = []
