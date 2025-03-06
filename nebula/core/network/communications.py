@@ -103,9 +103,10 @@ class CommunicationsManager:
     async def add_ready_connection(self, addr):
         self.ready_connections.add(addr)
 
-    """                                                     ##############################
-                                                            #    PROCESSING MESSAGES     #
-                                                            ##############################
+    """
+    ##############################
+    #    PROCESSING MESSAGES     #
+    ##############################
     """
 
     async def handle_incoming_message(self, data, addr_from):
@@ -133,9 +134,10 @@ class CommunicationsManager:
     def get_messages_events(self):
         return self.mm.get_messages_events()
 
-    """                                                     ##############################
-                                                            #    OTHER FUNCTIONALITIES   #
-                                                            ##############################
+    """
+    ##############################
+    #    OTHER FUNCTIONALITIES   #
+    ##############################
     """
 
     def get_connections_lock(self):
@@ -179,7 +181,7 @@ class CommunicationsManager:
                 connection_addr = f"{addr[0]}:{connected_node_port}"
                 direct = await reader.readline()
                 direct = direct.decode("utf-8").strip()
-                direct = True if direct == "True" else False
+                direct = direct == "True"
                 logging.info(
                     f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
                 )
@@ -297,15 +299,11 @@ class CommunicationsManager:
 
     def verify_any_connections(self, neighbors):
         # Return True if any neighbors are connected
-        if any(neighbor in self.connections for neighbor in neighbors):
-            return True
-        return False
+        return bool(any(neighbor in self.connections for neighbor in neighbors))
 
     def verify_connections(self, neighbors):
         # Return True if all neighbors are connected
-        if all(neighbor in self.connections for neighbor in neighbors):
-            return True
-        return False
+        return bool(all(neighbor in self.connections for neighbor in neighbors))
 
     async def network_wait(self):
         await self.stop_network_engine.wait()
@@ -313,8 +311,7 @@ class CommunicationsManager:
     async def deploy_additional_services(self):
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
-        if self.config.participant["mobility_args"]["mobility"]:
-            if self.config.participant["network_args"]["simulation"]:
+        if self.config.participant["mobility_args"]["mobility"] and self.config.participant["network_args"]["simulation"]:
                 pass
             # await self._discoverer.start()
         # await self._health.start()
@@ -367,7 +364,6 @@ class CommunicationsManager:
                 logging.info(
                     f"Sending model to {dest_addr} with round {round}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
                 )
-                # message = self.mm.generate_model_message(round, serialized_model, weight)
                 parameters = serialized_model
                 message = self.create_message("model", "", round, parameters, weight)
                 await conn.send(data=message, is_compressed=True)
@@ -404,7 +400,7 @@ class CommunicationsManager:
                 async with self.connections_manager_lock:
                     if addr in self.connections:
                         logging.info(f"🔗  [outgoing] Already connected with {self.connections[addr]}")
-                        if not self.connections[addr].get_direct() and (direct == True):
+                        if not self.connections[addr].get_direct() and (direct is True):
                             self.connections[addr].set_direct(direct)
                             return True
                         else:
@@ -532,7 +528,7 @@ class CommunicationsManager:
 
     async def connect(self, addr, direct=True):
         await self.get_connections_lock().acquire_async()
-        duplicated = addr in self.connections.keys()
+        duplicated = addr in self.connections
         await self.get_connections_lock().release_async()
         if duplicated:
             if direct:  # Upcoming direct connection

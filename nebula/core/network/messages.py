@@ -55,7 +55,7 @@ class MessagesManager:
 
     def get_messages_events(self):
         message_events = {}
-        for message_name in self._message_templates.keys():
+        for message_name in self._message_templates:
             if message_name != "model" and message_name != "reputation":
                 message_events[message_name] = get_actions_names(message_name)
         return message_events
@@ -99,7 +99,6 @@ class MessagesManager:
                     if message_type == "model_message":
                         await self.cm.handle_model_message(source, message_data)
                     else:
-                        # await self.cm.handle_message(source, message_type, message_data)
                         me = MessageEvent(
                             (msg_name, get_action_name_from_value(msg_name, message_data.action)), source, message_data
                         )
@@ -107,7 +106,6 @@ class MessagesManager:
             # Rest of messages
             else:
                 if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    # await self.cm.handle_message(source, message_type, message_data)
                     me = MessageEvent(
                         (msg_name, get_action_name_from_value(msg_name, message_data.action)), source, message_data
                     )

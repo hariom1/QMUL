@@ -168,7 +168,7 @@ class Propagator:
 
         await asyncio.sleep(self.interval)
         return True
-    
+
     async def get_model_information(self, dest_addr, strategy_id: str, init=False):
         if not init:
             if strategy_id not in self.strategies:
@@ -177,7 +177,7 @@ class Propagator:
             if self.get_round() is None:
                 logging.info("Propagation halted: round is not set.")
                 return None
-        
+
         strategy = self.strategies[strategy_id]
         logging.info(f"Preparing model information with strategy to make an offer: {strategy_id}")
 
@@ -189,6 +189,5 @@ class Propagator:
                 model_params if isinstance(model_params, bytes) else self.trainer.serialize_model(model_params)
             )
             return (serialized_model, rounds, self.get_round())
-                
+
         return None
-    

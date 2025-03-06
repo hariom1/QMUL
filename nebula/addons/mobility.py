@@ -3,11 +3,13 @@ import logging
 import math
 import random
 import time
+from typing import TYPE_CHECKING
+
+from nebula.addons.functions import print_msg_box
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import GPSEvent
 from nebula.core.utils.locker import Locker
-from nebula.addons.functions import print_msg_box
-from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
 
@@ -102,7 +104,7 @@ class Mobility:
         task = asyncio.create_task(self.run_mobility())
         return task
 
-    async def update_nodes_distances(self, gpsevent : GPSEvent):
+    async def update_nodes_distances(self, gpsevent: GPSEvent):
         distances = await gpsevent.get_event_data()
         async with self._nodes_distances_lock:
             self._nodes_distances = dict(distances)
@@ -133,7 +135,7 @@ class Mobility:
         """
         if not self.mobility:
             return
-        #await asyncio.sleep(self.grace_time)
+        # await asyncio.sleep(self.grace_time)
         while True:
             await self.change_geo_location()
             await asyncio.sleep(self.period)
@@ -159,7 +161,8 @@ class Mobility:
             - The calculated radius is converted from meters to degrees based on an approximate
               conversion factor (1 degree is approximately 111 kilometers).
         """
-        if self._verbose: logging.info("📍  Changing geo location randomly")
+        if self._verbose:
+            logging.info("📍  Changing geo location randomly")
         # radius_in_degrees = self.radius_federation / 111000
         max_radius_in_degrees = self.max_movement_random_strategy / 111000
         radius = random.uniform(0, max_radius_in_degrees)  # noqa: S311
@@ -240,7 +243,8 @@ class Mobility:
 
         self.config.participant["mobility_args"]["latitude"] = latitude
         self.config.participant["mobility_args"]["longitude"] = longitude
-        if self._verbose: logging.info(f"📍  New geo location: {latitude}, {longitude}")
+        if self._verbose:
+            logging.info(f"📍  New geo location: {latitude}, {longitude}")
 
     async def change_geo_location(self):
         """
@@ -274,10 +278,10 @@ class Mobility:
                     sorted_list = sorted(self._nodes_distances.items(), key=lambda item: item[1][0])
                     # Transformamos la lista para obtener solo dirección y coordenadas
                     result = [(addr, dist, coords) for addr, (dist, coords) in sorted_list]
-                    
+
                 selected_neighbor = result[0] if result else None
                 if selected_neighbor:
-                    #logging.info(f"📍  Selected neighbor: {selected_neighbor}")
+                    # logging.info(f"📍  Selected neighbor: {selected_neighbor}")
                     addr, dist, (lat, long) = selected_neighbor
                     if dist > self.max_initiate_approximation:
                         # If the distance is too big, we move towards the neighbor
@@ -298,5 +302,3 @@ class Mobility:
         else:
             logging.error(f"📍  Mobility type {self.mobility_type} not implemented")
             return
-
-

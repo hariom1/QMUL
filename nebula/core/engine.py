@@ -8,7 +8,7 @@ import docker
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
-from nebula.core.addonmanager import AddondManager
+from nebula.core.addonmanager import AddonManager
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
@@ -102,7 +102,7 @@ class Engine:
         self._aggregator = create_aggregator(config=self.config, engine=self)
 
         self._secure_neighbors = []
-        self._is_malicious = True if self.config.participant["adversarial_args"]["attacks"] != "No Attack" else False
+        self._is_malicious = self.config.participant["adversarial_args"]["attacks"] != "No Attack"
 
         msg = f"Trainer: {self._trainer.__class__.__name__}"
         msg += f"\nDataset: {self.config.participant['data_args']['dataset']}"
@@ -144,9 +144,7 @@ class Engine:
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
-        event_manager = EventManager.get_instance(verbose=False)
-
-        self._addon_manager = AddondManager(self, self.config)
+        self._addon_manager = AddonManager(self, self.config)
 
     @property
     def cm(self):
@@ -202,9 +200,10 @@ class Engine:
         self.round = new_round
         self.trainer.set_current_round(new_round)
 
-    """                                                     ##############################
-                                                            #       MODEL CALLBACKS      #
-                                                            ##############################
+    """
+    ##############################
+    #       MODEL CALLBACKS      #
+    ##############################
     """
 
     async def model_initialization_callback(self, source, message):
@@ -235,9 +234,10 @@ class Engine:
         updt_received_event = UpdateReceivedEvent(decoded_model, message.weight, source, message.round)
         await EventManager.get_instance().publish_node_event(updt_received_event)
 
-    """                                                     ##############################
-                                                            #      General callbacks     #
-                                                            ##############################
+    """
+    ##############################
+    #      General callbacks     #
+    ##############################
     """
 
     async def _discovery_discover_callback(self, source, message):
@@ -331,9 +331,10 @@ class Engine:
         finally:
             await self.cm.get_connections_lock().release_async()
 
-    """                                                     ##############################
-                                                            #    REGISTERING CALLBACKS   #
-                                                            ##############################
+    """
+    ##############################
+    #    REGISTERING CALLBACKS   #
+    ##############################
     """
 
     async def register_events_callbacks(self):
@@ -369,9 +370,10 @@ class Engine:
         if callable(method):
             await EventManager.get_instance().subscribe((event_type, action), method)
 
-    """                                                     ##############################
-                                                            #    ENGINE FUNCTIONALITY    #
-                                                            ##############################
+    """
+    ##############################
+    #    ENGINE FUNCTIONALITY    #
+    ##############################
     """
 
     async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
@@ -424,7 +426,6 @@ class Engine:
                 while not await self.cm.check_federation_ready():
                     await asyncio.sleep(1)
                 logging.info("Sending FEDERATION_START to neighbors...")
-                # message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_START)
                 message = self.cm.create_message("federation", "federation_start")
                 await self.cm.send_message_to_neighbors(message)
                 await self.get_federation_ready_lock().release_async()
@@ -435,7 +436,6 @@ class Engine:
 
         else:
             logging.info("Sending FEDERATION_READY to neighbors...")
-            # message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_READY)
             message = self.cm.create_message("federation", "federation_ready")
             await self.cm.send_message_to_neighbors(message)
             logging.info("💤  Waiting until receiving the start signal from the start node")

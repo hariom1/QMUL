@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import lz4.frame
-from geopy import distance
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -103,15 +102,13 @@ class Connection:
         return self.federated_round
 
     def get_tunnel_status(self):
-        if self.reader is None or self.writer is None:
-            return False
-        return True
+        return not (self.reader is None or self.writer is None)
 
     def update_round(self, federated_round):
         self.federated_round = federated_round
 
     def get_ready(self):
-        return True if self.federated_round != Connection.DEFAULT_FEDERATED_ROUND else False
+        return self.federated_round != Connection.DEFAULT_FEDERATED_ROUND
 
     def get_direct(self):
         return self.direct
@@ -292,11 +289,11 @@ class Connection:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
-        except BrokenPipeError:
+        except BrokenPipeError as e:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
             if self.direct:
-                #TODO tal vez una task?
+                # TODO tal vez una task?
                 await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
