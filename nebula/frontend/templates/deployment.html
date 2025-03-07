@@ -597,6 +597,20 @@
                                 placeholder="Enter size of node data samples" min="1"
                                 style="display: inline; width: 80%">
                         </div>
+                        <h5 id="shadow-metric-options-title" class="step-title" style="display: none;">Metric Detail</h5>
+                        <div class="form-check form-check-inline" id="shadow-metric-options-container" style="display: none;">
+                            <select class="form-control" id="shadow-metric-options-select" name="shadow-metric-options"
+                                style="display: inline; width: 80%">
+                                <option selected>Prediction Correctness</option>
+                                <option>Prediction Loss</option>
+                                <option>Prediction Maximal Confidence</option>
+                                <option>Prediction Entropy</option>
+                                <option>Prediction Class Confidence</option>
+                                <option>Prediction Class Entropy</option>
+                                <option>Prediction Modified Entropy</option>
+                                <option>Prediction Sensitivity (Jacobian Matrix)</option>
+                            </select>
+                        </div>
                         <h5 id="shadow-model-attack-title" class="step-title" style="display: none;">Attack Model</h5>
                         <div class="form-check form-check-inline" id="shadow-model-attack-container" style="display: none;">
                             <select class="form-control" id="shadow-model-attack-select" name="attack-model" style="display: inline; width: 80%">
@@ -1162,12 +1176,16 @@
             data["attack_params"].strength = document.getElementById("strength").value;
             data["attack_params"].layer_idx = document.getElementById("layer_idx").value;
             data["attack_params"].delay = document.getElementById("delay").value;
-            data["attack_params"].round_start_attack = document.getElementById("start-attack").value
-            data["attack_params"].round_stop_attack = document.getElementById("stop-attack").value
-            data["attack_params"].attack_interval = document.getElementById("attack-interval").value
-            data["attack_params"].target_percentage = document.getElementById("target-percentage").value
-            data["attack_params"].selection_interval = document.getElementById("selection-interval").value
-            data["attack_params"].flooding_factor = document.getElementById("flooding-factor").value
+            data["attack_params"].round_start_attack = document.getElementById("start-attack").value;
+            data["attack_params"].round_stop_attack = document.getElementById("stop-attack").value;
+            data["attack_params"].attack_interval = document.getElementById("attack-interval").value;
+            data["attack_params"].target_percentage = document.getElementById("target-percentage").value;
+            data["attack_params"].selection_interval = document.getElementById("selection-interval").value;
+            data["attack_params"].flooding_factor = document.getElementById("flooding-factor").value;
+            data["attack_params"].size_of_node_data_samples = document.getElementById("size-of-node-data-samples").value;
+            data["attack_params"].shadow_model_number = document.getElementById("shadow-model-number").value;
+            data["attack_params"].shadow_model_attack = document.getElementById("shadow-model-attack").value;
+            data["attack_params"].shadow_metric_options = document.getElementById("shadow-metric-options").value;
             // Step 13
             data["with_reputation"] = document.getElementById("with-reputation-btn").checked ? true : false
             data["is_dynamic_topology"] = document.getElementById("dynamic-topology-btn").checked ? true : false
@@ -1286,6 +1304,10 @@
                 document.getElementById("target-percentage").value = data.attack_params.target_percentage;
                 document.getElementById("selection-interval").value = data.attack_params.selection_interval;
                 document.getElementById("flooding-factor").value = data.attack_params.flooding_factor;
+                document.getElementById("size-of-node-data-samples").value = data.attack_params.size_of_node_data_samples;
+                document.getElementById("shadow-model-number").value = data.attack_params.shadow_model_number;
+                document.getElementById("shadow-model-attack").value = data.attack_params.shadow_model_attack;
+                document.getElementById("shadow-metric-options").value = data.attack_params.shadow_metric_options;
 
                 if (data["poisoned_node_percent"] == 0)
                 {
@@ -3098,10 +3120,10 @@
                 document.getElementById("stop-attack-container").style.display = "block";
                 document.getElementById("attack-interval-title").style.display = "block";
                 document.getElementById("attack-interval-container").style.display = "block";
-                document.getElementById("target-percentage-title").style.display = "block";
-                document.getElementById("target-percentage-container").style.display = "block";
-                document.getElementById("selection-interval-title").style.display = "block";
-                document.getElementById("selection-interval-container").style.display = "block";
+                document.getElementById("target-percentage-title").style.display = "none";
+                document.getElementById("target-percentage-container").style.display = "none";
+                document.getElementById("selection-interval-title").style.display = "none";
+                document.getElementById("selection-interval-container").style.display = "none";
                 document.getElementById("flooding-factor-title").style.display = "none";
                 document.getElementById("flooding-factor-container").style.display = "none";
                 document.getElementById("size-of-node-data-samples-title").style.display = "block";
@@ -3109,7 +3131,9 @@
                 document.getElementById("shadow-model-number-title").style.display = "block";
                 document.getElementById("shadow-model-number-container").style.display = "block";
                 document.getElementById("shadow-model-attack-title").style.display = "block";
-                document.getElementById("shadow-model-attack-title-container").style.display = "block";
+                document.getElementById("shadow-model-attack-container").style.display = "block";
+                document.getElementById("shadow-metric-options-title").style.display = "none";
+                document.getElementById("shadow-metric-options-container").style.display = "none";
             }
             else if(this.value == "Metric Based MIAs"){
                 document.getElementById("poisoned-node-title").style.display = "block";
@@ -3130,18 +3154,18 @@
                 document.getElementById("strength-container").style.display = "none";
                 document.getElementById("layer_idx-title").style.display = "none";
                 document.getElementById("layer_idx-container").style.display = "none";
-                document.getElementById("delay-title").style.display = "block";
-                document.getElementById("delay-container").style.display = "block";
+                document.getElementById("delay-title").style.display = "none";
+                document.getElementById("delay-container").style.display = "none";
                 document.getElementById("start-attack-title").style.display = "block";
                 document.getElementById("start-attack-container").style.display = "block";
                 document.getElementById("stop-attack-title").style.display = "block";
                 document.getElementById("stop-attack-container").style.display = "block";
                 document.getElementById("attack-interval-title").style.display = "block";
                 document.getElementById("attack-interval-container").style.display = "block";
-                document.getElementById("target-percentage-title").style.display = "block";
-                document.getElementById("target-percentage-container").style.display = "block";
-                document.getElementById("selection-interval-title").style.display = "block";
-                document.getElementById("selection-interval-container").style.display = "block";
+                document.getElementById("target-percentage-title").style.display = "none";
+                document.getElementById("target-percentage-container").style.display = "none";
+                document.getElementById("selection-interval-title").style.display = "none";
+                document.getElementById("selection-interval-container").style.display = "none";
                 document.getElementById("flooding-factor-title").style.display = "none";
                 document.getElementById("flooding-factor-container").style.display = "none";
                 document.getElementById("size-of-node-data-samples-title").style.display = "block";
@@ -3149,7 +3173,9 @@
                 document.getElementById("shadow-model-number-title").style.display = "none";
                 document.getElementById("shadow-model-number-container").style.display = "none";
                 document.getElementById("shadow-model-attack-title").style.display = "none";
-                document.getElementById("shadow-model-attack-title-container").style.display = "none";
+                document.getElementById("shadow-model-attack-container").style.display = "none";
+                document.getElementById("shadow-metric-options-title").style.display = "block";
+                document.getElementById("shadow-metric-options-container").style.display = "block";
             }
         });
     </script>

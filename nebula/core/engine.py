@@ -5,6 +5,7 @@ import os
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
+from nebula.addons.attacks.mia.miaattack import MembershipInferenceAttack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
@@ -589,10 +590,24 @@ class MaliciousNode(Engine):
         )
         self.attack = create_attack(self)
         self.aggregator_bening = self._aggregator
+        self.mia_metrics = {"Precision": [], "Recall": [], "F1": []}
 
     async def _extended_learning_cycle(self):
         try:
-            await self.attack.attack()
+            if isinstance(self.attack, MembershipInferenceAttack):
+                precision, recall, f1 = self.attack.attack()
+                self.mia_metrics["Precision"].append(precision)
+                self.mia_metrics["Recall"].append(recall)
+                self.mia_metrics["F1"].append(f1)
+
+                logging.info(self.mia_metrics)
+
+                self._trainer._logger.log_metrics(
+                    {"MIA_Evaluation/Attack Precision": self.mia_metrics["Precision"][self.round],
+                     "MIA_Evaluation/Attack Recall": self.mia_metrics["Recall"][self.round],
+                     "MIA_Evaluation/Attack F1-Score": self.mia_metrics["F1"][self.round]}, self.round)
+            else:
+                await self.attack.attack()
         except:
             attack_name = self.config.participant["adversarial_args"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")

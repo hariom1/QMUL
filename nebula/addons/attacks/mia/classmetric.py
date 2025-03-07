@@ -12,29 +12,20 @@ class ClassMetricBasedAttack(ShadowModelBasedAttack):
 
     def __init__(
         self,
-        model,
-        global_dataset,
-        in_eval,
-        out_eval,
-        indexing_map,
-        max_epochs,
-        shadow_train,
-        shadow_test,
-        num_s,
-        attack_model_type,
-        method_name,
+        engine,
+        attack_params
     ):
         super().__init__(
-            model,
-            global_dataset,
-            in_eval,
-            out_eval,
-            indexing_map,
-            max_epochs,
-            shadow_train,
-            shadow_test,
-            num_s,
-            attack_model_type,
+            engine._trainer.model,
+            engine._trainer.data,
+            engine._trainer.data.in_eval_loader,
+            engine._trainer.data.out_eval_loader,
+            engine._trainer.data.indexing_map,
+            int(engine.config.participant["training_args"]["epochs"]),
+            engine._trainer.data.shadow_train_loader,
+            engine._trainer.data.shadow_test_loader,
+            1,
+            attack_params["shadow_model_attack"],
         )
 
         self.num_classes = 10
@@ -70,7 +61,7 @@ class ClassMetricBasedAttack(ShadowModelBasedAttack):
         self.t_in_m_entr = self._m_entr_comp(self.t_in_outputs, self.t_in_labels)
         self.t_out_m_entr = self._m_entr_comp(self.t_out_outputs, self.t_out_labels)
 
-        self.methods_name = [method_name]
+        self.methods_name = [attack_params["shadow_metric_options"]]
 
     def _log_value(self, probs, small_value=1e-30):
         return -np.log(np.maximum(probs, small_value))

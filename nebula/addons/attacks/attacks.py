@@ -2,6 +2,10 @@ import importlib
 import logging
 from abc import ABC, abstractmethod
 
+from nebula.addons.attacks.mia.classmetric import ClassMetricBasedAttack
+from nebula.addons.attacks.mia.metric import MetricBasedAttack
+from nebula.addons.attacks.mia.shadowmodel import ShadowModelBasedAttack
+
 # To take into account:
 # - Malicious nodes do not train on their own data
 # - Malicious nodes aggregate the weights of the other nodes, but not their own
@@ -128,11 +132,21 @@ def create_attack(engine) -> Attack:
         "Label Flipping": LabelFlippingAttack,
         "Sample Poisoning": SamplePoisoningAttack,
         "Model Poisoning": ModelPoisonAttack,
+        "Shadow Model Based MIA": ShadowModelBasedAttack,
+        "Class Metric Based MIAs": ClassMetricBasedAttack,
+        "Metric Based MIAs": MetricBasedAttack
     }
 
     # Get attack name and parameters from the engine configuration
     attack_name = engine.config.participant["adversarial_args"]["attacks"]
     attack_params = engine.config.participant["adversarial_args"].get("attack_params", {}).items()
+
+    if engine.config.participant["mia_args"]["metric_detail"] in {
+        "Prediction Class Confidence",
+        "Prediction Class Entropy",
+        "Prediction Modified Entropy"
+    }:
+        attack_name = "Class Metric Based MIAs"
 
     # Look up the attack class based on the attack name
     attack = ATTACK_MAP.get(attack_name)

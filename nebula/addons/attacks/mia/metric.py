@@ -16,8 +16,8 @@ class MetricBasedAttack(MembershipInferenceAttack):
     """
        Subclass for conducting Metric-Based Membership Inference Attacks.
     """
-    def __init__(self, model, global_dataset, in_eval, out_eval, indexing_map, train_result, method_name):
-        super().__init__(model, global_dataset, in_eval, out_eval, indexing_map)
+    def __init__(self, engine, attack_params):
+        super().__init__(engine._trainer.model, engine._trainer.data, engine._trainer.data.in_eval_loader, engine._trainer._data.out_eval_loader, engine._trainer.data.indexing_map)
         """
             Initializes the MetricBasedAttack class with the given parameters.
     
@@ -31,8 +31,8 @@ class MetricBasedAttack(MembershipInferenceAttack):
                 method_name (str): The specific metric-based attack method to use.
         """
 
-        self.train_result = train_result
-        self.method_name = method_name
+        self.train_result = 0
+        self.method_name = attack_params["shadow_metric_options"]
 
     def execute_all_attack(self):
         """

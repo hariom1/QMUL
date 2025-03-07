@@ -13,16 +13,8 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
 
     def __init__(
         self,
-        model,
-        global_dataset,
-        in_eval,
-        out_eval,
-        indexing_map,
-        max_epochs,
-        shadow_train,
-        shadow_test,
-        num_s,
-        attack_model_type,
+        engine,
+        attack_params
     ):
         """
         Initializes the ShadowModelBasedAttack class with the given parameters.
@@ -40,15 +32,15 @@ class ShadowModelBasedAttack(MembershipInferenceAttack):
             attack_model_type (str): The type of model used for the attack (e.g., "Neural Network").
         """
 
-        super().__init__(model, global_dataset, in_eval, out_eval, indexing_map)
+        super().__init__(engine._trainer.model, engine._trainer.data, engine._trainer.data.in_eval_loader, engine._trainer.data.out_eval_loader, engine._trainer.data.indexing_map)
 
         self.shadow_test_res = None
         self.shadow_train_res = None
-        self.max_epochs = max_epochs
-        self.num_shadow = num_s
-        self.shadow_train = shadow_train  # A list containing different shadow model's train dataloaders
-        self.shadow_test = shadow_test  # A list containing different shadow model's test dataloaders
-        self.attack_model_type = attack_model_type
+        self.max_epochs = int(engine.config.participant["training_args"]["epochs"])
+        self.num_shadow = attack_params["shadow_model_number"]
+        self.shadow_train = engine._trainer.data.shadow_train_loader  # A list containing different shadow model's train dataloaders
+        self.shadow_test = engine._trainer.data.shadow_test_loader  # A list containing different shadow model's test dataloaders
+        self.attack_model_type = attack_params["shadow_model_attack"]
 
         self._generate_attack_dataset()
 

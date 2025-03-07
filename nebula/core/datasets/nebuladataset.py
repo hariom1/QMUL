@@ -15,7 +15,7 @@ plt.switch_backend("Agg")
 
 import logging
 
-from nebula.config.config import TRAINING_LOGGER
+from nebula.config.config import TRAINING_LOGGER, Config
 from nebula.core.utils.deterministic import enable_deterministic
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
@@ -589,6 +589,29 @@ class NebulaDataset:
             raise ValueError(
                 f"Could not create partitions with at least {min_samples_size} samples per client after {max_iter} iterations."
             )
+        
+        # MIA
+        for file in os.listdir(self.config_dir):
+            if file.startswith("participant_") and file.endswith(".json"):
+                participant_file = os.path.join(self.config_dir, file)
+                config = Config(entity="participant", participant_config_file=participant_file)
+
+                if config.participant["adversarial_args"]["attacks"] != "No Attack" and "MIA" in config.participant["adversarial_args"]["attacks"]:
+                    node_size = int(config.participant["adversarial_args"]["attack_params"]["size_of_node_data_samples"])
+                    if node_size:
+                        restricted_size = self.partitions_number * node_size
+                        idxs = np.random.permutation(N)[:restricted_size]
+                        out_idxs = np.random.permutation(N)[restricted_size:]
+                        X_train, y_train = X_train[idxs], y_train[idxs]
+                        N = restricted_size
+
+                        self.initialize_eval_dataset(idxs, out_idxs)
+                        if config.participant["adversarial_args"]["attacks"] == "Shadow Model Based MIA" \
+                                or config.participant["adversarial_args"]["attack_params"]["shadow_metric_options"] in {"Prediction Class Confidence",
+                                                                                            "Prediction Class Entropy",
+                                                                                            "Prediction Modified Entropy"}:
+                            self.initialize_shadow_dataset(out_idxs, node_size * self.partitions_number,
+                                                           config.participant["adversarial_args"]["attack_params"]["shadow_model_number"])
 
         initial_partition = {i: indices for i, indices in enumerate(indices_per_partition)}
 
@@ -695,6 +718,35 @@ class NebulaDataset:
         idxs = np.random.permutation(n_train)
         batch_idxs = np.array_split(idxs, n_nets)
         net_dataidx_map = {i: batch_idxs[i] for i in range(n_nets)}
+
+        # MIA
+        for file in os.listdir(self.config_dir):
+            if file.startswith("participant_") and file.endswith(".json"):
+                participant_file = os.path.join(self.config_dir, file)
+                config = Config(entity="participant", participant_config_file=participant_file)
+
+                if config.participant["adversarial_args"]["attacks"] != "No Attack" and "MIA" in config.participant["adversarial_args"]["attacks"]:
+                    node_size = int(config.participant["adversarial_args"]["attack_params"]["size_of_node_data_samples"])
+                    in_idxs, out_idxs = None, None
+                    if node_size:
+                        restricted_size = n_nets * node_size
+                        in_dxs = idxs[:restricted_size]
+                        if n_train >= 2 * restricted_size:
+                            out_idxs = idxs[restricted_size:2 * restricted_size]
+                        else:
+                            print("""
+                            Warning: The out evaluation dataset is not enough to match the in evaluation dataset size.
+                            You may want to reconsider the evaluation of the precision of MIA here.
+                            """)
+                            out_idxs = idxs[restricted_size:]
+
+                        self.initialize_eval_dataset(in_idxs, out_idxs)
+                        if config.participant["adversarial_args"]["attacks"] == "Shadow Model Based MIA" \
+                                or config.participant["adversarial_args"]["attack_params"]["shadow_metric_options"] in {"Prediction Class Confidence",
+                                                                                            "Prediction Class Entropy",
+                                                                                            "Prediction Modified Entropy"}:
+                            self.initialize_shadow_dataset(out_idxs, node_size * n_nets,
+                                                           config.participant["adversarial_args"]["attack_params"]["shadow_model_number"])
 
         # partitioned_datasets = []
         for i in range(self.partitions_number):
@@ -1008,3 +1060,54 @@ class NebulaDataset:
         path_to_save = f"{self.config_dir}/all_data_distribution_CIRCLES_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
         plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
         plt.close()
+
+    def initialize_shadow_dataset(self, out_idxs, shadow_size, shadow_number):
+        """
+            Initializes the datasets for training and testing shadow models.
+
+            Args:
+                out_idxs (list): List of indices for the out-of-sample training dataset.
+                shadow_size (int): Size of each shadow dataset.
+                shadow_number (int): Number of shadow datasets to create.
+
+            Raises:
+                ValueError: If the remaining training dataset size or the test set size is smaller than the shadow dataset size.
+
+            This method generates random subsets of the training and test datasets to be used as shadow datasets.
+            It ensures that the generated shadow datasets are of the specified size and number.
+        """
+        if len(out_idxs) < shadow_size:
+            raise ValueError(
+                "The remaining unused training dataset size is even smaller than one shadow training dataset!")
+        if len(self.test_set) < shadow_size:
+            raise ValueError("The size of test set is even samller than one shadow test dataset!")
+
+        test_indices = np.arange(len(self.test_set))
+
+        shadow_train_indices = []
+        shadow_test_indices = []
+
+        for i in range(shadow_number):
+            shadow_train_index = np.random.choice(out_idxs, size=shadow_size, replace=True)
+            shadow_test_index = np.random.choice(test_indices, size=shadow_size, replace=True)
+
+            shadow_train_indices.append(shadow_train_index)
+            shadow_test_indices.append(shadow_test_index)
+
+        print(shadow_train_indices)
+        print(shadow_test_indices)
+        self.shadow_train = shadow_train_indices
+        self.shadow_test = shadow_test_indices
+
+    def initialize_eval_dataset(self, in_idxs, out_idxs):
+        """
+            Initializes the evaluation datasets.
+
+            Args:
+                in_idxs (list): List of indices for the in-sample evaluation dataset.
+                out_idxs (list): List of indices for the out-of-sample evaluation dataset.
+
+            This method assigns the provided indices to the class attributes for in-sample and out-sample evaluation datasets.
+        """
+        self.in_eval = in_idxs
+        self.out_eval = out_idxs
