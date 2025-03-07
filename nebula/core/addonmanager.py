@@ -15,7 +15,7 @@ class AddondManager():
         self._addons = []
         
     async def deploy_additional_services(self):
-        print_msg_box(msg="Deploying Additional Services\n(='.'=)", indent=2, title="Addons Manager")
+        print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
         if self._config.participant["mobility_args"]["mobility"]:
             mobility = Mobility(self._config, self._engine.cm, verbose=False)
             self._addons.append(mobility)

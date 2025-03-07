@@ -52,6 +52,33 @@ class RoundStartEvent(NodeEvent):
     
     async def is_concurrent(self):
         return False
+    
+class RoundEndEvent(NodeEvent):
+    def __init__(self, round, end_time):
+        """Event triggered when round is going to start.
+
+        Args:
+            round (int): Round number.
+            end_time (time): Current time when round has ended.
+        """
+        self._round_end_time = end_time
+        self._round = round
+
+    def __str__(self):
+        return "Round ending"
+
+    async def get_event_data(self):
+        """Retrieves the round start event data.
+
+        Returns:
+            tuple[int, float]:
+                -round (int): Round number.
+                -end_time (time): Current time when round has ended.
+        """
+        return (self._round, self._round_end_time)
+    
+    async def is_concurrent(self):
+        return False    
 
 class AggregationEvent(NodeEvent):
     def __init__(self, updates : dict, expected_nodes : set, missing_nodes : set):

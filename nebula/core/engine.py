@@ -9,7 +9,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent
+from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent, RoundEndEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
@@ -147,7 +147,7 @@ class Engine:
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
 
-        event_manager = EventManager.get_instance(verbose=True)
+        event_manager = EventManager.get_instance(verbose=False)
 
         # Mobility setup
         self._node_manager = None
@@ -340,18 +340,6 @@ class Engine:
     async def _federation_federation_start_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received start federation message from {source}")
         await self.create_trainer_module()
-
-    async def _federation_reputation_callback(self, source, message):
-        malicious_nodes = message.arguments  # List of malicious nodes
-        if self.with_reputation:
-            if len(malicious_nodes) > 0 and not self._is_malicious:
-                if self.is_dynamic_topology:
-                    await self._disrupt_connection_using_reputation(malicious_nodes)
-                if self.is_dynamic_aggregation and self.aggregator != self.target_aggregation:
-                    await self._dynamic_aggregator(
-                        self.aggregator.get_nodes_pending_models_to_aggregate(),
-                        malicious_nodes,
-                    )
 
     async def _federation_federation_models_included_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received aggregation finished message from {source}")
@@ -756,50 +744,6 @@ class Engine:
             if await self.learning_cycle_lock.locked_async():
                 await self.learning_cycle_lock.release_async()
 
-    async def _disrupt_connection_using_reputation(self, malicious_nodes):
-        malicious_nodes = list(set(malicious_nodes) & set(self.get_current_connections()))
-        logging.info(f"Disrupting connection with malicious nodes at round {self.round}")
-        logging.info(f"Removing {malicious_nodes} from {self.get_current_connections()}")
-        logging.info(f"Current connections before aggregation at round {self.round}: {self.get_current_connections()}")
-        for malicious_node in malicious_nodes:
-            if (self.get_name() != malicious_node) and (malicious_node not in self._secure_neighbors):
-                await self.cm.disconnect(malicious_node)
-        logging.info(f"Current connections after aggregation at round {self.round}: {self.get_current_connections()}")
-
-        await self._connect_with_benign(malicious_nodes)
-
-    async def _connect_with_benign(self, malicious_nodes):
-        lower_threshold = 1
-        higher_threshold = len(self.federation_nodes) - 1
-        if higher_threshold < lower_threshold:
-            higher_threshold = lower_threshold
-
-        benign_nodes = [i for i in self.federation_nodes if i not in malicious_nodes]
-        logging.info(f"_reputation_callback benign_nodes at round {self.round}: {benign_nodes}")
-        if len(self.get_current_connections()) <= lower_threshold:
-            for node in benign_nodes:
-                if len(self.get_current_connections()) <= higher_threshold and self.get_name() != node:
-                    connected = await self.cm.connect(node)
-                    if connected:
-                        logging.info(f"Connect new connection with at round {self.round}: {connected}")
-
-    async def _dynamic_aggregator(self, aggregated_models_weights, malicious_nodes):
-        logging.info(f"malicious detected at round {self.round}, change aggergation protocol!")
-        if self.aggregator != self.target_aggregation:
-            logging.info(f"Current aggregator is: {self.aggregator}")
-            self.aggregator = self.target_aggregation
-            await self.aggregator.update_federation_nodes(self.federation_nodes)
-
-            for subnodes in aggregated_models_weights.keys():
-                sublist = subnodes.split()
-                (submodel, weights) = aggregated_models_weights[subnodes]
-                for node in sublist:
-                    if node not in malicious_nodes:
-                        await self.aggregator.include_model_in_buffer(
-                            submodel, weights, source=self.get_name(), round=self.round
-                        )
-            logging.info(f"Current aggregator is: {self.aggregator}")
-
     async def _waiting_model_updates(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
@@ -840,7 +784,10 @@ class Engine:
             logging.info(f"[Role {self.role}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(self.federation_nodes)
             await self._extended_learning_cycle()
-            await self._additional_mobility_actions()
+
+            current_time = time.time()
+            ree = RoundEndEvent(self.round, current_time)
+            await EventManager.get_instance().publish_node_event(ree)
 
             await self.get_round_lock().acquire_async()
             print_msg_box(
@@ -893,54 +840,7 @@ class Engine:
         """
         pass
 
-    async def _additional_mobility_actions(self):
-        if not self.mobility:
-            return
-        logging.info("🔄 Starting additional mobility actions...")
-        await self.nm.mobility_actions()
-
-    def reputation_calculation(self, aggregated_models_weights):
-        cossim_threshold = 0.5
-        loss_threshold = 0.5
-
-        current_models = {}
-        for subnodes in aggregated_models_weights.keys():
-            sublist = subnodes.split()
-            submodel = aggregated_models_weights[subnodes][0]
-            for node in sublist:
-                current_models[node] = submodel
-
-        malicious_nodes = []
-        reputation_score = {}
-        local_model = self.trainer.get_model_parameters()
-        untrusted_nodes = list(current_models.keys())
-        logging.info(f"reputation_calculation untrusted_nodes at round {self.round}: {untrusted_nodes}")
-
-        for untrusted_node in untrusted_nodes:
-            logging.info(f"reputation_calculation untrusted_node at round {self.round}: {untrusted_node}")
-            logging.info(f"reputation_calculation self.get_name() at round {self.round}: {self.get_name()}")
-            if untrusted_node != self.get_name():
-                untrusted_model = current_models[untrusted_node]
-                cossim = cosine_metric(local_model, untrusted_model, similarity=True)
-                logging.info(f"reputation_calculation cossim at round {self.round}: {untrusted_node}: {cossim}")
-                self.trainer._logger.log_data({f"Reputation/cossim_{untrusted_node}": cossim}, step=self.round)
-
-                avg_loss = self.trainer.validate_neighbour_model(untrusted_model)
-                logging.info(f"reputation_calculation avg_loss at round {self.round} {untrusted_node}: {avg_loss}")
-                self.trainer._logger.log_data({f"Reputation/avg_loss_{untrusted_node}": avg_loss}, step=self.round)
-                reputation_score[untrusted_node] = (cossim, avg_loss)
-
-                if cossim < cossim_threshold or avg_loss > loss_threshold:
-                    malicious_nodes.append(untrusted_node)
-                else:
-                    self._secure_neighbors.append(untrusted_node)
-
-        return malicious_nodes, reputation_score
-
-    async def send_reputation(self, malicious_nodes):
-        logging.info(f"Sending REPUTATION to the rest of the topology: {malicious_nodes}")
-        message = self.cm.create_message("federation", "reputation", arguments=[str(arg) for arg in (malicious_nodes)])
-        await self.cm.send_message_to_neighbors(message)
+    
 
 
 class MaliciousNode(Engine):

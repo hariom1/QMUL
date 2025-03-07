@@ -106,10 +106,7 @@ class NodeManager:
             
     async def get_geoloc(self):
         return await self.sam.get_geoloc()
-    
-    async def mobility_actions(self):
-        await self.sam.mobility_actions()        
-            
+        
     async def experiment_finish(self):
         await self.sam.experiment_finish()        
 

@@ -1,12 +1,13 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING
-
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
 from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
 from nebula.core.utils.locker import Locker
+from nebula.core.nebulaevents import RoundEndEvent
+from nebula.core.eventmanager import EventManager
 
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.nodemanager import NodeManager
 
@@ -30,7 +31,7 @@ class SAModule:
         self._topology = topology
         self._node_manager: NodeManager = nodemanager
         self._situational_awareness_network = SANetwork(self, self.cm, self._addr, self._topology)
-        self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
+        self._situational_awareness_training = SATraining(self, self._addr, "sos", "fastreboot", verbose=True)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
 
@@ -52,9 +53,10 @@ class SAModule:
     
 
     async def init(self):
-        #if not self.is_additional_participant():
+        await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._mobility_actions)
         await self.san.init()
         await self.sat.init()
+
           
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
@@ -67,7 +69,8 @@ class SAModule:
         longitude = self.nm.config.participant["mobility_args"]["longitude"]
         return (latitude, longitude)    
     
-    async def mobility_actions(self):
+    async def _mobility_actions(self, ree : RoundEndEvent):
+        logging.info("🔄 Starting additional mobility actions...")
         await self.san.module_actions()
         await self.sat.module_actions()    
 
