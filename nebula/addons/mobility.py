@@ -195,7 +195,7 @@ class Mobility:
               coordinates to determine the direction of movement.
             - The conversion from meters to degrees is based on approximate geographical conversion factors.
         """
-        logging.info("📍  Changing geo location towards the nearest neighbor")
+        if self._verbose: logging.info("📍  Changing geo location towards the nearest neighbor")
         scale_factor = min(1, self.max_movement_nearest_strategy / distance)
         # Calcular el ángulo hacia el vecino
         angle = math.atan2(neighbor_longitude - longitude, neighbor_latitude - latitude)
@@ -281,7 +281,7 @@ class Mobility:
                     addr, dist, (lat, long) = selected_neighbor
                     if dist > self.max_initiate_approximation:
                         # If the distance is too big, we move towards the neighbor
-                        logging.info(f"Moving towards nearest neighbor: {addr}")
+                        if self._verbose: logging.info(f"Moving towards nearest neighbor: {addr}")
                         await self.change_geo_location_nearest_neighbor_strategy(
                             dist,
                             latitude,

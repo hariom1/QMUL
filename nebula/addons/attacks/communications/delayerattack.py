@@ -22,8 +22,8 @@ class DelayerAttack(CommunicationAttack):
             self.delay = int(attack_params["delay"])
             round_start = int(attack_params["round_start_attack"])
             round_stop = int(attack_params["round_stop_attack"])
-            self.target_percentage = 50#int(attack_params["target_percentage"])
-            self.selection_interval = 1#int(attack_params["selection_interval"])
+            self.target_percentage = 100#int(attack_params["target_percentage"])
+            self.selection_interval = None#int(attack_params["selection_interval"])
         except KeyError as e:
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
