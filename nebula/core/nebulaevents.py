@@ -136,7 +136,31 @@ class UpdateNeighborEvent(NodeEvent):
         return (self._node_addr, self._removed)
     
     async def is_concurrent(self) -> bool:
-        return False    
+        return False
+    
+class NodeFoundEvent(NodeEvent):
+    def __init__(self, node_addr):
+        """Event triggered when a new node is found.
+
+        Args:
+            node_addr (str): Address of the neighboring node.
+        """
+        self._node_addr = node_addr
+        
+    def __str__(self):
+        return f"Node addr: {self._node_addr} found"
+        
+    async def get_event_data(self) -> tuple[str, bool]:
+        """Retrieves the node found event data.
+
+        Returns:
+            tuple[str, bool]: 
+                - node_addr (str): Address of the node found.
+        """
+        return self._node_addr
+    
+    async def is_concurrent(self) -> bool:
+        return True        
     
 class UpdateReceivedEvent(NodeEvent):
     def __init__(self, decoded_model, weight, source, round, local=False):

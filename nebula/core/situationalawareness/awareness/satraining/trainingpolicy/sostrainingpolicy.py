@@ -44,7 +44,7 @@ class SOSTrainingPolicy(TrainingPolicy):
     GRACE_ROUNDS = 1
     CHECK_COOLDOWN = 1
     W_UPDATE_FREQ = 0.25        # Update frequency weight
-    W_UPDATE_LATENCY = 0.05     # update latency weight
+    W_UPDATE_LATENCY = 0.15     # update latency weight
     W_AGG_WAITING = 0.6         # time waited since start waiting for aggregation until update is received weight
     W_INACTIVITY_PEN = 0.1      # inactivity penalty weight
      
@@ -58,6 +58,9 @@ class SOSTrainingPolicy(TrainingPolicy):
         self._last_check = 0
         self._internal_rounds_done = -1
         self._last_aggregation_time = None
+        
+    def __str__(self):
+        return "SOS"
 
     async def init(self, config):
         async with self._nodes_lock:
@@ -142,7 +145,6 @@ class SOSTrainingPolicy(TrainingPolicy):
             if self._verbose: logging.info("Grace time hasnt finished...")
             return None
         
-        result = set()
         if self._last_check == 0:
             nodes = await self._get_nodes()
             for node in nodes.keys():
@@ -198,14 +200,14 @@ class SOSTrainingPolicy(TrainingPolicy):
             F_agg_waiting = min_wait_time / avg_wait_time if avg_wait_time > 0 else 0
 
             # 4. Penalización por inactividad
-            P_n = 1 / (1 + missed_count)  # Penalización inversamente proporcional
+            P_n = missed_count*self.W_INACTIVITY_PEN  # Penalización inversamente proporcional
 
             # Calcular puntuación final
             score = (
                 (self.W_UPDATE_FREQ * F_updt_freq) +
                 (self.W_UPDATE_LATENCY * F_updt_latency) +
-                (self.W_AGG_WAITING * F_agg_waiting) +
-                (self.W_INACTIVITY_PEN * P_n)
+                (self.W_AGG_WAITING * F_agg_waiting) -
+                P_n
             )
             scores[node] = score
         
@@ -221,6 +223,6 @@ class SOSTrainingPolicy(TrainingPolicy):
                
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
                              
-        return result
+        return nodes_below_th
     
     

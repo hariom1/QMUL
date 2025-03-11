@@ -6,7 +6,6 @@ from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent
-import random
 
 # "Quality-Driven Selection"    (QDS)
 class QDSTrainingPolicy(TrainingPolicy):
@@ -25,6 +24,8 @@ class QDSTrainingPolicy(TrainingPolicy):
         self._grace_rounds = self.GRACE_ROUNDS
         self._last_check = 0
         
+    def __str__(self):
+        return "QDS"
 
     async def init(self, config):
         async with self._nodes_lock:
@@ -57,7 +58,7 @@ class QDSTrainingPolicy(TrainingPolicy):
                     else:
                         if self._verbose: logging.info(f"Node inactivity counter increased for: {node}")
                         self._nodes[node] = (deque_history, missed_count + 1)   # Inactive rounds counter +1
-                                       
+                #TODO hacerlo solo para los q no se está utilizando la ultima update guardada                       
                 (model,_) = updt
                 (self_model, _) = self_updt 
                 cos_sim = cosine_metric(self_model, model, similarity=True)
@@ -103,7 +104,7 @@ class QDSTrainingPolicy(TrainingPolicy):
             if len(redundant_nodes) > 1:
                 sorted_redundant_nodes = sorted(redundant_nodes, key=lambda x: x[1])
                 n_discarded = int(len(redundant_nodes)/2)
-                discard_nodes = sorted_redundant_nodes[-n_discarded:]
+                discard_nodes = sorted_redundant_nodes[:n_discarded]
                 if self._verbose: logging.info(f"Discarded redundant nodes: {discard_nodes}")
                 result = result.union(discard_nodes)
         else:

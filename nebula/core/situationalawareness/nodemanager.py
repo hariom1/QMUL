@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.candidateselection.candidateselector import factory_CandidateSelector
-from nebula.core.situationalawareness.fastreboot import FastReboot
 from nebula.core.situationalawareness.modelhandlers.modelhandler import factory_ModelHandler
 from nebula.core.situationalawareness.momentum import Momentum
 from nebula.core.situationalawareness.awareness.samodule import SAModule
@@ -23,8 +22,6 @@ class NodeManager:
         topology,
         model_handler,
         engine: "Engine",
-        fastreboot=False,
-        momentum=False,
     ):
         self._aditional_participant = aditional_participant
         self.topology = topology
@@ -47,9 +44,6 @@ class NodeManager:
         self.discarded_offers_addr_lock = Locker(name="discarded_offers_addr_lock")
         self.discarded_offers_addr = []
 
-        self._fast_reboot_status = fastreboot
-        self._momemtum_status = momentum
-
         self._desc_done = False #TODO remove
         
         self._situational_awareness_module = SAModule(self, self.engine.addr, topology)
@@ -57,10 +51,6 @@ class NodeManager:
     @property
     def engine(self):
         return self._engine
-
-    # @property
-    # def neighbor_policy(self):
-    #     return self._neighbor_policy
 
     @property
     def candidate_selector(self):
@@ -71,15 +61,8 @@ class NodeManager:
         return self._model_handler
 
     @property
-    def fr(self):
-        return self._fastreboot
-
-    @property
     def sam(self):
         return self._situational_awareness_module
-
-    def fast_reboot_on(self):
-        return self._fast_reboot_status
 
     def is_additional_participant(self):
         return self._aditional_participant
@@ -100,10 +83,7 @@ class NodeManager:
         logging.info("Building candidate selector configuration..")
         self.candidate_selector.set_config([0, 0.5, 0.5])
         # self.engine.trainer.get_loss(), self.config.participant["molibity_args"]["weight_distance"], self.config.participant["molibity_args"]["weight_het"]
-
-        if self._fast_reboot_status:
-            self._fastreboot = FastReboot(self)
-            
+        
     async def get_geoloc(self):
         return await self.sam.get_geoloc()
         
@@ -116,16 +96,12 @@ class NodeManager:
                 ##############################
     """
 
-    async def update_learning_rate(self, new_lr):
-        await self.engine.update_model_learning_rate(new_lr)
-
     async def register_late_neighbor(self, addr, joinning_federation=False):
         logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
         self.sam.meet_node(addr)
         await self.update_neighbors(addr)
         if joinning_federation:
-            if self.fast_reboot_on():
-                await self.fr.add_fastReboot_addr(addr)
+            pass
 
     """
                 ##############################
@@ -187,12 +163,10 @@ class NodeManager:
         return self.sam.get_actions()
 
     async def update_neighbors(self, node, remove=False):
-        #logging.info(f"Update neighbor | node addr: {node} | remove: {remove}")
         await self._update_neighbors_lock.acquire_async()
         self.sam.update_neighbors(node, remove)
         if remove:
-            if self._fast_reboot_status:
-                self.fr.discard_fastreboot_for(node)
+            pass
         else:
             self.sam.meet_node(node)
             self._remove_pending_confirmation_from(node)

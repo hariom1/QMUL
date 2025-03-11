@@ -218,25 +218,6 @@ class Engine:
     def get_round_lock(self):
         return self.round_lock
 
-    def get_sinchronized_status(self):
-        with self.sinchronized_status_lock:
-            return True
-            return self._sinchronized_status
-
-    def get_synchronizing_rounds(self):
-        return False
-        return self.nm.get_syncrhonizing_rounds()
-
-    def update_sinchronized_status(self, status):
-        with self.sinchronized_status_lock:
-            logging.info(f"Update | synchronized status from: {self._sinchronized_status} to {status}")
-            self._sinchronized_status = status
-
-    def set_synchronizing_rounds(self, status):
-        if self.mobility:
-            logging.info(f"Set sinchronizing rounds: {status}")
-            self.nm.set_synchronizing_rounds(status)
-
     def set_round(self, new_round):
         logging.info(f"🤖  Update round count | from: {self.round} | to round: {new_round}")
         self.round = new_round
@@ -574,7 +555,6 @@ class Engine:
     """
 
     async def _aditional_node_start(self):
-        self.update_sinchronized_status(False)
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
         await self.nm.start_late_connection_process()
         # continue ..
@@ -767,9 +747,9 @@ class Engine:
 
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
-            if self.addr.split()[0][-1] == "5": 
-                logging.info("### sleeping time ###")
-                time.sleep(30)
+            # if self.addr.split()[0][-1] == "5": 
+            #     logging.info("### sleeping time ###")
+            #     time.sleep(30)
             
             current_time = time.time()
             rse = RoundStartEvent(self.round, current_time)

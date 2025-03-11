@@ -5,6 +5,7 @@ from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.neigh
 from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import BeaconRecievedEvent
 from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -19,7 +20,8 @@ class SANetwork():
         communication_manager: "CommunicationsManager",
         addr, 
         topology, 
-        strict_topology=True
+        strict_topology=True,
+        verbose = False
     ):
         print_msg_box(
             msg=f"Starting Network SA\nTopology: {topology}\nStrict: {strict_topology}",
@@ -34,6 +36,7 @@ class SANetwork():
         self._neighbor_policy = factory_NeighborPolicy(topology)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
+        self._verbose = verbose
         
     @property
     def sam(self):
@@ -66,6 +69,9 @@ class SANetwork():
             self,
         ])
         
+        await EventManager.get_instance().subscribe_node_event(NodeFoundEvent, self.process_node_found_event)
+        await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.process_update_neighbor_event)
+        
     async def module_actions(self):
         logging.info("SA Network evaluating current scenario")
         await self._check_external_connection_service_status()
@@ -76,6 +82,17 @@ class SANetwork():
                                                             #       NEIGHBOR POLICY       #
                                                             ###############################
     """
+    
+    async def process_node_found_event(self, nfe : NodeFoundEvent):
+        node_addr = await nfe.get_event_data()
+        if self._verbose: logging.info(f"Processing Node Found Event, node addr: {node_addr}")
+        self.np.meet_node(node_addr)
+        
+    async def process_update_neighbor_event(self, une : UpdateNeighborEvent):
+        node_addr, removed = await une.get_event_data()
+        if self._verbose: logging.info(f"Processing Update Neighbor Event, node addr: {node_addr}, remove: {removed}")
+        self.np.update_neighbors(node_addr, removed)    
+    
     async def register_node(self, node, neighbor=False, remove=False):
         if not neighbor:
             self.meet_node(node)
@@ -124,7 +141,9 @@ class SANetwork():
     async def beacon_received(self, beacon_recieved_event : BeaconRecievedEvent):
         addr, geoloc = await beacon_recieved_event.get_event_data()
         latitude, longitude = geoloc
-        self.meet_node(addr)
+        nfe = NodeFoundEvent(addr)
+        asyncio.create_task(EventManager.get_instance().publish_node_event(nfe))
+        #self.meet_node(addr)
         #logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
         
     """                                                     ###############################

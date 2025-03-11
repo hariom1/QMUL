@@ -31,7 +31,7 @@ class SAModule:
         self._topology = topology
         self._node_manager: NodeManager = nodemanager
         self._situational_awareness_network = SANetwork(self, self.cm, self._addr, self._topology)
-        self._situational_awareness_training = SATraining(self, self._addr, "sos", "fastreboot", verbose=True)
+        self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
 
