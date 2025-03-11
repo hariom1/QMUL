@@ -28,7 +28,6 @@ from nebula.core.engine import AggregatorNode, IdleNode, MaliciousNode, ServerNo
 from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
 from nebula.core.models.cifar10.cnnV2 import CIFAR10ModelCNN_V2
 from nebula.core.models.cifar10.cnnV3 import CIFAR10ModelCNN_V3
-from nebula.core.models.cifar10.dualagg import DualAggModel
 from nebula.core.models.cifar10.fastermobilenet import FasterMobileNet
 from nebula.core.models.cifar10.resnet import CIFAR10ModelResNet
 from nebula.core.models.cifar10.simplemobilenet import SimpleMobileNetV1
@@ -122,7 +121,7 @@ async def main(config):
             raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
-    
+
     dataset = NebulaPartition(handler=handler, mode="memory", config=config)
     dataset.load_partition()
     dataset.log_partition()
@@ -143,12 +142,8 @@ async def main(config):
         trainer = Lightning
     elif trainer_str == "scikit":
         raise NotImplementedError
-    elif trainer_str == "siamese" and dataset_name == "CIFAR10":
+    elif trainer_str == "siamese":
         trainer = Siamese
-        model = DualAggModel()
-        config.participant["model_args"]["model"] = "DualAggModel"
-        config.participant["data_args"]["dataset"] = "CIFAR10"
-        config.participant["aggregator_args"]["algorithm"] = "DualHistAgg"
     else:
         raise ValueError(f"Trainer {trainer_str} not supported")
 
@@ -206,15 +201,9 @@ async def main(config):
     # In order to do that, it should request the current round to the controller
     if additional_node_status:
         logging.info(f"Waiting for round {additional_node_round} to start")
-        time.sleep(6000)  # DEBUG purposes
-        import requests
+        logging.info("Waiting time to start finding federation")
 
-        url = f"http://{node.config.participant['scenario_args']['controller']}/platform/{node.config.participant['scenario_args']['name']}/round"
-        current_round = int(requests.get(url).json()["round"])
-        while current_round < additional_node_round:
-            logging.info(f"Waiting for round {additional_node_round} to start")
-            time.sleep(10)
-        logging.info(f"Round {additional_node_round} started, connecting to the network")
+        await asyncio.sleep(6000)  # DEBUG purposes
 
     if node.cm is not None:
         await node.cm.network_wait()

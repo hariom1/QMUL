@@ -455,41 +455,38 @@ async def nebula_dashboard_runningscenario():
 
 async def get_host_resources():
     url = f"http://{settings.controller_host}:{settings.controller_port}/resources"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                try:
-                    return await response.json()
-                except Exception as e:
-                    return {"error": f"Failed to parse JSON: {e}"}
-            else:
-                return None
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            try:
+                return await response.json()
+            except Exception as e:
+                return {"error": f"Failed to parse JSON: {e}"}
+        else:
+            return None
 
 
 async def get_available_gpus():
     url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                try:
-                    return await response.json()
-                except Exception as e:
-                    return {"error": f"Failed to parse JSON: {e}"}
-            else:
-                return None
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            try:
+                return await response.json()
+            except Exception as e:
+                return {"error": f"Failed to parse JSON: {e}"}
+        else:
+            return None
 
 
 async def get_least_memory_gpu():
     url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                try:
-                    return await response.json()
-                except Exception as e:
-                    return {"error": f"Failed to parse JSON: {e}"}
-            else:
-                return None
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            try:
+                return await response.json()
+            except Exception as e:
+                return {"error": f"Failed to parse JSON: {e}"}
+        else:
+            return None
 
 
 async def check_enough_resources():
@@ -733,12 +730,11 @@ def update_topology(scenario_name, nodes_list, nodes_config):
     matrix = np.zeros((len(nodes), len(nodes)))
     for node in nodes_list:
         for neighbour in node[5].split(" "):
-            if neighbour != "":
-                if neighbour in nodes:
-                    matrix[
-                        nodes.index(node[2] + ":" + str(node[3])),
-                        nodes.index(neighbour),
-                    ] = 1
+            if neighbour != "" and neighbour in nodes:
+                matrix[
+                    nodes.index(node[2] + ":" + str(node[3])),
+                    nodes.index(neighbour),
+                ] = 1
     from nebula.addons.topologymanager import TopologyManager
 
     tm = TopologyManager(n_nodes=len(nodes_list), topology=matrix, scenario_name=scenario_name)
@@ -916,7 +912,7 @@ async def nebula_monitor_log_error(scenario_name: str, id: str):
 
 @app.get("/platform/dashboard/{scenario_name}/topology/image/")
 async def nebula_monitor_image(scenario_name: str):
-    topology_image = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, "topology.png"))
+    topology_image = FileUtils.check_path(settings.config_dir, os.path.join(scenario_name, "topology.png"))
     if os.path.exists(topology_image):
         return FileResponse(topology_image, media_type="image/png")
     else:
@@ -1121,7 +1117,7 @@ else:
 
 def zipdir(path, ziph):
     # ziph is zipfile handle
-    for root, dirs, files in os.walk(path):
+    for root, _, files in os.walk(path):
         for file in files:
             ziph.write(
                 os.path.join(root, file),

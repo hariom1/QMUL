@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import lz4.frame
-from geopy import distance
 
 from nebula.core.reputation.Reputation import (
     Reputation,
@@ -28,6 +27,9 @@ class MessageChunk:
     is_last: bool
 
 
+MAX_INCOMPLETED_RECONNECTIONS = 3
+
+
 class Connection:
     DEFAULT_FEDERATED_ROUND = -1
 
@@ -43,6 +45,7 @@ class Connection:
         active=True,
         compression="zlib",
         config=None,
+        prio="MEDIUM",
     ):
         self.cm = cm
         self.reader = reader
@@ -58,13 +61,12 @@ class Connection:
         self.config = config
 
         self.federated_round = Connection.DEFAULT_FEDERATED_ROUND
-        self.latitude = None
-        self.longitude = None
         self.loop = asyncio.get_event_loop()
         self.read_task = None
         self.process_task = None
         self.pending_messages_queue = asyncio.Queue(maxsize=100)
         self.message_buffers: dict[bytes, dict[int, MessageChunk]] = {}
+        self._prio = prio
 
         self.EOT_CHAR = b"\x00\x00\x00\x04"
         self.COMPRESSION_CHAR = b"\x00\x00\x00\x01"
@@ -80,6 +82,9 @@ class Connection:
 
         self.reputation_instance = Reputation(self.cm.engine)
         self._model_arrival_latency_data = self.reputation_instance.model_arrival_latency_data
+
+        self.incompleted_reconnections = 0
+        self.forced_disconnection = False
 
         logging.info(
             f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})"
@@ -97,45 +102,20 @@ class Connection:
     def get_addr(self):
         return self.addr
 
+    def get_prio(self):
+        return self._prio
+
     def get_federated_round(self):
         return self.federated_round
 
     def get_tunnel_status(self):
-        if self.reader is None or self.writer is None:
-            return False
-        return True
+        return not (self.reader is None or self.writer is None)
 
     def update_round(self, federated_round):
         self.federated_round = federated_round
 
-    def update_geolocation(self, latitude, longitude):
-        self.latitude = latitude
-        self.longitude = longitude
-        self.config.participant["mobility_args"]["neighbors_distance"][self.addr] = self.compute_distance_myself()
-
-    def get_geolocation(self):
-        if self.latitude is None or self.longitude is None:
-            raise ValueError("Geo-location not set for this neighbor")
-        return self.latitude, self.longitude
-
-    def get_neighbor_distance(self):
-        if self.addr not in self.config.participant["mobility_args"]["neighbors_distance"]:
-            return None
-        return self.config.participant["mobility_args"]["neighbors_distance"][self.addr]
-
-    def compute_distance(self, latitude, longitude):
-        distance_m = distance.distance((self.latitude, self.longitude), (latitude, longitude)).m
-        return distance_m
-
-    def compute_distance_myself(self):
-        distance_m = self.compute_distance(
-            self.config.participant["mobility_args"]["latitude"],
-            self.config.participant["mobility_args"]["longitude"],
-        )
-        return distance_m
-
     def get_ready(self):
-        return True if self.federated_round != Connection.DEFAULT_FEDERATED_ROUND else False
+        return self.federated_round != Connection.DEFAULT_FEDERATED_ROUND
 
     def get_direct(self):
         return self.direct
@@ -165,6 +145,7 @@ class Connection:
 
     async def stop(self):
         logging.info(f"❗️  Connection [stopped]: {self.addr} (id: {self.id})")
+        self.forced_disconnection = True
         tasks = [self.read_task, self.process_task]
         for task in tasks:
             if task is not None:
@@ -175,14 +156,29 @@ class Connection:
                     logging.exception(f"❗️  {self} cancelled...")
 
         if self.writer is not None:
-            self.writer.close()
-            await self.writer.wait_closed()
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception as e:
+                logging.exception(f"❗️  Error ocurred when closing pipe: {e}")
 
     async def reconnect(self, max_retries: int = 5, delay: int = 5) -> None:
+        if self.forced_disconnection:
+            return
+
+        self.incompleted_reconnections += 1
+        if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
+            logging.info(f"Reconnection with {self.addr} failed...")
+            self.forced_disconnection = True
+            await self.cm.terminate_failed_reconnection(self)
+            return
+
         for attempt in range(max_retries):
             try:
                 logging.info(f"Attempting to reconnect to {self.addr} (attempt {attempt + 1}/{max_retries})")
                 await self.cm.connect(self.addr)
+                await asyncio.sleep(1)
+
                 self.read_task = asyncio.create_task(
                     self.handle_incoming_message(),
                     name=f"Connection {self.addr} reader",
@@ -191,13 +187,15 @@ class Connection:
                     self.process_message_queue(),
                     name=f"Connection {self.addr} processor",
                 )
-                logging.info(f"Reconnected to {self.addr}")
+                if not self.forced_disconnection:
+                    logging.info(f"Reconnected to {self.addr}")
                 return
             except Exception as e:
                 logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
         logging.error(f"Failed to reconnect to {self.addr} after {max_retries} attempts. Stopping connection...")
-        await self.stop()
+        # await self.stop()
+        await self.cm.terminate_failed_reconnection(self)
 
     async def send(
         self,
@@ -225,7 +223,8 @@ class Connection:
             await self._send_chunks(message_id, data_to_send)
         except Exception as e:
             logging.exception(f"Error sending data: {e}")
-            # await self.reconnect()
+            if self.direct:
+                await self.reconnect()
 
     def _prepare_data(self, data: Any, pb: bool, encoding_type: str) -> tuple[bytes, bytes]:
         if pb:
@@ -286,76 +285,23 @@ class Connection:
 
                 chunk_data = await self._read_chunk(reusable_buffer)
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
-                logging.debug(
-                    f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes"
-                )
-
-                round_id = self.cm.get_round()
-                source = self.addr
-                comparation_with = b"\x01\x00\x00\x00x\x9c\x00"
-
-                if round_id is not None and round_id >= 0:
-                    chunk_bytes = chunk_data.tobytes()
-                    # if round_id not in self._model_arrival_latency_data:
-                    #     self._model_arrival_latency_data[round_id] = {}
-                    # if source not in self._model_arrival_latency_data[round_id]:
-                    #     self._model_arrival_latency_data[round_id][source] = {}
-
-                    if chunk_index == 0 and chunk_bytes[: len(comparation_with)] == comparation_with:
-                        start_time = time.time()
-                        # logging.info(f"start_time: {start_time:.3f} of source {source} for round {round_id}")
-                        # self._model_arrival_latency_data[round_id][source]["start_time"] = start_time
-
-                #     if chunk_index == 1 and "start_time" in self._model_arrival_latency_data[round_id][source]:
-                #         logging.info("Processing chunk_index == 1")
-                #         end_time = time.time()
-                #         self._model_arrival_latency_data[round_id][source]["end_time"] = end_time
-                #         logging.info(f"end_time: {end_time} of source {source} for round {round_id}")
-                #         start_time = self._model_arrival_latency_data[round_id][source]["start_time"]
-                #         latency = end_time - start_time
-                #         logging.info(f"Node {source} | Latency: {latency:.3f} seconds")
-
-                # if (
-                #     "start_time" in self._model_arrival_latency_data[round_id][source] and
-                #     "end_time" in self._model_arrival_latency_data[round_id][source]
-                # ):
-                #     start_time = self._model_arrival_latency_data[round_id][source]["start_time"]
-                #     end_time = self._model_arrival_latency_data[round_id][source]["end_time"]
-                #     latency = end_time - start_time
-                #     logging.info(f"Node {source} | Latency: {latency:.3f} seconds")
-
-                # if "time_0" not in self._model_arrival_latency_data[round_id]:
-                #     self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
-                #     logging.info(f"start_time: {start_time} of source {self.addr} for round {round_id}")
-
-                # relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
-
-                # if source not in self._model_arrival_latency_data[round_id]:
-                #     self._model_arrival_latency_data[round_id][source] = {
-                #         "start_time": start_time,
-                #         "relative_time": relative_time,
-                #     }
-                #     logging.info(f"self.chunk_data: {self._model_arrival_latency_data}")
-                #     logging.info(f"Node {source} | Time taken relative to time_0: {relative_time:.3f} seconds")
-
-                # save_data(
-                #     self.config.participant["scenario_args"]["name"],
-                #     "chunk_latency",
-                #     source,
-                #     self.cm.get_addr(),
-                #     num_round=round_id,
-                #     latency=relative_time,
-                # )
-
+                # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
+                # Active connection without fails
+                self.incompleted_reconnections = 0
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
-        except asyncio.CancelledError:
-            logging.info("Message handling cancelled")
+        except asyncio.CancelledError as e:
+            logging.exception(f"Message handling cancelled: {e}")
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
-            # await self.reconnect()
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
+        except BrokenPipeError as e:
+            logging.exception(f"Error handling incoming message: {e}")
+        finally:
+            if self.direct:
+                # TODO tal vez una task?
+                await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
         data = b""
@@ -373,6 +319,9 @@ class Connection:
                 if _ == max_retries - 1:
                     raise
                 logging.warning(f"Retrying read after IncompleteReadError: {e}")
+            except BrokenPipeError as e:
+                if not self.forced_disconnection:
+                    logging.exception(f"Broken PIPE while reading: {e}")
         raise RuntimeError("Max retries reached in _read_exactly")
 
     def _parse_header(self, header: bytes) -> tuple[bytes, int, bool]:
