@@ -52,6 +52,9 @@ class DFLUpdateHandler(UpdateHandler):
     @property
     def agg(self):
         return self._aggregator
+    
+    async def get_rejected_nodes(self):
+        return self._aggregator.engine.rejected_nodes
 
     async def init(self, config=None):
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
@@ -97,6 +100,12 @@ class DFLUpdateHandler(UpdateHandler):
     async def storage_update(self, updt_received_event: UpdateReceivedEvent):
         time_received = time.time()
         (model, weight, source, round, _) = await updt_received_event.get_event_data()
+
+        rejected_nodes = await self.get_rejected_nodes()
+        if source in rejected_nodes:
+            logging.info(f"Discard update | source: {source} is rejected and its update will not be stored.")
+            return
+
         if source in self._sources_expected:
             updt = Update(model, weight, source, round, time_received)
             await self._updates_storage_lock.acquire_async()
@@ -125,14 +134,18 @@ class DFLUpdateHandler(UpdateHandler):
                 logging.info(f"Discard update | source: {source} not in expected updates for this Round")
 
     async def get_round_updates(self):
+        rejected_nodes = await self.get_rejected_nodes()
         await self._updates_storage_lock.acquire_async()
-        updates_missing = self._sources_expected.difference(self._sources_received)
+        updates_missing = self._sources_expected.difference(self._sources_received).difference(rejected_nodes)
         if updates_missing:
             self._missing_ones = updates_missing
             logging.info(f"Missing updates from sources: {updates_missing}")
         self._nodes_using_historic.clear()
         updates = {}
         for sr in self._sources_received:
+            if sr in rejected_nodes:
+                logging.info(f"Discard update | source: {sr} is rejected")
+                continue
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
@@ -202,7 +215,8 @@ class DFLUpdateHandler(UpdateHandler):
         await self.agg.notify_all_updates_received()
 
     async def _all_updates_received(self):
-        updates_left = self._sources_expected.difference(self._sources_received)
+        rejected_nodes = await self.get_rejected_nodes()
+        updates_left = self._sources_expected.difference(self._sources_received).difference(rejected_nodes)
         all_received = False
         if len(updates_left) == 0:
             logging.info("All updates have been received this round")

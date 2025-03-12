@@ -121,7 +121,6 @@ message ReputationMessage {
   enum Action {
     SHARE = 0;
   }
-
   string node_id = 1; //Id of the node to which the reputation is sent
   float score = 2; //Score reputation
   int32 round = 3; //Round to send the reputation

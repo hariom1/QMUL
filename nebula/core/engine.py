@@ -5,6 +5,7 @@ import time
 
 import docker
 
+from datetime import datetime
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
@@ -14,6 +15,18 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
+from nebula.core.reputation.Reputation import (
+    Reputation,
+    save_data,
+)
+from nebula.core.utils.helper import (
+    cosine_metric,
+    euclidean_metric,
+    jaccard_metric,
+    manhattan_metric,
+    minkowski_metric,
+    pearson_correlation_metric,
+)
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -131,6 +144,18 @@ class Engine:
 
         self._addon_manager = AddonManager(self, self.config)
 
+        self.reputation_instance = Reputation(self)
+        self.reputation = {}
+        self.reputation_with_feedback = {}
+        self.reputation_with_all_feedback = {}
+        self.rejected_nodes = set()
+        self.change_weight_nodes = set()
+        self._model_arrival_latency_data = self.reputation_instance.model_arrival_latency_data
+
+        self.with_reputation = self.config.participant["defense_args"]["with_reputation"]
+        msg = f"Reputation system: {self.with_reputation}"
+        print_msg_box(msg=msg, indent=2, title="Defense information")
+
     @property
     def cm(self):
         return self._cm
@@ -219,6 +244,96 @@ class Engine:
         updt_received_event = UpdateReceivedEvent(decoded_model, message.weight, source, message.round)
         await EventManager.get_instance().publish_node_event(updt_received_event)
 
+        if self.with_reputation:
+            if self.config.participant["adaptive_args"]["model_similarity"]:
+                logging.info("🤖  handle_model_message | Checking model similarity")
+                cosine_value = cosine_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    similarity=True,
+                )
+                euclidean_value = euclidean_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    similarity=True,
+                )
+                minkowski_value = minkowski_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    p=2,
+                    similarity=True,
+                )
+                manhattan_value = manhattan_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    similarity=True,
+                )
+                pearson_correlation_value = pearson_correlation_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    similarity=True,
+                )
+                jaccard_value = jaccard_metric(
+                    self.trainer.get_model_parameters(),
+                    decoded_model,
+                    similarity=True,
+                )
+                file = f"{self.log_dir}/participant_{self.idx}_similarity.csv"
+                directory = os.path.dirname(file)
+                os.makedirs(directory, exist_ok=True)
+                if not os.path.isfile(file):
+                    with open(file, "w") as f:
+                        f.write(
+                            "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
+                        )
+                with open(file, "a") as f:
+                    f.write(
+                        f"{datetime.now()}, {source}, {message.round}, {self.get_round()}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
+                    )
+
+            # Manage parameters of models
+            parameters_local = self.trainer.get_model_parameters()
+            self.cm.fraction_of_parameters_changed(source, parameters_local, decoded_model, message.round)
+
+            # Manage model_arrival_latency latency
+            start_time = time.time()
+            round_id = message.round
+            if round_id not in self._model_arrival_latency_data:
+                self._model_arrival_latency_data[round_id] = {}
+
+            if "time_0" not in self._model_arrival_latency_data[round_id]:
+                self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
+
+            relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
+
+            if source not in self._model_arrival_latency_data[round_id]:
+                self._model_arrival_latency_data[round_id][source] = {
+                    "start_time": start_time,
+                    "relative_time": relative_time,
+                }
+                # logging.info(f"self.model_arrival_latency_data: {self._model_arrival_latency_data}")
+                logging.info(f"Node {source} | Time taken relative to time_0: {relative_time:.3f} seconds")
+
+            if message.round == self.get_round():
+                logging.info(f"🤖  handle_model_message | message_round == current_round to node {source}")
+            elif message.round < self.get_round():
+                logging.info(f"🤖  handle_model_message | message_round <= current_round to node {source}")
+            else:
+                logging.info(f"🤖  handle_model_message | message_round > current_round to node {source}")
+
+            save_data(
+                self.config.participant["scenario_args"]["name"],
+                "model_arrival_latency",
+                source,
+                self.get_addr(),
+                num_round=message.round,
+                latency=relative_time,
+            )
+
+            if cosine_value < 0.6:
+                logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
+                self.rejected_nodes.add(source)
+
     """
     ##############################
     #      General callbacks     #
@@ -287,10 +402,8 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(
-                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
-            )
-            self.cm.store_receive_timestamp(source, "reputation", message.round)
+            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+            #self.cm.store_receive_timestamp(source, "reputation", message.round)
 
             current_node = self.addr
             nei = message.node_id
@@ -303,7 +416,7 @@ class Engine:
                     self.reputation_with_all_feedback[key] = []
 
                 self.reputation_with_all_feedback[key].append(message.score)
-                logging.info(f"Reputation with all feedback: {self.reputation_with_all_feedback}")
+                #logging.info(f"Reputation with all feedback: {self.reputation_with_all_feedback}")
 
         except Exception as e:
             logging.exception(f"Error handling reputation message: {e}")

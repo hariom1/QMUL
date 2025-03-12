@@ -4,7 +4,6 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 import requests
@@ -20,14 +19,6 @@ from nebula.core.network.propagator import Propagator
 from nebula.core.reputation.Reputation import (
     Reputation,
     save_data,
-)
-from nebula.core.utils.helper import (
-    cosine_metric,
-    euclidean_metric,
-    jaccard_metric,
-    manhattan_metric,
-    minkowski_metric,
-    pearson_correlation_metric,
 )
 from nebula.core.utils.locker import Locker
 
@@ -82,7 +73,6 @@ class CommunicationsManager:
 
         # Reputation
         self.reputation_instance = Reputation(self.engine)
-        self._model_arrival_latency_data = self.reputation_instance.model_arrival_latency_data
         self.message_timestamps = {}
         self.fraction_of_params_changed = {}
 
@@ -146,99 +136,6 @@ class CommunicationsManager:
         if message.round == -1:
             model_init_event = MessageEvent(("model", "initialization"), source, message)
             asyncio.create_task(EventManager.get_instance().publish(model_init_event))
-
-        if self._engine.with_reputation:
-            if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
-                decoded_model = self.engine.trainer.deserialize_model(message.parameters)
-                if self.config.participant["adaptive_args"]["model_similarity"]:
-                    logging.info("🤖  handle_model_message | Checking model similarity")
-                    cosine_value = cosine_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    euclidean_value = euclidean_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    minkowski_value = minkowski_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        p=2,
-                        similarity=True,
-                    )
-                    manhattan_value = manhattan_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    pearson_correlation_value = pearson_correlation_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    jaccard_value = jaccard_metric(
-                        self.engine.trainer.get_model_parameters(),
-                        decoded_model,
-                        similarity=True,
-                    )
-                    file = f"{self.engine.log_dir}/participant_{self.engine.idx}_similarity.csv"
-                    directory = os.path.dirname(file)
-                    os.makedirs(directory, exist_ok=True)
-                    if not os.path.isfile(file):
-                        with open(file, "w") as f:
-                            f.write(
-                                "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
-                            )
-                    with open(file, "a") as f:
-                        f.write(
-                            f"{datetime.now()}, {source}, {message.round}, {self.get_round()}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
-                        )
-
-                # Manage parameters of models
-                parameters_local = self.engine.trainer.get_model_parameters()
-                self.fraction_of_parameters_changed(source, parameters_local, decoded_model, message.round)
-
-                # Manage model_arrival_latency latency
-                start_time = time.time()
-                round_id = message.round
-                if round_id not in self._model_arrival_latency_data:
-                    self._model_arrival_latency_data[round_id] = {}
-
-                if "time_0" not in self._model_arrival_latency_data[round_id]:
-                    self._model_arrival_latency_data[round_id]["time_0"] = {"time": start_time, "source": source}
-
-                relative_time = start_time - self._model_arrival_latency_data[round_id]["time_0"]["time"]
-
-                if source not in self._model_arrival_latency_data[round_id]:
-                    self._model_arrival_latency_data[round_id][source] = {
-                        "start_time": start_time,
-                        "relative_time": relative_time,
-                    }
-                    # logging.info(f"self.model_arrival_latency_data: {self._model_arrival_latency_data}")
-                    logging.info(f"Node {source} | Time taken relative to time_0: {relative_time:.3f} seconds")
-
-                if message.round == self.get_round():
-                    logging.info(f"🤖  handle_model_message | message_round == current_round to node {source}")
-                elif message.round < self.get_round():
-                    logging.info(f"🤖  handle_model_message | message_round <= current_round to node {source}")
-                else:
-                    logging.info(f"🤖  handle_model_message | message_round > current_round to node {source}")
-
-                save_data(
-                    self.config.participant["scenario_args"]["name"],
-                    "model_arrival_latency",
-                    source,
-                    self.get_addr(),
-                    num_round=message.round,
-                    latency=relative_time,
-                )
-
-                if cosine_value < 0.6:
-                    logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
-                    self.engine.rejected_nodes.add(source)
-                    return
         else:
             model_updt_event = MessageEvent(("model", "update"), source, message)
             asyncio.create_task(EventManager.get_instance().publish(model_updt_event))

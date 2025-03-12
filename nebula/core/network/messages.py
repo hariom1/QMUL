@@ -61,7 +61,7 @@ class MessagesManager:
     def get_messages_events(self):
         message_events = {}
         for message_name in self._message_templates:
-            if message_name != "model" and message_name != "reputation":
+            if message_name != "model":
                 message_events[message_name] = get_actions_names(message_name)
         return message_events
 
@@ -84,7 +84,8 @@ class MessagesManager:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
 
-            self.cm.store_receive_timestamp(addr_from, message_type, round=self.cm.get_round())
+            if self.cm.engine.with_reputation:
+                self.cm.store_receive_timestamp(addr_from, message_type, round=self.cm.get_round())
 
             message_data = getattr(message_wrapper, message_type)
 
