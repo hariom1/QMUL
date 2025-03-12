@@ -241,7 +241,7 @@ class CommunicationsManager:
             logging.info(f"Connections verified after searching: {current_connections}")
 
             for addr in addrs:
-                logging.info(f"Sending {msg_type} to ---> {addr}")
+                logging.info(f"Sending {msg_type} to addr: {addr}")
                 asyncio.create_task(self.send_message(addr, msg))
                 await asyncio.sleep(1)
                 discovers_sent += 1

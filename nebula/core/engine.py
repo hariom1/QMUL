@@ -261,7 +261,6 @@ class Engine:
                                                             ##############################
     """
 
-    # TODO llevar a communications
     async def _discovery_discover_callback(self, source, message):
         logging.info(
             f"🔍  handle_discovery_message | Trigger | Received discovery message from {source} (network propagation)"
@@ -342,170 +341,170 @@ class Engine:
         finally:
             await self.cm.get_connections_lock().release_async()
 
-    """                                                     ##############################
-                                                            #     Mobility callbacks     #
-                                                            ##############################
-    """
+    # """                                                     ##############################
+    #                                                         #     Mobility callbacks     #
+    #                                                         ##############################
+    # """
 
-    async def _connection_late_connect_callback(self, source, message):
-        logging.info(f"🔗  handle_connection_message | Trigger | Received late connect message from {source}")
-        # Verify if it's a confirmation message from a previous late connection message sent to source
-        if await self.nm.waiting_confirmation_from(source):
-            await self.nm.confirmation_received(source, confirmation=True)
-            return
+    # async def _connection_late_connect_callback(self, source, message):
+    #     logging.info(f"🔗  handle_connection_message | Trigger | Received late connect message from {source}")
+    #     # Verify if it's a confirmation message from a previous late connection message sent to source
+    #     if await self.nm.waiting_confirmation_from(source):
+    #         await self.nm.confirmation_received(source, confirmation=True)
+    #         return
 
-        if not self.get_initialization_status():
-            logging.info("❗️ Connection refused | Device not initialized yet...")
-            return
+    #     if not self.get_initialization_status():
+    #         logging.info("❗️ Connection refused | Device not initialized yet...")
+    #         return
 
-        if self.nm.accept_connection(source, joining=True):
-            logging.info(f"🔗  handle_connection_message | Late connection accepted | source: {source}")
-            await self.cm.connect(source, direct=True)
+    #     if self.nm.accept_connection(source, joining=True):
+    #         logging.info(f"🔗  handle_connection_message | Late connection accepted | source: {source}")
+    #         await self.cm.connect(source, direct=True)
 
-            # Verify conenction is accepted
-            conf_msg = self.cm.create_message("connection", "late_connect")
-            await self.cm.send_message(source, conf_msg)
-            await self.nm.register_late_neighbor(source, joinning_federation=True)
+    #         # Verify conenction is accepted
+    #         conf_msg = self.cm.create_message("connection", "late_connect")
+    #         await self.cm.send_message(source, conf_msg)
+    #         await self.nm.register_late_neighbor(source, joinning_federation=True)
 
-            ct_actions, df_actions = self.nm.get_actions()
-            if len(ct_actions):
-                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
-                await self.cm.send_message(source, cnt_msg)
+    #         ct_actions, df_actions = self.nm.get_actions()
+    #         if len(ct_actions):
+    #             cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
+    #             await self.cm.send_message(source, cnt_msg)
 
-            if len(df_actions):
-                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
-                await self.cm.send_message(source, df_msg)
+    #         if len(df_actions):
+    #             df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
+    #             await self.cm.send_message(source, df_msg)
 
-        else:
-            logging.info(f"❗️  Late connection NOT accepted | source: {source}")
+    #     else:
+    #         logging.info(f"❗️  Late connection NOT accepted | source: {source}")
 
-    async def _connection_restructure_callback(self, source, message):
-        logging.info(f"🔗  handle_connection_message | Trigger | Received restructure message from {source}")
-        # Verify if it's a confirmation message from a previous restructure connection message sent to source
-        if await self.nm.waiting_confirmation_from(source):
-            await self.nm.confirmation_received(source, confirmation=True)
-            return
+    # async def _connection_restructure_callback(self, source, message):
+    #     logging.info(f"🔗  handle_connection_message | Trigger | Received restructure message from {source}")
+    #     # Verify if it's a confirmation message from a previous restructure connection message sent to source
+    #     if await self.nm.waiting_confirmation_from(source):
+    #         await self.nm.confirmation_received(source, confirmation=True)
+    #         return
 
-        if not self.get_initialization_status():
-            logging.info("❗️ Connection refused | Device not initialized yet...")
-            return
+    #     if not self.get_initialization_status():
+    #         logging.info("❗️ Connection refused | Device not initialized yet...")
+    #         return
 
-        if self.nm.accept_connection(source, joining=False):
-            logging.info(f"🔗  handle_connection_message | Trigger | restructure connection accepted from {source}")
-            await self.cm.connect(source, direct=True)
+    #     if self.nm.accept_connection(source, joining=False):
+    #         logging.info(f"🔗  handle_connection_message | Trigger | restructure connection accepted from {source}")
+    #         await self.cm.connect(source, direct=True)
 
-            conf_msg = self.cm.create_message("connection", "restructure")
+    #         conf_msg = self.cm.create_message("connection", "restructure")
 
-            await self.cm.send_message(source, conf_msg)
+    #         await self.cm.send_message(source, conf_msg)
 
-            ct_actions, df_actions = self.nm.get_actions()
-            if len(ct_actions):
-                cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
-                await self.cm.send_message(source, cnt_msg)
+    #         ct_actions, df_actions = self.nm.get_actions()
+    #         if len(ct_actions):
+    #             cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
+    #             await self.cm.send_message(source, cnt_msg)
 
-            if len(df_actions):
-                df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
-                await self.cm.send_message(source, df_msg)
+    #         if len(df_actions):
+    #             df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
+    #             await self.cm.send_message(source, df_msg)
 
-            await self.nm.register_late_neighbor(source, joinning_federation=False)
-        else:
-            logging.info(f"❗️  handle_connection_message | Trigger | restructure connection denied from {source}")
-            await asyncio.sleep(1)
-            # await self.cm.disconnect(source, mutual_disconnection=True)
+    #         await self.nm.register_late_neighbor(source, joinning_federation=False)
+    #     else:
+    #         logging.info(f"❗️  handle_connection_message | Trigger | restructure connection denied from {source}")
+    #         await asyncio.sleep(1)
+    #         # await self.cm.disconnect(source, mutual_disconnection=True)
 
-    async def _discover_discover_join_callback(self, source, message):
-        logging.info(f"🔍  handle_discover_message | Trigger | Received discover_join message from {source} ")
-        if len(self.get_federation_nodes()) > 0:
-            await self.trainning_in_progress_lock.acquire_async()
-            model, rounds, round = (
-                await self.cm.propagator.get_model_information(source, "stable")
-                if self.get_round() > 0
-                else await self.cm.propagator.get_model_information(source, "initialization")
-            )
-            await self.trainning_in_progress_lock.release_async()
-            if round != -1:
-                epochs = self.config.participant["training_args"]["epochs"]
-                msg = self.cm.create_message(
-                    "offer",
-                    "offer_model",
-                    len(self.get_federation_nodes()),
-                    0,
-                    parameters=model,
-                    rounds=rounds,
-                    round=round,
-                    epochs=epochs,
-                )
-                await self.cm.send_offer_model(source, msg)
-            else:
-                logging.info("Discover join received before federation is running..")
-                # starter node is going to send info to the new node
-        else:
-            logging.info(f"🔗  Dissmissing discover join from {source} | no active connections at the moment")
+    # async def _discover_discover_join_callback(self, source, message):
+    #     logging.info(f"🔍  handle_discover_message | Trigger | Received discover_join message from {source} ")
+    #     if len(self.get_federation_nodes()) > 0:
+    #         await self.trainning_in_progress_lock.acquire_async()
+    #         model, rounds, round = (
+    #             await self.cm.propagator.get_model_information(source, "stable")
+    #             if self.get_round() > 0
+    #             else await self.cm.propagator.get_model_information(source, "initialization")
+    #         )
+    #         await self.trainning_in_progress_lock.release_async()
+    #         if round != -1:
+    #             epochs = self.config.participant["training_args"]["epochs"]
+    #             msg = self.cm.create_message(
+    #                 "offer",
+    #                 "offer_model",
+    #                 len(self.get_federation_nodes()),
+    #                 0,
+    #                 parameters=model,
+    #                 rounds=rounds,
+    #                 round=round,
+    #                 epochs=epochs,
+    #             )
+    #             await self.cm.send_offer_model(source, msg)
+    #         else:
+    #             logging.info("Discover join received before federation is running..")
+    #             # starter node is going to send info to the new node
+    #     else:
+    #         logging.info(f"🔗  Dissmissing discover join from {source} | no active connections at the moment")
 
-    async def _discover_discover_nodes_callback(self, source, message):
-        logging.info(f"🔍  handle_discover_message | Trigger | Received discover_node message from {source} ")
-        # self.nm.meet_node(source)
-        if len(self.get_federation_nodes()) > 0:
-            # msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
-            msg = self.cm.create_message(
-                "offer",
-                "offer_metric",
-                n_neighbors=len(self.get_federation_nodes()),
-                loss=self.trainer.get_current_loss(),
-            )
-            await self.cm.send_message(source, msg)
-        else:
-            logging.info(f"🔗  Dissmissing discover nodes from {source} | no active connections at the moment")
+    # async def _discover_discover_nodes_callback(self, source, message):
+    #     logging.info(f"🔍  handle_discover_message | Trigger | Received discover_node message from {source} ")
+    #     # self.nm.meet_node(source)
+    #     if len(self.get_federation_nodes()) > 0:
+    #         # msg = self.cm.mm.generate_offer_message(nebula_pb2.OfferMessage.Action.OFFER_METRIC, len(self.get_federation_nodes()), self.trainer.get_current_loss())
+    #         msg = self.cm.create_message(
+    #             "offer",
+    #             "offer_metric",
+    #             n_neighbors=len(self.get_federation_nodes()),
+    #             loss=self.trainer.get_current_loss(),
+    #         )
+    #         await self.cm.send_message(source, msg)
+    #     else:
+    #         logging.info(f"🔗  Dissmissing discover nodes from {source} | no active connections at the moment")
 
-    async def _offer_offer_model_callback(self, source, message):
-        logging.info(f"🔍  handle_offer_message | Trigger | Received offer_model message from {source}")
-        self.nm.meet_node(source)
-        if self.nm.still_waiting_for_candidates():
-            try:
-                model_compressed = message.parameters
-                if self.nm.accept_model_offer(
-                    source,
-                    model_compressed,
-                    message.rounds,
-                    message.round,
-                    message.epochs,
-                    message.n_neighbors,
-                    message.loss,
-                ):
-                    logging.info(f"🔧 Model accepted from offer | source: {source}")
-                else:
-                    logging.info(f"❗️ Model offer discarded | source: {source}")
-                    self.nm.add_to_discarded_offers(source)
-            except RuntimeError:
-                logging.info(f"❗️ Error proccesing offer model from {source}")
-        else:
-            logging.info(
-                f"❗️ handfle_offer_message | NOT accepting offers | restructure: {self.nm.get_restructure_process_lock().locked()} | waiting candidates: {self.nm.still_waiting_for_candidates()}"
-            )
-            self.nm.add_to_discarded_offers(source)
+    # async def _offer_offer_model_callback(self, source, message):
+    #     logging.info(f"🔍  handle_offer_message | Trigger | Received offer_model message from {source}")
+    #     self.nm.meet_node(source)
+    #     if self.nm.still_waiting_for_candidates():
+    #         try:
+    #             model_compressed = message.parameters
+    #             if self.nm.accept_model_offer(
+    #                 source,
+    #                 model_compressed,
+    #                 message.rounds,
+    #                 message.round,
+    #                 message.epochs,
+    #                 message.n_neighbors,
+    #                 message.loss,
+    #             ):
+    #                 logging.info(f"🔧 Model accepted from offer | source: {source}")
+    #             else:
+    #                 logging.info(f"❗️ Model offer discarded | source: {source}")
+    #                 self.nm.add_to_discarded_offers(source)
+    #         except RuntimeError:
+    #             logging.info(f"❗️ Error proccesing offer model from {source}")
+    #     else:
+    #         logging.info(
+    #             f"❗️ handfle_offer_message | NOT accepting offers | restructure: {self.nm.get_restructure_process_lock().locked()} | waiting candidates: {self.nm.still_waiting_for_candidates()}"
+    #         )
+    #         self.nm.add_to_discarded_offers(source)
 
-    async def _offer_offer_metric_callback(self, source, message):
-        logging.info(f"🔍  handle_offer_message | Trigger | Received offer_metric message from {source}")
-        self.nm.meet_node(source)
-        if self.nm.still_waiting_for_candidates():
-            n_neighbors = message.n_neighbors
-            loss = message.loss
-            self.nm.add_candidate(source, n_neighbors, loss)
+    # async def _offer_offer_metric_callback(self, source, message):
+    #     logging.info(f"🔍  handle_offer_message | Trigger | Received offer_metric message from {source}")
+    #     self.nm.meet_node(source)
+    #     if self.nm.still_waiting_for_candidates():
+    #         n_neighbors = message.n_neighbors
+    #         loss = message.loss
+    #         self.nm.add_candidate(source, n_neighbors, loss)
 
-    async def _link_connect_to_callback(self, source, message):
-        logging.info(f"🔗  handle_link_message | Trigger | Received connect_to message from {source}")
-        addrs = message.addrs
-        for addr in addrs.split():
-            # await self.cm.connect(addr, direct=True)
-            # self.nm.update_neighbors(addr)
-            self.nm.meet_node(addr)
+    # async def _link_connect_to_callback(self, source, message):
+    #     logging.info(f"🔗  handle_link_message | Trigger | Received connect_to message from {source}")
+    #     addrs = message.addrs
+    #     for addr in addrs.split():
+    #         # await self.cm.connect(addr, direct=True)
+    #         # self.nm.update_neighbors(addr)
+    #         self.nm.meet_node(addr)
 
-    async def _link_disconnect_from_callback(self, source, message):
-        logging.info(f"🔗  handle_link_message | Trigger | Received disconnect_from message from {source}")
-        addrs = message.addrs
-        for addr in addrs.split():
-            await self.cm.disconnect(source, mutual_disconnection=False)
-            await self.nm.update_neighbors(addr, remove=True)
+    # async def _link_disconnect_from_callback(self, source, message):
+    #     logging.info(f"🔗  handle_link_message | Trigger | Received disconnect_from message from {source}")
+    #     addrs = message.addrs
+    #     for addr in addrs.split():
+    #         await self.cm.disconnect(source, mutual_disconnection=False)
+    #         await self.nm.update_neighbors(addr, remove=True)
 
     """                                                     ##############################
                                                             #    REGISTERING CALLBACKS   #

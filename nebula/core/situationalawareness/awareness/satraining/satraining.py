@@ -50,5 +50,5 @@ class SATraining():
         nodes = await self.tp.evaluate()
         if nodes:
             for n in nodes:
-                # pass
-                asyncio.create_task(self.sam.cm.disconnect(n[0], forced=True))
+                pass
+                #asyncio.create_task(self.sam.cm.disconnect(n[0], forced=True))
