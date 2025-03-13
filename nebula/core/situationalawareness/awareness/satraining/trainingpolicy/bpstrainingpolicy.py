@@ -13,3 +13,6 @@ class BPSTrainingPolicy(TrainingPolicy):
     
     async def evaluate(self):
         return None
+    
+    async def get_evaluation_results(self):
+        return None

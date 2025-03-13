@@ -137,6 +137,9 @@ class SOSTrainingPolicy(TrainingPolicy):
             else:
                 if not node in self._nodes:
                     self._nodes.update({node : (deque(maxlen=self.MAX_HISTORIC_SIZE), 0, float('inf'), float('inf'))})
+
+    async def get_evaluation_results(self):
+        return None
     
     async def evaluate(self):
         if self._verbose: logging.info("Evaluating using speed-oriented strategy")

@@ -13,7 +13,7 @@ class TrainingPolicy(ABC):
         pass
     
     @abstractmethod
-    async def evaluate(self):
+    async def get_evaluation_results(self):
         pass
     
     

@@ -23,6 +23,7 @@ class QDSTrainingPolicy(TrainingPolicy):
         self._round_missing_nodes = set()
         self._grace_rounds = self.GRACE_ROUNDS
         self._last_check = 0
+        self._evaluation_results = set()
         
     def __str__(self):
         return "QDS"
@@ -63,6 +64,7 @@ class QDSTrainingPolicy(TrainingPolicy):
                 (self_model, _) = self_updt 
                 cos_sim = cosine_metric(self_model, model, similarity=True)
                 self._nodes[addr][0].append(cos_sim)
+        self._evaluation_results = await self.evaluate()
     
     async def _get_nodes(self):
         async with self._nodes_lock:
@@ -74,6 +76,8 @@ class QDSTrainingPolicy(TrainingPolicy):
             self._grace_rounds -= 1
             if self._verbose: logging.info("Grace time hasnt finished...")
             return None
+        
+        if self._verbose: logging.info("Evaluation in process")
     
         result = set()     
         if self._last_check == 0:
@@ -113,3 +117,6 @@ class QDSTrainingPolicy(TrainingPolicy):
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
                              
         return result
+    
+    async def get_evaluation_results(self):
+        return self._evaluation_results.copy()

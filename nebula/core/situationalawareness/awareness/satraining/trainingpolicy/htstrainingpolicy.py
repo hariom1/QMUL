@@ -28,8 +28,11 @@ class HTSTrainingPolicy(TrainingPolicy):
             await tp.init(config)    
 
     async def update_neighbors(self, node, remove=False):
-        pass
+        return None
     
+    async def get_evaluation_results(self):
+        pass
+
     async def evaluate(self):
         nodes_to_remove = dict()
         for tp in self.tps:
