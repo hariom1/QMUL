@@ -1,22 +1,21 @@
 import asyncio
 import collections
 import logging
-import subprocess
 import sys
 from typing import TYPE_CHECKING
 
 import requests
 
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.externalconnection.externalconnectionservice import factory_connection_service
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
-from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.propagator import Propagator
 from nebula.core.utils.locker import Locker
-from nebula.core.eventmanager import EventManager
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -34,10 +33,10 @@ class CommunicationsManager:
         self.config = engine.get_config()
         self.id = str(self.config.participant["device_args"]["idx"])
 
-        self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
-        self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
+        self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/platform/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
+        self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/platform/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
 
-        self._connections : dict[str, Connection] = {}
+        self._connections: dict[str, Connection] = {}
         self.connections_lock = Locker(name="connections_lock", async_lock=True)
         self.connections_manager_lock = Locker(name="connections_manager_lock", async_lock=True)
         self.connection_attempt_lock_incoming = Locker(name="connection_attempt_lock_incoming", async_lock=True)
@@ -73,7 +72,7 @@ class CommunicationsManager:
 
         # Connection service to communicate with external devices
         self._external_connection_service = factory_connection_service("nebula", self, self.addr)
-        
+
     @property
     def engine(self):
         return self._engine
@@ -105,7 +104,7 @@ class CommunicationsManager:
     @property
     def ecs(self):
         return self._external_connection_service
-    
+
     @property
     def bl(self):
         return self._blacklist
@@ -247,12 +246,11 @@ class CommunicationsManager:
                 discovers_sent += 1
         return discovers_sent
 
-       
     """                                                     ##############################
                                                             #    OTHER FUNCTIONALITIES   #
                                                             ##############################
     """
-    
+
     def get_connections_lock(self):
         return self.connections_lock
 
@@ -443,10 +441,9 @@ class CommunicationsManager:
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
 
-            # await self._discoverer.start()
+        # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
-        
 
     async def include_received_message_hash(self, hash_message):
         try:

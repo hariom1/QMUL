@@ -2,18 +2,25 @@ import asyncio
 import logging
 import os
 import time
+
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
+from nebula.core.addonmanager import AddondManager
 from nebula.core.aggregation.aggregator import create_aggregator, create_target_aggregator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent, RoundStartEvent, AggregationEvent, RoundEndEvent
+from nebula.core.nebulaevents import (
+    AggregationEvent,
+    RoundEndEvent,
+    RoundStartEvent,
+    UpdateNeighborEvent,
+    UpdateReceivedEvent,
+)
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.nodemanager import NodeManager
 from nebula.core.utils.locker import Locker
-from nebula.core.addonmanager import AddondManager
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -27,7 +34,6 @@ import sys
 
 from nebula.config.config import Config
 from nebula.core.training.lightning import Lightning
-from nebula.core.utils.helper import cosine_metric
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -381,8 +387,7 @@ class Engine:
 
     async def get_geoloc(self):
         return await self.nm.get_geoloc()
-    
-    
+
     """                                                     ##############################
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ##############################
@@ -402,11 +407,13 @@ class Engine:
             await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
             updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
             asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
-            
-    async def broadcast_models_include(self, age : AggregationEvent):
-        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")    
-        message = self.cm.create_message("federation", "federation_models_included", [str(arg) for arg in [self.get_round()]])
-        asyncio.create_task(self.cm.send_message_to_neighbors(message))        
+
+    async def broadcast_models_include(self, age: AggregationEvent):
+        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
+        message = self.cm.create_message(
+            "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
+        )
+        asyncio.create_task(self.cm.send_message_to_neighbors(message))
 
     async def update_model_learning_rate(self, new_lr):
         await self.trainning_in_progress_lock.acquire_async()
@@ -581,16 +588,16 @@ class Engine:
 
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
-            # if self.addr.split()[0][-1] == "5": 
+            # if self.addr.split()[0][-1] == "5":
             #     logging.info("### sleeping time ###")
             #     time.sleep(30)
-            
+
             current_time = time.time()
             rse = RoundStartEvent(self.round, current_time)
             await EventManager.get_instance().publish_node_event(rse)
-            
+
             print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds} started.",
+                msg=f"Round {self.round} of {self.total_rounds - 1} started (max. {self.total_rounds} rounds)",
                 indent=2,
                 title="Round information",
             )
@@ -610,24 +617,25 @@ class Engine:
 
             await self.get_round_lock().acquire_async()
             print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds} finished.",
+                msg=f"Round {self.round} of {self.total_rounds - 1} finished (max. {self.total_rounds} rounds)",
                 indent=2,
                 title="Round information",
             )
             # await self.aggregator.reset()
             self.trainer.on_round_end()
-            self.round = self.round + 1
+            self.round += 1
             self.config.participant["federation_args"]["round"] = (
                 self.round
             )  # Set current round in config (send to the controller)
             await self.get_round_lock().release_async()
 
-        if self.mobility: await self.nm.experiment_finish()
+        if self.mobility:
+            await self.nm.experiment_finish()
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
         await self.trainer.test()
         print_msg_box(
-            msg="Federated Learning process has been completed.",
+            msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,
             title="End of the experiment",
         )
@@ -659,8 +667,6 @@ class Engine:
         """
         pass
 
-    
-
 
 class MaliciousNode(Engine):
     def __init__(
@@ -684,7 +690,7 @@ class MaliciousNode(Engine):
     async def _extended_learning_cycle(self):
         try:
             await self.attack.attack()
-        except:
+        except Exception:
             attack_name = self.config.participant["adversarial_args"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")
 
@@ -720,9 +726,11 @@ class AggregatorNode(Engine):
         await self.trainer.train()
         await self.trainning_in_progress_lock.release_async()
 
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round)
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
-        
+
         await self.cm.propagator.propagate("stable")
         await self._waiting_model_updates()
 
@@ -747,8 +755,10 @@ class ServerNode(Engine):
     async def _extended_learning_cycle(self):
         # Define the functionality of the server node
         await self.trainer.test()
-     
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round)
+
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self._waiting_model_updates()
@@ -778,8 +788,10 @@ class TrainerNode(Engine):
 
         await self.trainer.test()
         await self.trainer.train()
-      
-        self_update_event = UpdateReceivedEvent(self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True)
+
+        self_update_event = UpdateReceivedEvent(
+            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True
+        )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self.cm.propagator.propagate("stable")

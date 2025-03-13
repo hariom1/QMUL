@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from functools import wraps
 
@@ -19,23 +18,26 @@ class FloodingAttack(CommunicationAttack):
             attack_params (dict): Parameters for the attack, including the delay duration.
         """
         try:
-            
             round_start = int(attack_params["round_start_attack"])
             round_stop = int(attack_params["round_stop_attack"])
-            self.flooding_factor = 100 #int(attack_params["flooding_factor"])
-            self.target_percentage = 50#int(attack_params["target_percentage"])
-            self.selection_interval = 1#int(attack_params["selection_interval"])
+            attack_interval = int(attack_params["attack_interval"])
+            self.flooding_factor = int(attack_params["flooding_factor"])
+            self.target_percentage = int(attack_params["target_percentage"])
+            self.selection_interval = int(attack_params["selection_interval"])
         except KeyError as e:
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
             raise ValueError("Invalid value in attack_params. Ensure all values are integers.")
 
+        self.verbose = False
+
         super().__init__(
             engine,
-            engine._cm, 
+            engine._cm,
             "send_message",
             round_start,
             round_stop,
+            attack_interval,
             self.flooding_factor,
             self.target_percentage,
             self.selection_interval,
@@ -55,13 +57,17 @@ class FloodingAttack(CommunicationAttack):
         def decorator(func):
             @wraps(func)
             async def wrapper(*args, **kwargs):
-                if len(args) > 1:  
+                if len(args) > 1:
                     dest_addr = args[1]
-                    if dest_addr in self.targets:  
+                    if dest_addr in self.targets:
                         logging.info(f"[FloodingAttack] Flooding message to {dest_addr} by {flooding_factor} times")
                         for i in range(flooding_factor):
-                            logging.info(f"[FloodingAttack] Sending duplicate {i+1}/{flooding_factor} to {dest_addr}")
-                            await func(*args, **kwargs)
+                            if self.verbose:
+                                logging.info(
+                                    f"[FloodingAttack] Sending duplicate {i + 1}/{flooding_factor} to {dest_addr}"
+                                )
+                            _, *new_args = args  # Exclude self argument
+                            await func(*new_args, **kwargs)
                 _, *new_args = args  # Exclude self argument
                 return await func(*new_args)
 

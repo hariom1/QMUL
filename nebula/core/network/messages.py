@@ -3,9 +3,9 @@ import logging
 import traceback
 from typing import TYPE_CHECKING
 
+from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.actions import factory_message_action, get_action_name_from_value, get_actions_names
 from nebula.core.pb import nebula_pb2
-from nebula.core.nebulaevents import MessageEvent
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -89,7 +89,6 @@ class MessagesManager:
             if not message_type:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
-            # logging.info(f"Message type received: {message_type}")
 
             message_data = getattr(message_wrapper, message_type)
 
@@ -182,7 +181,7 @@ class MessagesManager:
         # logging.info(f"kwargs parameters: {kwargs.keys()}")
         for param_name in template_params:
             if param_name not in kwargs:
-                #logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")
+                # logging.info(f"Filling parameter '{param_name}' with default value: {default_values.get(param_name)}")
                 kwargs[param_name] = default_values.get(param_name)
 
         # Create an instance of the protobuf message class using the constructed kwargs
@@ -194,4 +193,3 @@ class MessagesManager:
         getattr(message_wrapper, field_name).CopyFrom(message)
         data = message_wrapper.SerializeToString()
         return data
-
