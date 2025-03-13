@@ -213,18 +213,6 @@
          <lastmod>2025-03-13</lastmod>
     </url>
     <url>
-         <loc>https://nebula.enriquetomasmb.com/api/config/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/config/config/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/config/mender/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
          <loc>https://nebula.enriquetomasmb.com/api/core/</loc>
          <lastmod>2025-03-13</lastmod>
     </url>
@@ -521,34 +509,6 @@
          <lastmod>2025-03-13</lastmod>
     </url>
     <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/certificate/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/deterministic/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/helper/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/locker/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/nebulalogger_tensorboard/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/core/utils/tasks/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
          <loc>https://nebula.enriquetomasmb.com/api/frontend/</loc>
          <lastmod>2025-03-13</lastmod>
     </url>
@@ -558,18 +518,6 @@
     </url>
     <url>
          <loc>https://nebula.enriquetomasmb.com/api/frontend/database/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/frontend/config/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/tests/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://nebula.enriquetomasmb.com/api/tests/main/</loc>
          <lastmod>2025-03-13</lastmod>
     </url>
 </urlset>
