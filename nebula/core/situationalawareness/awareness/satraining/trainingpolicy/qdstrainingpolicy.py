@@ -12,8 +12,8 @@ class QDSTrainingPolicy(TrainingPolicy):
     MAX_HISTORIC_SIZE = 10
     SIMILARITY_THRESHOLD = 0.8
     INACTIVE_THRESHOLD = 3
-    GRACE_ROUNDS = 10
-    CHECK_COOLDOWN = 10
+    GRACE_ROUNDS = 0
+    CHECK_COOLDOWN = 50
 
     def __init__(self, config : dict):
         self._addr = config["addr"]

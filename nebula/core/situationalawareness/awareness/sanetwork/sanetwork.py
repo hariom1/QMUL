@@ -168,7 +168,7 @@ class SANetwork():
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
                 logging.info("No Neighbors left | reconnecting with Federation")
-                await self.reconnect_to_federation()
+                #await self.reconnect_to_federation()
             elif self.np.need_more_neighbors() and self._restructure_available():
                 logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()
