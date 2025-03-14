@@ -9,6 +9,7 @@ import numpy as np
 import seaborn as sns
 from sklearn.manifold import TSNE
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
 
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
@@ -243,7 +244,7 @@ class NebulaDataset:
         partitions_number=1,
         batch_size=32,
         num_workers=4,
-        iid=True,
+        iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
         seed=42,
@@ -303,11 +304,43 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        self.train_indices_map = (
-            self.generate_iid_map(self.train_set)
-            if self.iid
-            else self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-        )
+        size_s1 = 0.5
+        index = 0
+        targets = set()
+        data = []
+        sample, target = self.train_set.__getitem__(index)
+        while sample != None and target != None:
+            data.append(sample)
+            targets.add(target)
+            index += 1
+            try:
+                sample, target = self.train_set.__getitem__(index)
+            except Exception:
+                pass
+        data = np.array(data)
+        logging.info(f"longitud del dataset: {len(data)}")
+
+
+        # División estratificada en dos subconjuntos de tamaño variable
+        X_s1, X_s2, y_s1, y_s2 = train_test_split(data, targets, test_size=(1 - size_s1), stratify=targets, random_state=42)
+        # Ver la distribución de clases en cada subconjunto
+        logging.info(f"S1 - {np.bincount(y_s1)} | S2 - {np.bincount(y_s2)}")
+
+        self.iid = "IID"
+        if self.iid == "IID":
+            self.train_indices_map = self.generate_iid_map(self.train_set)
+        elif self.iid == "Non-IID":
+            self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
+        else:
+            pass
+    
+        self.iid = True
+
+        # self.train_indices_map = (
+        #     self.generate_iid_map(self.train_set)
+        #     if self.iid
+        #     else self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
+        # )
         self.test_indices_map = self.get_test_indices_map()
         self.local_test_indices_map = self.get_local_test_indices_map()
 
