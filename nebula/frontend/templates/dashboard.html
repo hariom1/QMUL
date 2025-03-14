@@ -117,8 +117,7 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    {% for name, start_time, end_time, title, description, status, network_subnet, model, dataset,
-                    rounds, role, username, gpu_id in scenarios %}
+                    {% for name, username, title, start_time, model, dataset, rounds, status in scenarios %}
                     <tr id="scenario-vars">
                         {% if user_role == "admin" %}
                         <td id="username">{{ username|lower }}</td>
@@ -130,8 +129,8 @@
                         <td id="rounds">{{ rounds }}</td>
                         {% if status == "running" %}
                         <td id="status"><span class="badge text-bg-warning">Running</span></td>
-                        {% elif status == "completed" %}
-                        <td id="status"><span class="badge text-bg-success">Completed</span></td>
+                        {% elif status == "waiting" %}
+                        <td id="status"><span class="badge text-bg-secondary">Waiting</span></td>
                         {% else %}
                         <td id="status"><span class="badge text-bg-danger">Finished</span></td>
                         {% endif %}

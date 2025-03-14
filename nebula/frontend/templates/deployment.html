@@ -1088,8 +1088,8 @@
 
             var data = {}
             // Step 1
-            data["scenario_title"] = document.getElementById("scenario-title").value
-            data["scenario_description"] = document.getElementById("scenario-description").value
+            data["title"] = document.getElementById("scenario-title").value
+            data["description"] = document.getElementById("scenario-description").value
             // Step 2
             if (document.getElementById("process-radio").checked) {
                 data["deployment"] = "process"
@@ -1177,8 +1177,8 @@
                     document.getElementById("mode-btn").click();
                 }
                 // Step 1
-                document.getElementById("scenario-title").value = data["scenario_title"];
-                document.getElementById("scenario-description").value = data["scenario_description"];
+                document.getElementById("scenario-title").value = data["title"];
+                document.getElementById("scenario-description").value = data["description"];
                 // Step 2
                 // Read deployment from data and set the specific radio button
                 if (data["deployment"] == "process") {
@@ -2188,8 +2188,8 @@
 
                     scenarioStorage.replaceScenario();
                     scenarioStorage.scenariosList.forEach((scenario, index) => {
-                        if (!scenario.scenario_title){
-                            scenarioStorage.scenariosList[index].scenario_title = "empty";
+                        if (!scenario.title){
+                            scenarioStorage.scenariosList[index].title = "empty";
                         }
                     });
                     var data = scenarioStorage.scenariosList;

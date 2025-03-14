@@ -676,8 +676,8 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                     "scenario_status": scenario[5],
                     "nodes_table": list(nodes_table),
                     "scenario_name": scenario[0],
-                    "scenario_title": scenario[3],
-                    "scenario_description": scenario[4],
+                    "title": scenario[3],
+                    "description": scenario[4],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -698,8 +698,8 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                     "scenario_status": scenario[5],
                     "nodes_table": [],
                     "scenario_name": scenario[0],
-                    "scenario_title": scenario[3],
-                    "scenario_description": scenario[4],
+                    "title": scenario[3],
+                    "description": scenario[4],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1331,19 +1331,13 @@ async def run_scenario(scenario_data, role, user):
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
     scenario_update_record(
-        scenario_name=scenarioManagement.scenario_name,
-        username=user,
+        name=scenarioManagement.scenario_name,
         start_time=scenarioManagement.start_date_scenario,
         end_time="",
+        scenario=scenarioManagement.scenario,
         status="running",
-        title=scenario_data["scenario_title"],
-        description=scenario_data["scenario_description"],
-        network_subnet=scenario_data["network_subnet"],
-        model=scenario_data["model"],
-        dataset=scenario_data["dataset"],
-        rounds=scenario_data["rounds"],
         role=role,
-        gpu_id=json.dumps(scenario_data["gpu_id"]),
+        username=user
     )
 
     # Run the actual scenario
@@ -1370,12 +1364,32 @@ async def run_scenario(scenario_data, role, user):
 
 # Deploy the list of scenarios
 async def run_scenarios(role, user):
+    from nebula.scenarios import Scenario
+
     try:
         user_data = user_data_store[user]
 
+        scenario_pos = 0
+        created_time = datetime.datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+        for scenario_data in user_data.scenarios_list:
+            scenario_data["gpu_id"] = []
+            scenario = Scenario.from_dict(scenario_data)
+
+            scenario_update_record(
+                name=f"nebula_{scenario.federation}_{created_time}_{scenario_pos}",
+                start_time="",
+                end_time="",
+                scenario=scenario,
+                status="waiting",
+                role=role,
+                username=user
+            )
+
+            scenario_pos+=1
+
         for scenario_data in user_data.scenarios_list:
             user_data.finish_scenario_event.clear()
-            logging.info(f"Running scenario {scenario_data['scenario_title']}")
+            logging.info(f"Running scenario {scenario_data['title']}")
             await run_scenario(scenario_data, role, user)
             # Waits till the scenario is completed
             while not user_data.finish_scenario_event.is_set() and not user_data.stop_all_scenarios_event.is_set():

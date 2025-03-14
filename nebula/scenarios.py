@@ -29,8 +29,8 @@ from nebula.utils import DockerUtils, FileUtils
 class Scenario:
     def __init__(
         self,
-        scenario_title,
-        scenario_description,
+        title,
+        description,
         deployment,
         federation,
         topology,
@@ -78,8 +78,8 @@ class Scenario:
         Initialize the scenario.
 
         Args:
-            scenario_title (str): Title of the scenario.
-            scenario_description (str): Description of the scenario.
+            title (str): Title of the scenario.
+            description (str): Description of the scenario.
             deployment (str): Type of deployment (e.g., 'docker', 'process').
             federation (str): Type of federation.
             topology (str): Network topology.
@@ -125,8 +125,8 @@ class Scenario:
             schema_additional_participants (str): Schema for additional participants.
             random_topology_probability (float): Probability for random topology.
         """
-        self.scenario_title = scenario_title
-        self.scenario_description = scenario_description
+        self.title = title
+        self.description = description
         self.deployment = deployment
         self.federation = federation
         self.topology = topology

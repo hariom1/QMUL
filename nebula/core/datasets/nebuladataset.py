@@ -349,7 +349,7 @@ class NebulaDataset:
                 train_labels = np.array([self.train_set.targets[idx] for idx in self.train_indices_map[participant_id]])
                 indices = np.where(np.isin(test_targets, train_labels))[0].tolist()
                 local_test_indices_map[participant_id] = indices
-                logging.info(f"Participant {participant_id} | Local test indices: {indices}")
+                # logging.info(f"Participant {participant_id} | Local test indices: {indices}")
             return local_test_indices_map
         except Exception as e:
             logging.exception(f"Error in get_local_test_indices_map: {e}")
