@@ -349,7 +349,7 @@ class NebulaDataset:
                 train_labels = np.array([self.train_set.targets[idx] for idx in self.train_indices_map[participant_id]])
                 indices = np.where(np.isin(test_targets, train_labels))[0].tolist()
                 local_test_indices_map[participant_id] = indices
-                logging.info(f"Participant {participant_id} | Local test indices: {indices}")
+                #logging.info(f"Participant {participant_id} | Local test indices: {indices}")
             return local_test_indices_map
         except Exception as e:
             logging.exception(f"Error in get_local_test_indices_map: {e}")
@@ -1010,3 +1010,22 @@ class NebulaDataset:
         path_to_save = f"{self.config_dir}/all_data_distribution_CIRCLES_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
         plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
         plt.close()
+
+def factory_nebuladataset(dataset, **config) -> NebulaDataset:
+    from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
+    from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
+    from nebula.core.datasets.emnist.emnist import EMNISTDataset
+    from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
+    from nebula.core.datasets.mnist.mnist import MNISTDataset
+    logging.info(f"cosas: {config}")
+    options = {
+        "MNIST": MNISTDataset,  
+        "FashionMNIST": FashionMNISTDataset,   
+        "EMNIST": EMNISTDataset,   
+        "CIFAR10": CIFAR10Dataset, 
+        "CIFAR100": CIFAR100Dataset,  
+    } 
+    
+    cs = options.get(dataset, None)
+    if not cs: raise ValueError(f"Dataset {dataset} not supported")
+    return cs(**config)
