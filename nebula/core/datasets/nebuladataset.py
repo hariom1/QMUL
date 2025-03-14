@@ -247,6 +247,8 @@ class NebulaDataset:
         iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
+        nsplits_percentages = [],
+        nsplits_iid = [],
         seed=42,
         config_dir=None,
     ):
@@ -259,6 +261,8 @@ class NebulaDataset:
         self.partition_parameter = partition_parameter
         self.seed = seed
         self.config_dir = config_dir
+        self._nsplits_percentages = nsplits_percentages
+        self._nsplits_iid = nsplits_iid
 
         logging.info(
             f"Dataset {self.__class__.__name__} initialized | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
@@ -304,36 +308,38 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        size_s1 = 0.5
-        index = 0
-        targets = set()
-        data = []
-        sample, target = self.train_set.__getitem__(index)
-        while sample != None and target != None:
-            data.append(sample)
-            targets.add(target)
-            index += 1
-            try:
-                sample, target = self.train_set.__getitem__(index)
-            except Exception:
-                pass
-        data = np.array(data)
-        logging.info(f"longitud del dataset: {len(data)}")
-
-
-        # División estratificada en dos subconjuntos de tamaño variable
-        X_s1, X_s2, y_s1, y_s2 = train_test_split(data, targets, test_size=(1 - size_s1), stratify=targets, random_state=42)
-        # Ver la distribución de clases en cada subconjunto
-        logging.info(f"S1 - {np.bincount(y_s1)} | S2 - {np.bincount(y_s2)}")
-
         self.iid = "IID"
         if self.iid == "IID":
             self.train_indices_map = self.generate_iid_map(self.train_set)
         elif self.iid == "Non-IID":
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
         else:
-            pass
-    
+            index = 0
+            data = []
+            targets = []
+            sample, target = self.train_set.__getitem__(index)
+            while sample != None and target != None:
+                data.append(sample)
+                targets.append(target)
+                index += 1
+                try:
+                    sample, target = self.train_set.__getitem__(index)
+                except Exception:
+                    break
+            data = np.array(data)
+            targets = np.array(targets)
+            logging.info(f"number of samples on dataset: {len(data)}, targets: {targets}")
+
+            subsets = []
+            subset_to_split = data
+            for i in range(0, len(self._nsplits_percentages)-1):
+                #TODO cuadrar los porcentajes sucesivos
+                size_s = self._nsplits_percentages[i]
+                X_s1, X_s2, y_s1, y_s2 = train_test_split(subset_to_split, targets, test_size=(1 - size_s), stratify=targets, random_state=42)
+                logging.info(f"S1 - {np.bincount(y_s1)} | S2 - {np.bincount(y_s2)}")
+                subsets.append[y_s1]
+                subset_to_split = y_s2
+        
         self.iid = True
 
         # self.train_indices_map = (
@@ -1050,7 +1056,6 @@ def factory_nebuladataset(dataset, **config) -> NebulaDataset:
     from nebula.core.datasets.emnist.emnist import EMNISTDataset
     from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
     from nebula.core.datasets.mnist.mnist import MNISTDataset
-    logging.info(f"cosas: {config}")
     options = {
         "MNIST": MNISTDataset,  
         "FashionMNIST": FashionMNISTDataset,   
