@@ -1,5 +1,5 @@
 [project]
-name = "nebula-dfl"
+name = "nebula-dfl-corelc"
 version = "0.0.1"
 description = "NEBULA: A Platform for Decentralized Federated Learning"
 authors = [{name = "Enrique Tomás Martínez Beltrán", email = "enriquetomas@um.es"}]
