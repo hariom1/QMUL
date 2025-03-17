@@ -10,6 +10,7 @@ import seaborn as sns
 from sklearn.manifold import TSNE
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
+from types import SimpleNamespace
 
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
@@ -247,8 +248,8 @@ class NebulaDataset:
         iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
-        nsplits_percentages = [],
-        nsplits_iid = [],
+        nsplits_percentages = [0.50, 0.25, 0.25],
+        nsplits_iid = ["IID", "IID", "IID"],
         seed=42,
         config_dir=None,
     ):
@@ -308,45 +309,15 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        self.iid = "IID"
+        self.iid = "hybrid" #TODO REMOVE
         if self.iid == "IID":
             self.train_indices_map = self.generate_iid_map(self.train_set)
         elif self.iid == "Non-IID":
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
         else:
-            index = 0
-            data = []
-            targets = []
-            sample, target = self.train_set.__getitem__(index)
-            while sample != None and target != None:
-                data.append(sample)
-                targets.append(target)
-                index += 1
-                try:
-                    sample, target = self.train_set.__getitem__(index)
-                except Exception:
-                    break
-            data = np.array(data)
-            targets = np.array(targets)
-            logging.info(f"number of samples on dataset: {len(data)}, targets: {targets}")
-
-            subsets = []
-            subset_to_split = data
-            for i in range(0, len(self._nsplits_percentages)-1):
-                #TODO cuadrar los porcentajes sucesivos
-                size_s = self._nsplits_percentages[i]
-                X_s1, X_s2, y_s1, y_s2 = train_test_split(subset_to_split, targets, test_size=(1 - size_s), stratify=targets, random_state=42)
-                logging.info(f"S1 - {np.bincount(y_s1)} | S2 - {np.bincount(y_s2)}")
-                subsets.append[y_s1]
-                subset_to_split = y_s2
-        
-        self.iid = True
-
-        # self.train_indices_map = (
-        #     self.generate_iid_map(self.train_set)
-        #     if self.iid
-        #     else self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-        # )
+            self.train_indices_map = self.generate_hybrid_map()
+                
+        self.iid = True #TODO REMOVE
         self.test_indices_map = self.get_test_indices_map()
         self.local_test_indices_map = self.get_local_test_indices_map()
 
@@ -453,11 +424,84 @@ class NebulaDataset:
         pass
 
     @abstractmethod
-    def generate_iid_map(self, dataset, plot=False):
+    def generate_iid_map(self, dataset, plot=False, num_clients=None):
         """
         Create an iid map of the dataset.
         """
         pass
+
+    def generate_hybrid_map(self):
+        index = 0
+        data = []
+        targets = []
+        sample, target = self.train_set.__getitem__(index)
+        while sample != None and target != None:
+            data.append(sample)
+            targets.append(target)
+            index += 1
+            try:
+                sample, target = self.train_set.__getitem__(index)
+            except Exception:
+                break
+        data = np.array(data)
+        targets = np.array(targets)
+        logging.info(f"number of samples on dataset: {len(data)}, targets: {targets}")
+
+        remaining_size = 1.0
+        subsets = []
+        subset_to_split, targets_to_split = data, targets
+                
+        participants = [i for i in range(self.partitions_number)]
+        num_participants = len(participants)
+        grouped_participants = []
+        start_idx = 0 
+                
+        for i, size in enumerate(self._nsplits_percentages[:-1]):   # Last one doesnt required split
+            relative_size = size / remaining_size                   # Relative size to remaining dataset
+            logging.info(f"size: {size}, relative size: {relative_size}, remaining size: {remaining_size}")
+            X_s1, X_s2, y_s1, y_s2 = train_test_split(
+                subset_to_split, targets_to_split, 
+                test_size=(1 - relative_size), 
+                stratify=targets_to_split, 
+                random_state=42
+            )
+                            
+            logging.info(f"Subset {i+1}: {len(X_s1)} samples")
+            subsets.append((X_s1, y_s1))                            # Saving subsets
+                    
+            num_in_group = round(size * num_participants)
+            grouped_participants.append(participants[start_idx:start_idx + num_in_group])
+
+            # Update to next iteration
+            subset_to_split, targets_to_split = X_s2, y_s2
+            remaining_size -= size
+
+        # Saving last subset
+        subsets.append((subset_to_split, targets_to_split))
+        grouped_participants.append(participants[start_idx:])
+                
+        logging.info(f"Subset {len(subsets)}: {len(subset_to_split)} samples")
+
+        for i, (_, y_subset) in enumerate(subsets):
+            logging.info(f"Subset {i+1} - {np.bincount(y_subset)}")
+            
+            
+        general_map = {}    
+        for i, subset in enumerate(subsets):
+            data_mapped = dict()
+            dataset_wrapped = SimpleNamespace(data=subset[0], targets=subset[1])
+            
+            if self._nsplits_iid[i] == "IID":
+                subset_map = self.generate_iid_map(dataset_wrapped, num_clients=len(grouped_participants[i]))       
+                for j, real_id in enumerate(grouped_participants[i]): # Mapping subset map generated to real clients IDs
+                    data_mapped[real_id] = subset_map[j]
+                    
+            else:
+                #TODO nonIID case
+                pass
+                
+            general_map.update(data_mapped)
+        return general_map        
 
     def plot_data_distribution(self, phase, dataset, partitions_map):
         """
@@ -751,7 +795,7 @@ class NebulaDataset:
 
         return net_dataidx_map
 
-    def balanced_iid_partition(self, dataset):
+    def balanced_iid_partition(self, dataset, num_clients=None):
         """
         Partition the dataset into balanced and IID (Independent and Identically Distributed)
         subsets for each client.
@@ -777,7 +821,7 @@ class NebulaDataset:
             federated_data = balanced_iid_partition(my_dataset)
             # This creates federated data subsets with equal class distributions.
         """
-        num_clients = self.partitions_number
+        num_clients = self.partitions_number if not num_clients else num_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset

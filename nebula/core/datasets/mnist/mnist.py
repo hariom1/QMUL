@@ -83,9 +83,9 @@ class MNISTDataset(NebulaDataset):
 
         return partitions_map
 
-    def generate_iid_map(self, dataset, partition="balancediid", partition_parameter=2):
+    def generate_iid_map(self, dataset, partition="balancediid", partition_parameter=2, num_clients=None):
         if partition == "balancediid":
-            partitions_map = self.balanced_iid_partition(dataset)
+            partitions_map = self.balanced_iid_partition(dataset, num_clients)
         elif partition == "unbalancediid":
             partitions_map = self.unbalanced_iid_partition(dataset, imbalance_factor=partition_parameter)
         else:
