@@ -249,8 +249,8 @@ class NebulaDataset:
         iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
-        nsplits_percentages = [0.50, 0.50],
-        nsplits_iid = ["IID", "Non-IID"],
+        nsplits_percentages = [0.5, 0.5],
+        nsplits_iid = ["Non-IID", "Non-IID"],
         seed=42,
         config_dir=None,
     ):
@@ -265,6 +265,7 @@ class NebulaDataset:
         self.config_dir = config_dir
         self._nsplits_percentages = nsplits_percentages
         self._nsplits_iid = nsplits_iid
+        self._targets_reales = None
 
         logging.info(
             f"Dataset {self.__class__.__name__} initialized | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
@@ -446,53 +447,70 @@ class NebulaDataset:
                 break
         data = np.array(data)
         targets = np.array(targets)
+        self._targets_reales = targets.copy() #TODO remove
         logging.info(f"number of samples on dataset: {len(data)}, targets: {targets}")
 
         remaining_size = 1.0
         subsets = []
-        subset_to_split, targets_to_split = data, targets
-                
+        subset_to_split, targets_to_split = copy.deepcopy(data), copy.deepcopy(targets)
+                     
         participants = [i for i in range(self.partitions_number)]
         num_participants = len(participants)
         grouped_participants = []
         start_idx = 0 
+        
+        or_indices = np.arange(len(data))
                 
-        for i, size in enumerate(self._nsplits_percentages[:-1]):   # Last one doesnt required split
-            relative_size = size / remaining_size                   # Relative size to remaining dataset
+        # Inicializar las estructuras que se dividirán en cada iteración
+        subset_to_split, targets_to_split, indices_to_split = copy.deepcopy(data), copy.deepcopy(targets), copy.deepcopy(or_indices)
+
+        for i, size in enumerate(self._nsplits_percentages[:-1]):   # Last one doesn't require split
+            relative_size = size / remaining_size  # Tamaño relativo respecto al conjunto restante
             logging.info(f"size: {size}, relative size: {relative_size}, remaining size: {remaining_size}")
-            X_s1, X_s2, y_s1, y_s2 = train_test_split(
-                subset_to_split, targets_to_split, 
+            
+            # Dividir manteniendo referencias originales
+            x_s1, x_s2, y_s1, y_s2, idx_s1, idx_s2 = train_test_split(
+                subset_to_split, targets_to_split, indices_to_split,  
                 test_size=(1 - relative_size), 
                 stratify=targets_to_split, 
                 random_state=42
             )
-                            
-            logging.info(f"Subset {i+1}: {len(X_s1)} samples")
-            subsets.append((X_s1, y_s1))                            # Saving subsets
-                    
+            
+            # Guardar los datos y etiquetas originales asociados a los índices seleccionados
+            original_X_s1, original_y_s1 = data[idx_s1], targets[idx_s1]
+                   
+            logging.info(f"Subset {i+1}: {len(original_X_s1)} samples")
+
+            # Guardar subset con referencia a los datos originales
+            subsets.append((original_X_s1, original_y_s1, idx_s1))  
+
             num_in_group = round(size * num_participants)
             grouped_participants.append(participants[start_idx:start_idx + num_in_group])
 
-            # Update to next iteration
-            subset_to_split, targets_to_split = X_s2, y_s2
+            # Actualizar para la siguiente iteración
+            subset_to_split, targets_to_split, indices_to_split = data[idx_s2], targets[idx_s2], idx_s2
             remaining_size -= size
             start_idx += num_in_group
 
-        # Saving last subset
-        subsets.append((subset_to_split, targets_to_split))
+        # Guardar el último subset con sus índices originales
+        original_X_s2, original_y_s2 = data[indices_to_split], targets[indices_to_split]
+        subsets.append((original_X_s2, original_y_s2, indices_to_split))
         grouped_participants.append(participants[start_idx:])
                 
-        logging.info(f"Subset {len(subsets)}: {len(subset_to_split)} samples")
-
-        for i, (_, y_subset) in enumerate(subsets):
-            logging.info(f"Subset {i+1} - {np.bincount(y_subset)}")
-            
-            
+        for i, (_, ysubset, _) in enumerate(subsets):
+            logging.info(f"Subset {i+1} - {np.bincount(ysubset)}")
+              
         general_map = {}    
         for i, subset in enumerate(subsets):
             data_mapped = dict()
-            subset_copy = copy.deepcopy(subset)
-            dataset_wrapped = SimpleNamespace(data=subset_copy[0], targets=subset_copy[1])
+            real_indexes = subset[2]
+            subset_real_data = data[real_indexes]
+            subset_real_targets = targets[real_indexes]
+            
+            logging.info(f"comprobacion de subset {np.array_equal(subset[0], subset_real_data)}")
+            logging.info(f"comprobacion de subset {np.array_equal(subset[1], subset_real_targets)}")
+            
+            dataset_wrapped = SimpleNamespace(data=subset_real_data, targets=subset_real_targets, real_indexes=real_indexes)
             
             if self._nsplits_iid[i] == "IID":
                 logging.info(f"Generating dataset subset IID for participants: {grouped_participants[i]}, num_clients:{len(grouped_participants[i])}")
@@ -502,11 +520,15 @@ class NebulaDataset:
                     
             else:
                 logging.info(f"Generating dataset subset Non-IID for participants: {grouped_participants[i]}, num_clients:{len(grouped_participants[i])}")
-                subset_map = self.generate_non_iid_map(dataset_wrapped, num_clients=len(grouped_participants[i]))       
+                subset_map = self.generate_non_iid_map(dataset_wrapped, num_clients=len(grouped_participants[i]))
+                for id, indxs in subset_map.items():
+                    logging.info(f"Prev | Participant id: {id}, num samples: {len(indxs)}, targets: {np.bincount(targets[indxs])}")       
                 for j, real_id in enumerate(grouped_participants[i]): # Mapping subset map generated to real clients IDs
                     data_mapped[real_id] = subset_map[j]
-                
+            
             general_map.update(data_mapped)
+        for id, indexes in general_map.items():
+            logging.info(f"After | Participant id: {id}, num samples: {len(indexes)}, targets: {np.bincount(targets[indexes])}")
         return general_map        
 
     def plot_data_distribution(self, phase, dataset, partitions_map):
@@ -631,15 +653,28 @@ class NebulaDataset:
         logging.info(f"Generating Dirichlet Partitioning, alpha: {alpha}, num_clients: {num_clients}")
         
         # Extract targets and unique labels.
-        y_data = self._get_targets(dataset)
-        unique_labels = np.unique(y_data)
+        if not num_clients:
+            y_data = self._get_targets(dataset)
+            unique_labels = np.unique(y_data)
+        else:
+            logging.info("Extracting dataset partition targets...")
+            y_data = dataset.targets
+            logging.info(f"{y_data}")
+            unique_labels = np.unique(y_data)
         logging.info(f"Unique labels in dataset: {unique_labels}")
 
         # For each class, get a shuffled list of indices.
         class_indices = {}
         base_rng = np.random.default_rng(self.seed)
         for label in unique_labels:
-            idx = np.where(y_data == label)[0]
+            if not num_clients:
+                idx = np.where(y_data == label)[0]
+            else:
+                ri = dataset.real_indexes
+                idx = np.where(self._targets_reales[ri] == label)[0]
+                idx = ri[idx]
+                logging.info(f"prueba antes: {self._targets_reales[idx]}")
+                
             base_rng.shuffle(idx)
             class_indices[label] = idx
 
@@ -653,7 +688,6 @@ class NebulaDataset:
                 proportions = np.full(n_clients, 1.0 / n_clients)
             else:
                 proportions = rng.dirichlet([alpha] * n_clients)
-            logging.info(f"Dirichlet proportions: {proportions}")
             sample_counts = (proportions * num_label_samples).astype(int)
             remainder = num_label_samples - sample_counts.sum()
             if remainder > 0:
@@ -668,12 +702,16 @@ class NebulaDataset:
             temp_indices_per_partition = [[] for _ in range(num_clients)]
             for label in unique_labels:
                 label_idx = class_indices[label]
+                # logging.info(f"prueba a saco: {self._prueba[label_idx]}")
                 logging.info(f"Calculating samples distribution for label: {label}")
                 counts = allocate_for_label(label_idx, rng, num_clients)
                 start = 0
                 for client_idx, count in enumerate(counts):
+                    # logging.info(f"start: {start}, count:{count}, end: {start+count}")
                     end = start + count
                     temp_indices_per_partition[client_idx].extend(label_idx[start:end])
+                    # logging.info(f"Assigned samples for: {client_idx}, label: {label}, number of samples: {len(temp_indices_per_partition[client_idx])}")
+                    logging.info(f"comprobacion de conteo: {np.bincount(self._targets_reales[temp_indices_per_partition[client_idx]])}")
                     start = end
 
             client_sizes = [len(indices) for indices in temp_indices_per_partition]
@@ -691,9 +729,7 @@ class NebulaDataset:
             )
 
         initial_partition = {i: indices for i, indices in enumerate(indices_per_partition)}
-
         final_partition = self.postprocess_partition(initial_partition, y_data)
-
         return final_partition
 
     @staticmethod
