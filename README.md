@@ -25,7 +25,7 @@ Check [official README](https://github.com/CyberDataLab/nebula/blob/main/README.
 
 ## 🎯 Get Started
 
-Just run ```curl -fsSL https://raw.githubusercontent.com/GenyaLC/nebula/refs/heads/main/run.sh | sh``` and enjoy.
+Just run ```curl -fsSL https://raw.githubusercontent.com/GenyaLC/nebula/refs/heads/core-devices/run.sh | sh``` and enjoy.
 
 ## 📝 License
 
