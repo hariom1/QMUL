@@ -440,7 +440,7 @@ class CommunicationsManager:
                 round = current_round
             save_data(
                 self.config.participant["scenario_args"]["name"],
-                "time_message",
+                "number_message",
                 source,
                 self.addr,
                 num_round=round,

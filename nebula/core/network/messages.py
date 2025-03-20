@@ -84,7 +84,7 @@ class MessagesManager:
                 logging.warning("Received message with no active field in the 'oneof'")
                 return
 
-            if self.cm.engine.with_reputation:
+            if self.cm.engine.with_reputation and self.cm.engine.reputation_metrics.get("num_messages"):
                 self.cm.store_receive_timestamp(addr_from, message_type, round=self.cm.get_round())
 
             message_data = getattr(message_wrapper, message_type)
