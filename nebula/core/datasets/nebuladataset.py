@@ -249,8 +249,10 @@ class NebulaDataset:
         iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
-        nsplits_percentages = [0.5, 0.5],
-        nsplits_iid = ["Non-IID", "Non-IID"],
+        nsplits_percentages = [0.5, 0.25, 0.25],
+        nsplits_iid = ["Non-IID", "IID", "Non-IID"],
+        npartitions = ["dirichlet", "balancediid", "dirichlet"],
+        npartitions_parameter =[50, 2, 0.5],
         seed=42,
         config_dir=None,
     ):
@@ -265,6 +267,8 @@ class NebulaDataset:
         self.config_dir = config_dir
         self._nsplits_percentages = nsplits_percentages
         self._nsplits_iid = nsplits_iid
+        self._npartitions = npartitions
+        self._npartitions_parameter = npartitions_parameter
         self._targets_reales = None
 
         logging.info(
@@ -506,29 +510,24 @@ class NebulaDataset:
             real_indexes = subset[2]
             subset_real_data = data[real_indexes]
             subset_real_targets = targets[real_indexes]
-            
-            logging.info(f"comprobacion de subset {np.array_equal(subset[0], subset_real_data)}")
-            logging.info(f"comprobacion de subset {np.array_equal(subset[1], subset_real_targets)}")
-            
+                    
             dataset_wrapped = SimpleNamespace(data=subset_real_data, targets=subset_real_targets, real_indexes=real_indexes)
             
             if self._nsplits_iid[i] == "IID":
-                logging.info(f"Generating dataset subset IID for participants: {grouped_participants[i]}, num_clients:{len(grouped_participants[i])}")
-                subset_map = self.generate_iid_map(dataset_wrapped, num_clients=len(grouped_participants[i]))       
+                logging.info(f"Generating dataset subset IID for participants: {grouped_participants[i]}, num_clients: {len(grouped_participants[i])}")
+                subset_map = self.generate_iid_map(dataset_wrapped, self._npartitions[i], self._npartitions_parameter[i], num_clients=len(grouped_participants[i]))       
                 for j, real_id in enumerate(grouped_participants[i]): # Mapping subset map generated to real clients IDs
                     data_mapped[real_id] = subset_map[j]
                     
             else:
-                logging.info(f"Generating dataset subset Non-IID for participants: {grouped_participants[i]}, num_clients:{len(grouped_participants[i])}")
-                subset_map = self.generate_non_iid_map(dataset_wrapped, num_clients=len(grouped_participants[i]))
-                for id, indxs in subset_map.items():
-                    logging.info(f"Prev | Participant id: {id}, num samples: {len(indxs)}, targets: {np.bincount(targets[indxs])}")       
+                logging.info(f"Generating dataset subset Non-IID for participants: {grouped_participants[i]}, num_clients: {len(grouped_participants[i])}")
+                subset_map = self.generate_non_iid_map(dataset_wrapped, self._npartitions[i], self._npartitions_parameter[i], num_clients=len(grouped_participants[i]))  
                 for j, real_id in enumerate(grouped_participants[i]): # Mapping subset map generated to real clients IDs
                     data_mapped[real_id] = subset_map[j]
             
             general_map.update(data_mapped)
         for id, indexes in general_map.items():
-            logging.info(f"After | Participant id: {id}, num samples: {len(indexes)}, targets: {np.bincount(targets[indexes])}")
+            logging.info(f" Participant id: {id}, num samples: {len(indexes)}, targets: {np.bincount(targets[indexes])}")
         return general_map        
 
     def plot_data_distribution(self, phase, dataset, partitions_map):
@@ -622,7 +621,7 @@ class NebulaDataset:
         min_samples_size: int = 50,
         balanced: bool = False,
         max_iter: int = 100,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[int, list[int]]:
         """
         Partition the dataset among clients using a Dirichlet distribution.
@@ -657,11 +656,11 @@ class NebulaDataset:
             y_data = self._get_targets(dataset)
             unique_labels = np.unique(y_data)
         else:
-            logging.info("Extracting dataset partition targets...")
+            if verbose: logging.info("Extracting dataset partition targets...")
+            # For hybrid dataset scenarios
             y_data = dataset.targets
-            logging.info(f"{y_data}")
             unique_labels = np.unique(y_data)
-        logging.info(f"Unique labels in dataset: {unique_labels}")
+        if verbose: logging.info(f"Unique labels in dataset: {unique_labels}")
 
         # For each class, get a shuffled list of indices.
         class_indices = {}
@@ -673,7 +672,7 @@ class NebulaDataset:
                 ri = dataset.real_indexes
                 idx = np.where(self._targets_reales[ri] == label)[0]
                 idx = ri[idx]
-                logging.info(f"prueba antes: {self._targets_reales[idx]}")
+                # logging.info(f"attempting: {self._targets_reales[idx]}")
                 
             base_rng.shuffle(idx)
             class_indices[label] = idx
@@ -683,7 +682,7 @@ class NebulaDataset:
 
         def allocate_for_label(label_idx: np.ndarray, rng: np.random.Generator, n_clients) -> np.ndarray:
             num_label_samples = len(label_idx)
-            logging.info(f"number of samples allocating {num_label_samples}")
+            if verbose: logging.info(f"number of samples allocating {num_label_samples}")
             if balanced:
                 proportions = np.full(n_clients, 1.0 / n_clients)
             else:
@@ -694,7 +693,7 @@ class NebulaDataset:
                 extra_indices = rng.choice(n_clients, size=remainder, replace=False)
                 for idx in extra_indices:
                     sample_counts[idx] += 1
-            logging.info(f"Samples allocated per client: {sample_counts}")
+            if verbose: logging.info(f"Samples allocated per client: {sample_counts}")
             return sample_counts
 
         for iteration in range(1, max_iter + 1):
@@ -702,16 +701,13 @@ class NebulaDataset:
             temp_indices_per_partition = [[] for _ in range(num_clients)]
             for label in unique_labels:
                 label_idx = class_indices[label]
-                # logging.info(f"prueba a saco: {self._prueba[label_idx]}")
-                logging.info(f"Calculating samples distribution for label: {label}")
+                if verbose: logging.info(f"Calculating samples distribution for label: {label}")
                 counts = allocate_for_label(label_idx, rng, num_clients)
                 start = 0
                 for client_idx, count in enumerate(counts):
-                    # logging.info(f"start: {start}, count:{count}, end: {start+count}")
                     end = start + count
                     temp_indices_per_partition[client_idx].extend(label_idx[start:end])
-                    # logging.info(f"Assigned samples for: {client_idx}, label: {label}, number of samples: {len(temp_indices_per_partition[client_idx])}")
-                    logging.info(f"comprobacion de conteo: {np.bincount(self._targets_reales[temp_indices_per_partition[client_idx]])}")
+                    if verbose: logging.info(f"Counting check: {np.bincount(self._targets_reales[temp_indices_per_partition[client_idx]])}")
                     start = end
 
             client_sizes = [len(indices) for indices in temp_indices_per_partition]
@@ -729,7 +725,7 @@ class NebulaDataset:
             )
 
         initial_partition = {i: indices for i, indices in enumerate(indices_per_partition)}
-        final_partition = self.postprocess_partition(initial_partition, y_data)
+        final_partition = initial_partition #self.postprocess_partition(initial_partition, y_data)
         return final_partition
 
     @staticmethod
@@ -872,6 +868,7 @@ class NebulaDataset:
             federated_data = balanced_iid_partition(my_dataset)
             # This creates federated data subsets with equal class distributions.
         """
+        logging.info("Generating balanced IID partition")
         num_clients = self.partitions_number if not num_clients else num_clients
         clients_data = {i: [] for i in range(num_clients)}
 
@@ -888,8 +885,13 @@ class NebulaDataset:
         min_count = label_counts[min_label]
 
         for label in range(self.num_classes):
-            # Get the indices of the same label samples
-            label_indices = np.where(labels == label)[0]
+            if not num_clients:
+                label_indices = np.where(labels == label)[0]
+            else:   # For hybrid dataset scenarios
+                ri = dataset.real_indexes
+                label_indices = np.where(self._targets_reales[ri] == label)[0]
+                label_indices = ri[label_indices]
+
             np.random.seed(self.seed)
             np.random.shuffle(label_indices)
 
@@ -934,12 +936,18 @@ class NebulaDataset:
             # This creates federated data subsets with varying number of samples based on
             # an imbalance factor of 2.
         """
+        logging.info("Generating unbalanced IID partition")
         num_clients = self.partitions_number if not num_clients else num_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset
-        labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        if not num_clients:
+            labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        else:
+            labels = np.array(self._targets_reales[dataset.real_indexes])
+
         label_counts = np.bincount(labels)
+        logging.info(f"label_counts: {label_counts}")
 
         min_label = label_counts.argmin()
         min_count = label_counts[min_label]
@@ -954,7 +962,13 @@ class NebulaDataset:
 
         for label in range(self.num_classes):
             # Get the indices of the same label samples
-            label_indices = np.where(labels == label)[0]
+            if not num_clients:
+                label_indices = np.where(labels == label)[0]
+            else:   # For hybrid dataset scenarios
+                ri = dataset.real_indexes
+                label_indices = np.where(self._targets_reales[ri] == label)[0]
+                label_indices = ri[label_indices]
+
             np.random.seed(self.seed)
             np.random.shuffle(label_indices)
 
@@ -967,7 +981,7 @@ class NebulaDataset:
 
         return clients_data
 
-    def percentage_partition(self, dataset, percentage=20):
+    def percentage_partition(self, dataset, percentage=20, num_clients=None):
         """
         Partition a dataset into multiple subsets with a specified level of non-IID-ness.
 
@@ -1007,11 +1021,16 @@ class NebulaDataset:
             y_train = np.asarray(dataset.targets)
 
         num_classes = self.num_classes
-        num_subsets = self.partitions_number
+        num_subsets = self.partitions_number if not num_clients else num_clients
+
+        #TODO
         class_indices = {i: np.where(y_train == i)[0] for i in range(num_classes)}
 
         # Get the labels from the dataset
-        labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        if not num_clients:
+            labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        else:
+            labels = np.array(self._targets_reales[dataset.real_indexes])
         label_counts = np.bincount(labels)
 
         min_label = label_counts.argmin()
