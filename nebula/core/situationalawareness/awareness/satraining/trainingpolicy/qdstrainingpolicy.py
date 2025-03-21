@@ -6,6 +6,7 @@ from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent
+import math
 
 # "Quality-Driven Selection"    (QDS)
 class QDSTrainingPolicy(TrainingPolicy):
@@ -65,7 +66,7 @@ class QDSTrainingPolicy(TrainingPolicy):
                 cos_sim = cosine_metric(self_model, model, similarity=True)
                 self._nodes[addr][0].append(cos_sim)
         self._evaluation_results = await self.evaluate()
-    
+        
     async def _get_nodes(self):
         async with self._nodes_lock:
             nodes = self._nodes.copy()
@@ -105,9 +106,9 @@ class QDSTrainingPolicy(TrainingPolicy):
             if self._verbose: logging.info(f"Redundant nodes on aggregations: {redundant_nodes}")
             if inactive_nodes:
                 result = result.union(inactive_nodes)    
-            if len(redundant_nodes) > 1:
+            if len(redundant_nodes):
                 sorted_redundant_nodes = sorted(redundant_nodes, key=lambda x: x[1])
-                n_discarded = int(len(redundant_nodes)/2)
+                n_discarded = math.ceil((len(redundant_nodes)/2))
                 discard_nodes = sorted_redundant_nodes[:n_discarded]
                 if self._verbose: logging.info(f"Discarded redundant nodes: {discard_nodes}")
                 result = result.union(discard_nodes)

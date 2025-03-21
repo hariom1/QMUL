@@ -75,9 +75,9 @@ class MNISTDataset(NebulaDataset):
 
     def generate_non_iid_map(self, dataset, partition="dirichlet", partition_parameter=0.5, num_clients=None):
         if partition == "dirichlet":
-            partitions_map = self.dirichlet_partition(dataset, alpha=partition_parameter, num_clients=num_clients)
+            partitions_map = self.dirichlet_partition(dataset, alpha=partition_parameter, n_clients=num_clients)
         elif partition == "percent":
-            partitions_map = self.percentage_partition(dataset, percentage=partition_parameter, num_clients=num_clients)
+            partitions_map = self.percentage_partition(dataset, percentage=partition_parameter, n_clients=num_clients)
         else:
             raise ValueError(f"Partition {partition} is not supported for Non-IID map")
 
@@ -85,9 +85,9 @@ class MNISTDataset(NebulaDataset):
 
     def generate_iid_map(self, dataset, partition="balancediid", partition_parameter=2, num_clients=None):
         if partition == "balancediid":
-            partitions_map = self.balanced_iid_partition(dataset, num_clients=num_clients)
+            partitions_map = self.balanced_iid_partition(dataset, n_clients=num_clients)
         elif partition == "unbalancediid":
-            partitions_map = self.unbalanced_iid_partition(dataset, imbalance_factor=partition_parameter, num_clients=num_clients)
+            partitions_map = self.unbalanced_iid_partition(dataset, imbalance_factor=partition_parameter, n_clients=num_clients)
         else:
             raise ValueError(f"Partition {partition} is not supported for IID map")
 
