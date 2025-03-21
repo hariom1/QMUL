@@ -709,7 +709,7 @@ class CommunicationsManager:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(data=self.create_message("connection", "disconnect"))
                 await asyncio.sleep(1)
-                self.connections[dest_addr].stop()
+                await self.connections[dest_addr].stop()
         except Exception as e:
             logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:

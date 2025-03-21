@@ -252,7 +252,7 @@ class NebulaDataset:
         nsplits_percentages = [0.5, 0.25, 0.25],
         nsplits_iid = ["Non-IID", "IID", "Non-IID"],
         npartitions = ["dirichlet", "balancediid", "dirichlet"],
-        npartitions_parameter =[50, 2, 0.5],
+        npartitions_parameter =[0.1, 2, 0.5],
         seed=42,
         config_dir=None,
     ):
@@ -315,11 +315,11 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        self.iid = "a" #TODO REMOVE
+        self.iid = "Non-IID" #TODO REMOVE
         if self.iid == "IID":
             self.train_indices_map = self.generate_iid_map(self.train_set)
         elif self.iid == "Non-IID":
-            self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
+            self.train_indices_map = self.generate_non_iid_map(self.train_set, partition=self.partition, partition_parameter=self.partition_parameter)
         else:
             self.train_indices_map = self.generate_hybrid_map()
                 
@@ -617,7 +617,7 @@ class NebulaDataset:
         self,
         dataset: Any,
         alpha: float = 0.2,
-        num_clients=None,
+        n_clients=None,
         min_samples_size: int = 50,
         balanced: bool = False,
         max_iter: int = 100,
@@ -648,11 +648,11 @@ class NebulaDataset:
         partitions : dict[int, list[int]]
             Dictionary mapping each client index to a list of sample indices.
         """
-        num_clients = self.partitions_number if not num_clients else num_clients
+        num_clients = self.partitions_number if not n_clients else n_clients
         logging.info(f"Generating Dirichlet Partitioning, alpha: {alpha}, num_clients: {num_clients}")
         
         # Extract targets and unique labels.
-        if not num_clients:
+        if not n_clients:
             y_data = self._get_targets(dataset)
             unique_labels = np.unique(y_data)
         else:
@@ -666,7 +666,7 @@ class NebulaDataset:
         class_indices = {}
         base_rng = np.random.default_rng(self.seed)
         for label in unique_labels:
-            if not num_clients:
+            if not n_clients:
                 idx = np.where(y_data == label)[0]
             else:
                 ri = dataset.real_indexes
@@ -842,7 +842,7 @@ class NebulaDataset:
 
         return net_dataidx_map
 
-    def balanced_iid_partition(self, dataset, num_clients=None):
+    def balanced_iid_partition(self, dataset, n_clients=None):
         """
         Partition the dataset into balanced and IID (Independent and Identically Distributed)
         subsets for each client.
@@ -869,7 +869,7 @@ class NebulaDataset:
             # This creates federated data subsets with equal class distributions.
         """
         logging.info("Generating balanced IID partition")
-        num_clients = self.partitions_number if not num_clients else num_clients
+        num_clients = self.partitions_number if not n_clients else n_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset
@@ -885,7 +885,7 @@ class NebulaDataset:
         min_count = label_counts[min_label]
 
         for label in range(self.num_classes):
-            if not num_clients:
+            if not n_clients:
                 label_indices = np.where(labels == label)[0]
             else:   # For hybrid dataset scenarios
                 ri = dataset.real_indexes
@@ -905,7 +905,7 @@ class NebulaDataset:
 
         return clients_data
 
-    def unbalanced_iid_partition(self, dataset, imbalance_factor=2, num_clients=None):
+    def unbalanced_iid_partition(self, dataset, imbalance_factor=2, n_clients=None):
         """
         Partition the dataset into multiple IID (Independent and Identically Distributed)
         subsets with different size.
@@ -937,11 +937,11 @@ class NebulaDataset:
             # an imbalance factor of 2.
         """
         logging.info("Generating unbalanced IID partition")
-        num_clients = self.partitions_number if not num_clients else num_clients
+        num_clients = self.partitions_number if not n_clients else n_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset
-        if not num_clients:
+        if not n_clients:
             labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
         else:
             labels = np.array(self._targets_reales[dataset.real_indexes])
@@ -962,7 +962,7 @@ class NebulaDataset:
 
         for label in range(self.num_classes):
             # Get the indices of the same label samples
-            if not num_clients:
+            if not n_clients:
                 label_indices = np.where(labels == label)[0]
             else:   # For hybrid dataset scenarios
                 ri = dataset.real_indexes
@@ -981,7 +981,7 @@ class NebulaDataset:
 
         return clients_data
 
-    def percentage_partition(self, dataset, percentage=20, num_clients=None):
+    def percentage_partition(self, dataset, percentage=20, n_clients=None):
         """
         Partition a dataset into multiple subsets with a specified level of non-IID-ness.
 
@@ -1021,13 +1021,17 @@ class NebulaDataset:
             y_train = np.asarray(dataset.targets)
 
         num_classes = self.num_classes
-        num_subsets = self.partitions_number if not num_clients else num_clients
+        num_subsets = self.partitions_number if not n_clients else n_clients
 
-        #TODO
-        class_indices = {i: np.where(y_train == i)[0] for i in range(num_classes)}
+        if not n_clients:
+            class_indices = {i: np.where(y_train == i)[0] for i in range(num_classes)}
+        else:
+            #TODO adapt, bad right now
+            ri = dataset.real_indexes
+            class_indices = {i: "" for i in range(num_classes)}
 
         # Get the labels from the dataset
-        if not num_clients:
+        if not n_clients:
             labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
         else:
             labels = np.array(self._targets_reales[dataset.real_indexes])

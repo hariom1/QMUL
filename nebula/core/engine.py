@@ -588,9 +588,6 @@ class Engine:
 
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
-            # if self.addr.split()[0][-1] == "5":
-            #     logging.info("### sleeping time ###")
-            #     time.sleep(30)
 
             current_time = time.time()
             rse = RoundStartEvent(self.round, current_time)
