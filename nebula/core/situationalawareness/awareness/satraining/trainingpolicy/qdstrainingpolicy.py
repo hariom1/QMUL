@@ -53,13 +53,13 @@ class QDSTrainingPolicy(TrainingPolicy):
                 if addr == self._addr: continue
                 if not addr in self._nodes.keys(): continue
                 
-                for node in self._nodes.keys():                                 # Update inactive counters
-                    deque_history, missed_count = self._nodes[node]
-                    if not node in missing_nodes:
-                        self._nodes[node] = (deque_history, 0)                  # Reset inactive counter
-                    else:
-                        if self._verbose: logging.info(f"Node inactivity counter increased for: {node}")
-                        self._nodes[node] = (deque_history, missed_count + 1)   # Inactive rounds counter +1
+                deque_history, missed_count = self._nodes[addr]
+                if addr in missing_nodes:
+                    if self._verbose: logging.info(f"Node inactivity counter increased for: {addr}")
+                    self._nodes[addr] = (deque_history, missed_count + 1)   # Inactive rounds counter +1
+                else:
+                    self._nodes[addr] = (deque_history, 0)                  # Reset inactive counter
+                    
                 #TODO hacerlo solo para los q no se está utilizando la ultima update guardada                       
                 (model,_) = updt
                 (self_model, _) = self_updt 
