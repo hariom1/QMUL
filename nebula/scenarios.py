@@ -27,6 +27,11 @@ from nebula.utils import DockerUtils, FileUtils
 
 # Definition of a scenario
 class Scenario:
+    """
+    Class to define a scenario for the NEBULA platform.
+    It contains all the parameters needed to create a scenario and run it on the platform.
+    """
+
     def __init__(
         self,
         scenario_title,
@@ -393,10 +398,14 @@ class ScenarioManagement:
             participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
             participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
             participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
-            participant_config["defense_args"]["weight_model_arrival_latency"] = self.scenario.weight_model_arrival_latency
+            participant_config["defense_args"]["weight_model_arrival_latency"] = (
+                self.scenario.weight_model_arrival_latency
+            )
             participant_config["defense_args"]["weight_model_similarity"] = self.scenario.weight_model_similarity
             participant_config["defense_args"]["weight_num_messages"] = self.scenario.weight_num_messages
-            participant_config["defense_args"]["weight_fraction_params_changed"] = self.scenario.weight_fraction_params_changed
+            participant_config["defense_args"]["weight_fraction_params_changed"] = (
+                self.scenario.weight_fraction_params_changed
+            )
             participant_config["mobility_args"]["random_geo"] = self.scenario.random_geo
             participant_config["mobility_args"]["latitude"] = self.scenario.latitude
             participant_config["mobility_args"]["longitude"] = self.scenario.longitude
