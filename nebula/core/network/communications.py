@@ -1,14 +1,11 @@
 import asyncio
 import collections
 import logging
-import os
 import sys
 import time
-from typing import TYPE_CHECKING
-
 import requests
-import torch
 
+from typing import TYPE_CHECKING
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.connection import Connection
@@ -16,10 +13,6 @@ from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
 from nebula.core.network.messages import MessagesManager
 from nebula.core.network.propagator import Propagator
-from nebula.core.reputation.Reputation import (
-    Reputation,
-    save_data,
-)
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -69,12 +62,7 @@ class CommunicationsManager:
         self.stop_network_engine = asyncio.Event()
         self.loop = asyncio.get_event_loop()
         max_concurrent_tasks = 5
-        self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
-
-        # Reputation
-        self.reputation_instance = Reputation(self.engine)
-        self.message_timestamps = {}
-        self.fraction_of_params_changed = {}
+        self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)        
 
     @property
     def engine(self):
@@ -151,69 +139,6 @@ class CommunicationsManager:
     #    OTHER FUNCTIONALITIES   #
     ##############################
     """
-
-    def fraction_of_parameters_changed(self, source, parameters_local, parameters_received, current_round):
-        # logging.info(f"🤖  fraction_of_parameters_changed | Managing parameters of models")
-        # logging.info(f"🤖  fraction_of_parameters_changed | Parameters local: {parameters_local}")
-        # logging.info(f"🤖  fraction_of_parameters_changed | Parameters received: {parameters_received}")
-        differences = []
-        total_params = 0
-        changed_params = 0
-        changes_record = {}
-        prev_threshold = None
-
-        if source in self.fraction_of_params_changed and current_round - 1 in self.fraction_of_params_changed[source]:
-            prev_threshold = self.fraction_of_params_changed[source][current_round - 1][-1]["threshold"]
-
-        for key in parameters_local.keys():
-            # logging.info(f"🤖  fraction_of_parameters_changed | Key: {key}")
-            if key in parameters_received:
-                diff = torch.abs(parameters_local[key] - parameters_received[key])
-                differences.extend(diff.flatten().tolist())
-                total_params += diff.numel()
-                # logging.info(f"🤖  fraction_of_parameters_changed | Total params: {total_params}")
-
-        if differences:
-            mean_threshold = torch.mean(torch.tensor(differences)).item()
-            current_threshold = (prev_threshold + mean_threshold) / 2 if prev_threshold is not None else mean_threshold
-        else:
-            current_threshold = 0
-
-        for key in parameters_local.keys():
-            if key in parameters_received:
-                diff = torch.abs(parameters_local[key] - parameters_received[key])
-                num_changed = torch.sum(diff > current_threshold).item()
-                changed_params += num_changed
-                if num_changed > 0:
-                    changes_record[key] = num_changed
-
-        fraction_changed = changed_params / total_params if total_params > 0 else 0.0
-
-        if source not in self.fraction_of_params_changed:
-            self.fraction_of_params_changed[source] = {}
-        if current_round not in self.fraction_of_params_changed[source]:
-            self.fraction_of_params_changed[source][current_round] = []
-
-        self.fraction_of_params_changed[source][current_round].append({
-            "fraction_changed": fraction_changed,
-            "total_params": total_params,
-            "changed_params": changed_params,
-            "threshold": current_threshold,
-            "changes_record": changes_record,
-        })
-
-        save_data(
-            self.config.participant["scenario_args"]["name"],
-            "fraction_of_params_changed",
-            source,
-            self.addr,
-            current_round,
-            fraction_changed=fraction_changed,
-            total_params=total_params,
-            changed_params=changed_params,
-            threshold=current_threshold,
-            changes_record=changes_record,
-        )
 
     def get_connections_lock(self):
         return self.connections_lock
@@ -431,23 +356,6 @@ class CommunicationsManager:
         except Exception as e:
             logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
             await self.disconnect(dest_addr, mutual_disconnection=False)
-
-    def store_receive_timestamp(self, source, type_message, round=None):
-        current_time = time.time()
-        current_round = self.get_round()
-        if current_time:
-            if round is None:
-                round = current_round
-            save_data(
-                self.config.participant["scenario_args"]["name"],
-                "number_message",
-                source,
-                self.addr,
-                num_round=round,
-                time=current_time,
-                type_message=type_message,
-                current_round=current_round,
-            )
 
     async def send_model(self, dest_addr, round, serialized_model, weight=1):
         async with self.semaphore_send_model:

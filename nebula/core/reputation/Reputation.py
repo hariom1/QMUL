@@ -3,14 +3,27 @@ import json
 import logging
 import os
 import random
-from typing import TYPE_CHECKING, ClassVar
-
+import torch
 import numpy as np
+import time
+import numpy as np
+
+from typing import TYPE_CHECKING, ClassVar
+from nebula.core.nebulaevents import RoundStartEvent, UpdateReceivedEvent, MessageEvent, AggregationEvent
+from nebula.core.eventmanager import EventManager
+from datetime import datetime
+from nebula.core.utils.helper import (
+    cosine_metric,
+    euclidean_metric,
+    jaccard_metric,
+    manhattan_metric,
+    minkowski_metric,
+    pearson_correlation_metric,
+)
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
-
-
+    
 def save_data(
     scenario,
     type_data,
@@ -18,7 +31,6 @@ def save_data(
     addr,
     num_round=None,
     time=None,
-    type_message=None,
     current_round=None,
     fraction_changed=None,
     total_params=None,
@@ -43,7 +55,6 @@ def save_data(
         if type_data == "number_message":
             combined_data["number_message"] = {
                 "time": time,
-                "type_message": type_message,
                 "round": num_round,
                 "current_round": current_round,
             }
@@ -105,13 +116,38 @@ class Reputation:
     def __init__(self, engine: "Engine"):
         self._engine = engine
         self.model_arrival_latency_data = {}
+        self.fraction_of_params_changed = {}
         self.history_data = {}
         self.metric_weights = {}
+        self.reputation = {}
+        self.reputation_with_feedback = {}
+        self.reputation_with_all_feedback = {}
+        self.rejected_nodes = set()
+
+        self.round_timing_info = {}
 
     @property
     def engine(self):
         return self._engine
-
+    
+    async def setup(self):
+        if self._engine.with_reputation:
+            logging.info("Reputation system enabled")
+            await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
+            await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
+            if self._engine.reputation_metrics.get("model_similarity", False):
+                await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_similarity)
+            if self._engine.reputation_metrics.get("fraction_parameters_changed", False):
+                await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_fraction_of_parameters_changed)
+            if self._engine.reputation_metrics.get("num_messages", False):
+                await EventManager.get_instance().subscribe(("model", "update"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(("model", "initialization"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(("control", "alive"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(("federation", "federation_models_included"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
+            if self._engine.reputation_metrics.get("model_arrival_latency", False):
+                await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_model_arrival_latency)
+            
     def init_reputation(self, addr, federation_nodes=None, round_num=None, last_feedback_round=None, scenario=None, init_reputation=None):
         """
         Initialize the reputation system.
@@ -129,20 +165,18 @@ class Reputation:
                 return
 
             for nei in neighbors:
-                if nei not in self._engine.reputation:
-                    self._engine.reputation[nei] = {
+                if nei not in self.reputation:
+                    self.reputation[nei] = {
                         "reputation": init_reputation,
                         "round": round_num,
                         "last_feedback_round": last_feedback_round,
                     }
-                elif self._engine.reputation[nei].get("reputation") is None:
-                    self._engine.reputation[nei]["reputation"] = init_reputation
-                    self._engine.reputation[nei]["round"] = round_num
-                    self._engine.reputation[nei]["last_feedback_round"] = last_feedback_round
+                elif self.reputation[nei].get("reputation") is None:
+                    self.reputation[nei]["reputation"] = init_reputation
+                    self.reputation[nei]["round"] = round_num
+                    self.reputation[nei]["last_feedback_round"] = last_feedback_round
 
-                avg_reputation = self.save_reputation_history_in_memory(
-                    self._engine.addr, nei, init_reputation, round_num
-                )
+                avg_reputation = self.save_reputation_history_in_memory(self._engine.addr, nei, init_reputation)
 
                 metrics_data = {
                     "addr": addr,
@@ -170,7 +204,7 @@ class Reputation:
 
         return valid_ip
 
-    def _calculate_static_reputation(self, addr, nei, metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency, current_round,
+    def _calculate_static_reputation(self, addr, nei, metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency,
                                      weight_messages_number, weight_similarity, weight_fraction, weight_model_arrival_latency):
         """
         Calculate the static reputation of a participant.
@@ -182,7 +216,6 @@ class Reputation:
             metric_similarity (float): The similarity between models.
             metric_fraction (float): The fraction of parameters changed.
             metric_model_arrival_latency (float): The model arrival latency.
-            current_round (int): The current round number.
             weight_messages_number (float): The weight of the number of messages.
             weight_similarity (float): The weight of the similarity.
             weight_fraction (float): The weight of the fraction.
@@ -211,9 +244,7 @@ class Reputation:
         )
         logging.info(f"Static reputation for node {nei} at round {self.engine.get_round()}: {reputation_static}")
 
-        avg_reputation = self.save_reputation_history_in_memory(
-            self.engine.addr, nei, reputation_static, current_round
-        )
+        avg_reputation = self.save_reputation_history_in_memory(self.engine.addr, nei, reputation_static)
 
         metrics_data = {
             "addr": addr,
@@ -225,15 +256,14 @@ class Reputation:
         for metric_name in metric_values:
             metrics_data[f"average_{metric_name}"] = static_weights[metric_name]
 
-        self._update_reputation_record(nei, avg_reputation, current_round, metrics_data)
+        self._update_reputation_record(nei, avg_reputation, metrics_data)
 
-    async def _calculate_dynamic_reputation(self, addr, current_round, neighbors):
+    async def _calculate_dynamic_reputation(self, addr, neighbors):
         """
         Calculate the dynamic reputation of a participant.
 
         Args:
             addr (str): The IP address of the participant.
-            current_round (int): The current round number.
             neighbors (list): The list of neighbors.
 
         Returns:
@@ -245,7 +275,7 @@ class Reputation:
             if self.engine.reputation_metrics.get(metric_name, False):
                 valid_entries = [
                     entry for entry in self.history_data[metric_name]
-                    if entry["round"] >= current_round and entry.get("weight") not in [None, -1]
+                    if entry["round"] >= self._engine.get_round() and entry.get("weight") not in [None, -1]
                 ]
 
                 if valid_entries:
@@ -259,7 +289,7 @@ class Reputation:
             for metric_name in self.history_data.keys():
                 if self.engine.reputation_metrics.get(metric_name, False):
                     for entry in self.history_data.get(metric_name, []):
-                        if entry["round"] == current_round and entry["metric_name"] == metric_name and entry["nei"] == nei:
+                        if entry["round"] == self._engine.get_round() and entry["metric_name"] == metric_name and entry["nei"] == nei:
                             metric_values[metric_name] = entry["metric_value"]
                             break
 
@@ -270,9 +300,7 @@ class Reputation:
                 )
                 logging.info(f"Dynamic reputation with weights for {nei} at round {self.engine.get_round()}: {reputation_with_weights}")
 
-                avg_reputation = self.save_reputation_history_in_memory(
-                    self.engine.addr, nei, reputation_with_weights, current_round
-                )
+                avg_reputation = self.save_reputation_history_in_memory(self.engine.addr, nei, reputation_with_weights)
 
                 metrics_data = {
                     "addr": addr,
@@ -284,36 +312,35 @@ class Reputation:
                 for metric_name in metric_values:
                     metrics_data[f"average_{metric_name}"] = average_weights[metric_name]
 
-                self._update_reputation_record(nei, avg_reputation, current_round, metrics_data)
+                self._update_reputation_record(nei, avg_reputation, metrics_data)
 
-    def _update_reputation_record(self, nei, reputation, current_round, data):
+    def _update_reputation_record(self, nei, reputation, data):
         """
         Update the reputation record of a participant.
 
         Args:
             nei (str): The IP address of the participant.
             reputation (float): The reputation of the participant.
-            current_round (int): The current round number.
         """
-        if nei not in self.engine.reputation:
-            self.engine.reputation[nei] = {
+        if nei not in self.reputation:
+            self.reputation[nei] = {
                 "reputation": reputation,
-                "round": current_round,
+                "round": self._engine.get_round(),
                 "last_feedback_round": -1,
             }
         else:
-            self.engine.reputation[nei]["reputation"] = reputation
-            self.engine.reputation[nei]["round"] = current_round
+            self.reputation[nei]["reputation"] = reputation
+            self.reputation[nei]["round"] = self._engine.get_round()
 
-        logging.info(f"Reputation of node {nei}: {self.engine.reputation[nei]['reputation']}")
-        if self.engine.reputation[nei]["reputation"] < 0.6:
-            self.engine.rejected_nodes.add(nei)
-            logging.info(f"Rejected node {nei} at round {self.engine.get_round()}")
+        logging.info(f"Reputation of node {nei}: {self.reputation[nei]['reputation']}")
+        if self.reputation[nei]["reputation"] < 0.6:
+            self.rejected_nodes.add(nei)
+            logging.info(f"Rejected node {nei} at round {self._engine.get_round()}")
 
         self.metrics(
-            self.engine.experiment_name,
+            self._engine.experiment_name,
             data,
-            self.engine.addr,
+            self._engine.addr,
             nei,
             "reputation",
             update_field="reputation_without_feedback",
@@ -428,7 +455,7 @@ class Reputation:
                     if entry["metric_name"] == metric_name and entry["round"] == current_round and entry["nei"] == nei:
                         entry["weight"] = weight
 
-    def calculate_value_metrics(self, scenario, log_dir, id_node, addr, nei, current_round=None, metrics_active=None):
+    async def calculate_value_metrics(self, scenario, log_dir, id_node, addr, nei, metrics_active=None):
         """
         Calculate the reputation of each participant based on the data stored.
 
@@ -446,8 +473,7 @@ class Reputation:
         avg_model_arrival_latency = 0
         similarity_reputation = 0
         fraction_neighbors_scores = None
-
-        logging.info(f"Metrics active: {metrics_active}")
+        federation_nodes = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
 
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -463,12 +489,10 @@ class Reputation:
                             round_time = metric["number_message"]["round"]
                             current_round_time = metric["number_message"]["current_round"]
                             time = metric["number_message"]["time"]
-                            type_message = metric["number_message"]["type_message"]
-                            previous_round_time = current_round - 1
+                            previous_round_time = self._engine.get_round() - 1
                             if round_time == previous_round_time:
                                 Reputation.messages_number_message.append({
                                     "number_message": time,
-                                    "type_message": type_message,
                                     "round": round_time,
                                     "current_round": current_round_time,
                                     "key": (addr, nei),
@@ -478,12 +502,12 @@ class Reputation:
                             round_fraction = metric["fraction_of_params_changed"]["round"]
                             fraction_changed = metric["fraction_of_params_changed"]["fraction_changed"]
                             threshold = metric["fraction_of_params_changed"]["threshold"]
-                            if round_fraction == current_round:
+                            if round_fraction == self._engine.get_round():
                                 fraction_score_normalized = Reputation.analyze_anomalies(
                                     addr,
                                     nei,
                                     round_fraction,
-                                    current_round,
+                                    self._engine.get_round(),
                                     fraction_changed,
                                     threshold,
                                     scenario,
@@ -493,8 +517,7 @@ class Reputation:
                             round_latency = metric["model_arrival_latency"]["round"]
                             round_received = metric["model_arrival_latency"]["round_received"]
                             latency = metric["model_arrival_latency"]["latency"]
-                            score_asigned = None
-                            if round_received == current_round:
+                            if round_received == self._engine.get_round():
                                 messages_model_arrival_latency_normalized = Reputation.manage_model_arrival_latency(
                                     round_latency,
                                     addr,
@@ -502,65 +525,40 @@ class Reputation:
                                     latency,
                                     scenario,
                                     self.model_arrival_latency_data,
-                                    current_round,
+                                    self._engine.get_round(),
                                     self.engine.config.participant["aggregator_args"]["aggregation_timeout"],
+                                    federation_nodes,
                                 )
-                            # elif round_latency < current_round:
-                            #     if current_round in Reputation.model_arrival_latency_history:
-                            #         if nei in Reputation.model_arrival_latency_history[current_round]:
-                            #             if "latency" in Reputation.model_arrival_latency_history[current_round][nei]:
-                            #                 if "score" in Reputation.model_arrival_latency_history[current_round][nei]:
-                            #                     score_asigned = Reputation.model_arrival_latency_history[current_round][
-                            #                         nei
-                            #                     ]["score"]
 
-                            #     if score_asigned is None:
-                            #         for round in range(current_round, current_round + 1):
-                            #             latency = self.engine.config.participant["aggregator_args"][
-                            #                 "aggregation_timeout"
-                            #             ]
-                            #             messages_model_arrival_latency_normalized = (
-                            #                 Reputation.manage_model_arrival_latency(
-                            #                     round_latency,
-                            #                     addr,
-                            #                     nei,
-                            #                     latency,
-                            #                     scenario,
-                            #                     self.model_arrival_latency_data,
-                            #                     current_round,
-                            #                 )
-                            #             )
-
-                    if current_round >= 5 and metrics_active.get("model_similarity", False):
+                    if self._engine.get_round() >= 5 and metrics_active.get("model_similarity", False):
                         similarity_file = os.path.join(log_dir, f"participant_{id_node}_similarity.csv")
-                        similarity_reputation = Reputation.read_similarity_file(similarity_file, nei, current_round)
+                        similarity_reputation = Reputation.read_similarity_file(similarity_file, nei, self._engine.get_round())
                     else:
                         similarity_reputation = 0
 
                     if messages_model_arrival_latency_normalized >= 0:
                         avg_model_arrival_latency = Reputation.save_model_arrival_latency_history(
-                            addr, nei, messages_model_arrival_latency_normalized, current_round
+                            addr, nei, messages_model_arrival_latency_normalized, self._engine.get_round()
                         )
-                        if avg_model_arrival_latency is None and current_round > 4:
+                        if avg_model_arrival_latency is None and self._engine.get_round() > 4:
                             avg_model_arrival_latency = Reputation.model_arrival_latency_history[(addr, nei)][
-                                current_round - 1
+                                self._engine.get_round() - 1
                             ]["score"]
 
                     if Reputation.messages_number_message is not None:
-                        messages_number_message_normalized, messages_number_message_count = (
-                            Reputation.manage_metric_number_message(
-                                Reputation.messages_number_message, addr, nei, current_round, scenario, metrics_active.get("num_messages", False)
+                        messages_number_message_normalized, messages_number_message_count = Reputation.manage_metric_number_message(
+                                Reputation.messages_number_message, addr, nei, self._engine.get_round(), scenario, metrics_active.get("num_messages", False)
                             )
-                        )
+                        
                         avg_messages_number_message_normalized = Reputation.save_number_message_history(
-                            addr, nei, messages_number_message_normalized, current_round
+                            addr, nei, messages_number_message_normalized, self._engine.get_round()
                         )
-                        if avg_messages_number_message_normalized is None and current_round > 4:
-                            avg_messages_number_message_normalized = Reputation.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
+                        if avg_messages_number_message_normalized is None and self._engine.get_round() > 4:
+                            avg_messages_number_message_normalized = Reputation.number_message_history[(addr, nei)][self._engine.get_round() - 1]["avg_number_message"]
 
-                    if current_round >= 5:
+                    if self._engine.get_round() >= 5:
                         if fraction_score_normalized > 0:
-                            key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                            key_previous_round = (addr, nei, self._engine.get_round() - 1) if self._engine.get_round() - 1 > 0 else None
                             fraction_previous_round = None
 
                             if (key_previous_round is not None and key_previous_round in Reputation.fraction_changed_history):
@@ -569,13 +567,13 @@ class Reputation:
 
                             if fraction_previous_round is not None:
                                 fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
-                                Reputation.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = (fraction_score_asign)
+                                Reputation.fraction_changed_history[(addr, nei, self._engine.get_round())]["fraction_score"] = (fraction_score_asign)
                             else:
                                 fraction_score_asign = fraction_score_normalized
-                                Reputation.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = (fraction_score_asign)
+                                Reputation.fraction_changed_history[(addr, nei, self._engine.get_round())]["fraction_score"] = (fraction_score_asign)
                         else:
                             fraction_previous_round = None
-                            key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                            key_previous_round = (addr, nei, self._engine.get_round() - 1) if self._engine.get_round() - 1 > 0 else None
                             if (key_previous_round is not None and key_previous_round in Reputation.fraction_changed_history):
                                 fraction_score = Reputation.fraction_changed_history[key_previous_round].get("fraction_score")
                                 fraction_previous_round = fraction_score if fraction_score is not None else None
@@ -607,7 +605,7 @@ class Reputation:
                         avg_model_arrival_latency,
                         addr,
                         nei,
-                        current_round,
+                        self._engine.get_round(),
                         self.engine.total_rounds,
                         scenario,
                     )
@@ -852,7 +850,7 @@ class Reputation:
 
     @staticmethod
     def manage_model_arrival_latency(
-        round_num, addr, nei, latency, scenario, model_arrival_latency_data, current_round, aggregation_timeout
+        round_num, addr, nei, latency, scenario, model_arrival_latency_data, current_round, aggregation_timeout, federation_nodes
     ):
         """
         Manage the model_arrival_latency metric with persistent storage of mean latency.
@@ -921,7 +919,7 @@ class Reputation:
                     score = 1 / (1 + np.exp(abs(difference) / prev_mean_latency))
 
                 if round_num < current_round:
-                    logging.info(f"Round: {round_num} < Current round: {current_round} to node {nei}")
+                    # logging.info(f"Round: {round_num} < Current round: {current_round} to node {nei}")
                     round_diff = current_round - round_num
                     penalty_factor = round_diff * 0.1
                     penalty = penalty_factor * (1 - score)
@@ -1088,7 +1086,6 @@ class Reputation:
             if previous_round > 4:
                 percentile_25 = Reputation.previous_percentile_25_number_message.get(current_addr_nei, 0)
                 percentile_85 = Reputation.previous_percentile_85_number_message.get(current_addr_nei, 0)
-
                 if messages_count > percentile_85:
                     relative_position = (messages_count - percentile_85) / (percentile_85 - percentile_25)
                     normalized_messages = np.exp(-relative_position)
@@ -1135,7 +1132,6 @@ class Reputation:
 
             Reputation.number_message_history[key][current_round] = {"number_message": messages_number_message_normalized}
 
-            
             if messages_number_message_normalized != 0 and current_round > 4:
                 previous_avg = (
                     Reputation.number_message_history[key].get(current_round - 1, {}).get("avg_number_message", None)
@@ -1158,8 +1154,7 @@ class Reputation:
             logging.exception(f"Error managing model_arrival_latency latency: {e}")
             return 0.0
     
-    @staticmethod
-    def save_reputation_history_in_memory(addr, nei, reputation, current_round):
+    def save_reputation_history_in_memory(self, addr, nei, reputation):
         """
         Save the reputation history of a participant (addr) regarding its neighbor (nei) in memory
         and calculate the average reputation.
@@ -1168,7 +1163,6 @@ class Reputation:
             addr (str): The identifier of the node whose reputation is being saved.
             nei (str): The neighboring node involved.
             reputation (float): The reputation value to be saved.
-            current_round (int): The current round number.
 
         Returns:
             float: The cumulative reputation including the current round.
@@ -1179,9 +1173,10 @@ class Reputation:
             if key not in Reputation.reputation_history:
                 Reputation.reputation_history[key] = {}
 
-            Reputation.reputation_history[key][current_round] = reputation
+            Reputation.reputation_history[key][self._engine.get_round()] = reputation
 
             avg_reputation = 0
+            current_round = self._engine.get_round()
             rounds = sorted(Reputation.reputation_history[key].keys(), reverse=True)[:2]
             # logging.info(f"Rounds in save_reputation_history: {rounds}")
 
@@ -1196,9 +1191,9 @@ class Reputation:
                 avg_reputation = (current_rep * 0.8) + (previous_rep * 0.2)
                 logging.info(f"Reputation ponderated: {avg_reputation}")
             else:
-                logging.info(f"Reputation history: {Reputation.reputation_history}")
+                # logging.info(f"Reputation history: {Reputation.reputation_history}")
                 avg_reputation = Reputation.reputation_history[key][current_round]
-                logging.info(f"Current reputation: {avg_reputation}")
+                # logging.info(f"Current reputation: {avg_reputation}")
 
             return avg_reputation
 
@@ -1345,3 +1340,372 @@ class Reputation:
                 writer = csv.DictWriter(file, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
+
+    async def calculate_reputation(self, ae: AggregationEvent):
+        """
+            Calculate the reputation of the node based on the active metrics.
+
+            Args:
+                ae (AggregationEvent): The aggregation event.
+        """
+        (updates, _, _) = await ae.get_event_data()
+        if self._engine.with_reputation:
+            logging.info(f"Calculating reputation at round {self._engine.get_round()}")
+            logging.info(f"Active metrics: {self._engine.reputation_metrics}")
+            logging.info(f"rejected nodes at round {self._engine.get_round()}: {self.rejected_nodes}")
+            self.rejected_nodes.clear()
+            logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
+
+            neighbors = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
+            history_data = self.history_data
+
+            for nei in neighbors:
+                metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency = (
+                    await self.calculate_value_metrics(
+                        self._engine.experiment_name,
+                        self._engine.log_dir,
+                        self._engine.idx,
+                        self._engine.addr,
+                        nei,
+                        metrics_active=self._engine.reputation_metrics,
+                    )
+                )
+                    
+                if self._engine.weighting_factor == "dynamic":
+                    self.calculate_weighted_values(
+                        metric_messages_number,
+                        metric_similarity,
+                        metric_fraction,
+                        metric_model_arrival_latency,
+                        history_data,
+                        self._engine.get_round(),
+                        self._engine.addr,
+                        nei,
+                        self._engine.reputation_metrics,
+                    )
+
+                if self._engine.weighting_factor == "static" and self._engine.get_round() >= 5:
+                    self._calculate_static_reputation(
+                        self._engine.addr,
+                        nei,
+                        metric_messages_number,
+                        metric_similarity,
+                        metric_fraction,
+                        metric_model_arrival_latency,
+                        self._engine.weight_num_messages,
+                        self._engine.weight_model_similarity,
+                        self._engine.weight_fraction_params_changed,
+                        self._engine.weight_model_arrival_latency,
+                    )
+            
+            if self._engine.weighting_factor == "dynamic" and self._engine.get_round() >= 5:
+                await self._calculate_dynamic_reputation(self._engine.addr, neighbors)
+
+            if self._engine.get_round() < 5 and self._engine.with_reputation:
+                federation = self._engine.config.participant["network_args"]["neighbors"].split()
+                self.init_reputation(
+                    self._engine.addr,
+                    federation_nodes=federation,
+                    round_num=self._engine.get_round(),
+                    last_feedback_round=-1,
+                    scenario=self._engine.experiment_name,
+                    init_reputation = self._engine.initial_reputation,
+                )
+
+            status = await self.include_feedback_in_reputation()
+            if status:
+                logging.info(f"Feedback included in reputation at round {self._engine.get_round()}")
+            else:
+                logging.info(f"Feedback not included in reputation at round {self._engine.get_round()}")
+
+            if self.reputation is not None:
+                self.create_graphic_reputation(
+                    self._engine.addr,
+                    self._engine.get_round(),
+                )
+
+                await self.update_process_aggregation(updates)
+                await self.send_reputation_to_neighbors(neighbors)
+
+    async def send_reputation_to_neighbors(self, neighbors):
+        """
+            Send the calculated reputation to the neighbors.
+        """
+        for nei, data in self.reputation.items():
+            if data["reputation"] is not None:
+                neighbors_to_send = [neighbor for neighbor in neighbors if neighbor != nei]
+
+                for neighbor in neighbors_to_send:
+                    message = self._engine.cm.create_message(
+                        "reputation", "share", node_id=nei, score=float(data["reputation"]), round=self._engine.get_round()
+                    )
+                    await self._engine.cm.send_message(neighbor, message)
+                    logging.info(
+                        f"Sending reputation to node {nei} from node {neighbor} with reputation {data['reputation']}"
+                    )
+
+                metrics_data = {
+                    "addr": self._engine.addr,
+                    "nei": nei,
+                    "round": self._engine.get_round(),
+                    "reputation_with_feedback": data["reputation"],
+                }
+
+                self.metrics(
+                    self._engine.experiment_name,
+                    metrics_data,
+                    self._engine.addr,
+                    nei,
+                    "reputation",
+                    update_field="reputation_with_feedback",
+                )
+    
+    def create_graphic_reputation(self, addr, round_num):
+        """
+        Create a graphic with the reputation of a node in a specific round.
+        """
+        try:
+            reputation_dict_with_values = {
+                f"Reputation/{addr}": {
+                    node_id: float(data["reputation"])
+                    for node_id, data in self.reputation.items()
+                    if data["reputation"] is not None
+                }
+            }
+
+            logging.info(f"Reputation dict: {reputation_dict_with_values}")
+            self._engine.trainer._logger.log_data(reputation_dict_with_values, step=round_num)
+
+        except Exception:
+            logging.exception("Error creating reputation graphic")
+
+         # reputation_dict_with_values = {
+                #     f"Reputation/{self._engine.addr}": {
+                #         node_id: float(data["reputation"])
+                #         for node_id, data in self.reputation.items()
+                #         if data["reputation"] is not None
+                #     }
+                # }
+
+                # logging.info(f"Reputation dict: {reputation_dict_with_values}")
+                # self._engine.trainer._logger.log_data(reputation_dict_with_values, step=self._engine.get_round())
+            
+    async def update_process_aggregation(self, updates):
+        """
+        Update the process of aggregation by removing rejected nodes from the updates.
+        """
+        for rn in self.rejected_nodes:
+            if rn in updates:
+                updates.pop(rn)
+
+        logging.info(f"Updates after rejected nodes: {list(updates.keys())}")
+
+    async def include_feedback_in_reputation(self):
+        weight_current_reputation = 0.9
+        weight_feedback = 0.1
+
+        if self.reputation_with_all_feedback is None:
+            logging.info("No feedback received.")
+            return False
+        
+        updated = False
+
+        for(current_node, node_ip, round_num), scores in self.reputation_with_all_feedback.items():
+            if not scores:
+                logging.info(f"No feedback received for node {node_ip} in round {round_num}")
+                continue
+
+            if node_ip not in self.reputation:
+                logging.info(f"No reputation for node {node_ip}")
+                continue
+
+            if "last_feedback_round" in self.reputation[node_ip] and self.reputation[node_ip]["last_feedback_round"] >= round_num:
+                continue
+
+            avg_feedback = sum(scores) / len(scores)
+            logging.info(f"Receive feedback to node {node_ip} with average score {avg_feedback}")
+
+            current_reputation = self.reputation[node_ip]["reputation"]
+            if current_reputation is None:
+                logging.info(f"No reputation calculate for node {node_ip}.")
+                continue
+
+            combined_reputation = (current_reputation * weight_current_reputation) + (avg_feedback * weight_feedback)
+            logging.info(f"Combined reputation for node {node_ip} in round {round_num}: {combined_reputation}")
+
+            self.reputation[node_ip] = {
+                "reputation": combined_reputation,
+                "round": self._engine.get_round(),
+                "last_feedback_round": round_num,
+            }
+            updated = True
+            logging.info(f"Updated self.reputation for {node_ip}: {self.reputation[node_ip]}")
+
+        if updated:
+            return True
+        else:
+            return False
+    
+    async def on_round_start(self, rse: RoundStartEvent):
+        (round_id, start_time, expected_nodes) = await rse.get_event_data()
+        if round_id not in self.round_timing_info:
+            self.round_timing_info[round_id] = {}
+        self.round_timing_info[round_id]["start_time"] = start_time
+        expected_nodes.difference_update(self.rejected_nodes)
+
+    async def recollect_model_arrival_latency(self, ure: UpdateReceivedEvent):
+        (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
+        current_time = time.time()
+        current_round = round_num
+
+        if current_round not in self.round_timing_info:
+            self.round_timing_info[current_round] = {}
+        
+        self.round_timing_info[current_round]["model_received_time"] = current_time
+        
+        if "start_time" in self.round_timing_info[current_round]:
+            start = self.round_timing_info[current_round]["start_time"]
+            duration = current_time - start
+            self.round_timing_info[current_round]["duration"] = duration
+            logging.info(f"Round {current_round} duration: {duration:.4f} seconds")
+
+            save_data(
+                self._engine.experiment_name,
+                "model_arrival_latency",
+                source,
+                self._engine.addr,
+                num_round=current_round,
+                current_round=self._engine.get_round(),
+                latency=duration,
+            )
+
+    async def recollect_similarity(self, ure: UpdateReceivedEvent):
+        (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
+        if self._engine.with_reputation and self._engine.reputation_metrics.get("model_similarity"):
+            if self._engine.config.participant["adaptive_args"]["model_similarity"]:
+                if source != self._engine.addr:
+                    logging.info("🤖  handle_model_message | Checking model similarity")
+                    cosine_value = cosine_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        similarity=True,
+                    )
+                    euclidean_value = euclidean_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        similarity=True,
+                    )
+                    minkowski_value = minkowski_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        p=2,
+                        similarity=True,
+                    )
+                    manhattan_value = manhattan_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        similarity=True,
+                    )
+                    pearson_correlation_value = pearson_correlation_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        similarity=True,
+                    )
+                    jaccard_value = jaccard_metric(
+                        self._engine.trainer.get_model_parameters(),
+                        decoded_model,
+                        similarity=True,
+                    )
+                    file = f"{self._engine.log_dir}/participant_{self._engine.idx}_similarity.csv"
+                    directory = os.path.dirname(file)
+                    os.makedirs(directory, exist_ok=True)
+                    if not os.path.isfile(file):
+                        with open(file, "w") as f:
+                            f.write(
+                                "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
+                            )
+                    with open(file, "a") as f:
+                        f.write(
+                            f"{datetime.now()}, {source}, {round_num}, {self._engine.get_round()}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
+                        )
+
+                    if cosine_value < 0.6:
+                        logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
+                        self.rejected_nodes.add(source)
+
+    async def recollect_number_message(self, source, message):
+        current_time = time.time()
+        if current_time:
+            save_data(
+                self._engine.experiment_name,
+                "number_message",
+                source,
+                self._engine.addr,
+                num_round=message.round if message.round is not None else self._engine.get_round(),
+                time=current_time,
+                current_round=self._engine.get_round(),
+            )
+
+    async def recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
+        (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
+        current_round = self._engine.get_round()
+        parameters_local = self._engine.trainer.get_model_parameters()
+        parameters_received = decoded_model
+        differences = []
+        total_params = 0
+        changed_params = 0
+        changes_record = {}
+        prev_threshold = None
+
+        if source in self.fraction_of_params_changed and current_round - 1 in self.fraction_of_params_changed[source]:
+            prev_threshold = self.fraction_of_params_changed[source][current_round - 1][-1]["threshold"]
+
+        for key in parameters_local.keys():
+            # logging.info(f"🤖  fraction_of_parameters_changed | Key: {key}")
+            if key in parameters_received:
+                diff = torch.abs(parameters_local[key] - parameters_received[key])
+                differences.extend(diff.flatten().tolist())
+                total_params += diff.numel()
+                # logging.info(f"🤖  fraction_of_parameters_changed | Total params: {total_params}")
+
+        if differences:
+            mean_threshold = torch.mean(torch.tensor(differences)).item()
+            current_threshold = (prev_threshold + mean_threshold) / 2 if prev_threshold is not None else mean_threshold
+        else:
+            current_threshold = 0
+
+        for key in parameters_local.keys():
+            if key in parameters_received:
+                diff = torch.abs(parameters_local[key] - parameters_received[key])
+                num_changed = torch.sum(diff > current_threshold).item()
+                changed_params += num_changed
+                if num_changed > 0:
+                    changes_record[key] = num_changed
+
+        fraction_changed = changed_params / total_params if total_params > 0 else 0.0
+
+        if source not in self.fraction_of_params_changed:
+            self.fraction_of_params_changed[source] = {}
+        if current_round not in self.fraction_of_params_changed[source]:
+            self.fraction_of_params_changed[source][current_round] = []
+
+        self.fraction_of_params_changed[source][current_round].append({
+            "fraction_changed": fraction_changed,
+            "total_params": total_params,
+            "changed_params": changed_params,
+            "threshold": current_threshold,
+            "changes_record": changes_record,
+        })
+
+        save_data(
+            self._engine.experiment_name,
+            "fraction_of_params_changed",
+            source,
+            self._engine.addr,
+            current_round,
+            fraction_changed=fraction_changed,
+            total_params=total_params,
+            changed_params=changed_params,
+            threshold=current_threshold,
+            changes_record=changes_record,
+        )

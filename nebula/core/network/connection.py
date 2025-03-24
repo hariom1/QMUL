@@ -80,9 +80,6 @@ class Connection:
         self.MAX_CHUNK_SIZE = 1024  # 1 KB
         self.BUFFER_SIZE = 1024  # 1 KB
 
-        self.reputation_instance = Reputation(self.cm.engine)
-        self._model_arrival_latency_data = self.reputation_instance.model_arrival_latency_data
-
         self.incompleted_reconnections = 0
         self.forced_disconnection = False
 
