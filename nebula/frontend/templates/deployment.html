@@ -162,9 +162,6 @@
                             <label>
                                 <input type="checkbox" id="mod-delayer" value='DelayerAttack' style="margin-right: 10px;">Delayer
                             </label>
-                            <label>
-                                <input type="checkbox" id="mod-flooding" value="FloodingAttack" style="margin-right: 10px;">Flooding
-                            </label>
                         </div>
                     </div>
                 </form>
@@ -608,8 +605,8 @@
                         </div>
                     </div>
                 </div>
-                <!-- Advanced Defense -->
-                <div class="form-group row container-shadow tiny grey">
+               <!-- Advanced Defense -->
+               <div class="form-group row container-shadow tiny grey">
                     <h5 class="step-number">Defense <i class="fa fa-wrench"></i>
                         <input type="checkbox" id="defense-lock" onchange="lock('reputationSwitch', 'initial-reputation', 'weighting-factor', 'model-similarity', 'num-messages', 'model-arrival-latency', 'fraction-params-changed', checked)" style="display: none;">
                         <label for="defense-lock" class="icon-container" style="float: right;">
@@ -1572,6 +1569,28 @@
             delay: { show: 500, hide: 100 },
         });
 
+        var popoverTriggerEl = document.getElementById("processHelpIcon");
+        var popover = new bootstrap.Popover(popoverTriggerEl, {
+            title: "Deployment type",
+            content: contentProcessHelp,
+            trigger: "hover",
+            placement: "right",
+            html: true,
+            container: "body",
+            delay: { show: 500, hide: 100 },
+        });
+
+        var popoverTriggerEl = document.getElementById("dockerHelpIcon");
+        var popover = new bootstrap.Popover(popoverTriggerEl, {
+            title: "Deployment type",
+            content: contentDockerHelp,
+            trigger: "hover",
+            placement: "right",
+            html: true,
+            container: "body",
+            delay: { show: 500, hide: 100 },
+        });
+
         var reputationInitialization = document.getElementById("reputationInitializationHelpIcon");
         var popover = new bootstrap.Popover(reputationInitialization, {
             title: "Reputation Initialization",
@@ -1616,37 +1635,6 @@
             container: "body",
             delay: { show: 500, hide: 100 },
         });
-
-        // When click processHelpIcon, redirect to the documentation page
-        var processIcon = document.getElementById("processHelpIcon");
-        processIcon.addEventListener("click", function () {
-            window.open("#", "_blank");
-
-        var dockerIcon = document.getElementById("dockerHelpIcon");
-        dockerIcon.addEventListener("click", function () {
-        window.open("#", "_blank");
-
-        // var popoverTriggerEl = document.getElementById("processHelpIcon");
-        // var popover = new bootstrap.Popover(popoverTriggerEl, {
-        //     title: "Deployment type",
-        //     content: contentProcessHelp,
-        //     trigger: "hover",
-        //     placement: "right",
-        //     html: true,
-        //     container: "body",
-        //     delay: { show: 500, hide: 100 },
-        // });
-
-        // var popoverTriggerEl = document.getElementById("dockerHelpIcon");
-        // var popover = new bootstrap.Popover(popoverTriggerEl, {
-        //     title: "Deployment type",
-        //     content: contentDockerHelp,
-        //     trigger: "hover",
-        //     placement: "right",
-        //     html: true,
-        //     container: "body",
-        //     delay: { show: 500, hide: 100 },
-        // });
     </script>
 
     <script>
@@ -2124,7 +2112,7 @@
         });
         document.getElementById("mod-robustness").addEventListener("change", function() {
             selectALL(['mod-noattack', 'mod-labelflipping', 'mod-samplepoisoning', 'mod-modelpoisoning', 'mod-neuroninversion', 'mod-noiseinjection',
-             'mod-swappingweights', 'mod-delayer', 'mod-flooding'], document.getElementById("mod-robustness").checked);
+             'mod-swappingweights', 'mod-delayer'], document.getElementById("mod-robustness").checked);
         });
 
         //Generate a scenario
@@ -2149,7 +2137,7 @@
             }
 
             var attacks = ['mod-noattack', 'mod-labelflipping', 'mod-samplepoisoning', 'mod-modelpoisoning', 'mod-neuroninversion', 'mod-noiseinjection',
-             'mod-swappingweights', 'mod-delayer', 'mod-flooding'];
+             'mod-swappingweights', 'mod-delayer'];
             if (!atLeastOneChecked(attacks)) {
                 alert("Please, select one robustness option at least.");
                 return;
@@ -3002,8 +2990,6 @@
                 document.getElementById("target_label-container").style.display = "none";
                 document.getElementById("target_changed_label-title").style.display = "none";
                 document.getElementById("target_changed_label-container").style.display = "none";
-                document.getElementById("strength-title").style.display = "none";
-                document.getElementById("strength-container").style.display = "none";
                 document.getElementById("layer_idx-title").style.display = "none";
                 document.getElementById("layer_idx-container").style.display = "none";
                 document.getElementById("delay-title").style.display = "block";
@@ -3052,56 +3038,6 @@
                 document.getElementById("selection-interval-container").style.display = "block";
                 document.getElementById("flooding-factor-title").style.display = "block";
                 document.getElementById("flooding-factor-container").style.display = "block";
-            }
-            else if(this.value == "Flooding"){
-                document.getElementById("poisoned-node-title").style.display = "none";
-                document.getElementById("poisoned-node-percent-container").style.display = "none";
-                document.getElementById("poisoned-sample-title").style.display = "none";
-                document.getElementById("poisoned-sample-percent-container").style.display = "none";
-                document.getElementById("poisoned-noise-title").style.display = "none";
-                document.getElementById("poisoned-noise-percent-container").style.display = "none";
-                document.getElementById("noise-type-title").style.display = "none";
-                document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted-title").style.display = "none";
-                document.getElementById("targeted-container").style.display = "none";
-                document.getElementById("target_label-title").style.display = "none";
-                document.getElementById("target_label-container").style.display = "none";
-                document.getElementById("target_changed_label-title").style.display = "none";
-                document.getElementById("target_changed_label-container").style.display = "none";
-                document.getElementById("layer_idx-title").style.display = "none";
-                document.getElementById("layer_idx-container").style.display = "none";
-                document.getElementById("delay-title").style.display = "none";
-                document.getElementById("delay-container").style.display = "none";
-                document.getElementById("start-attack-title").style.display = "block";
-                document.getElementById("start-attack-container").style.display = "block";
-                document.getElementById("stop-attack-title").style.display = "block";
-                document.getElementById("stop-attack-container").style.display = "block";
-            }
-            else if(this.value == "Flooding"){
-                document.getElementById("poisoned-node-title").style.display = "none";
-                document.getElementById("poisoned-node-percent-container").style.display = "none";
-                document.getElementById("poisoned-sample-title").style.display = "none";
-                document.getElementById("poisoned-sample-percent-container").style.display = "none";
-                document.getElementById("poisoned-noise-title").style.display = "none";
-                document.getElementById("poisoned-noise-percent-container").style.display = "none";
-                document.getElementById("noise-type-title").style.display = "none";
-                document.getElementById("noise-type-container").style.display = "none";
-                document.getElementById("targeted-title").style.display = "none";
-                document.getElementById("targeted-container").style.display = "none";
-                document.getElementById("target_label-title").style.display = "none";
-                document.getElementById("target_label-container").style.display = "none";
-                document.getElementById("target_changed_label-title").style.display = "none";
-                document.getElementById("target_changed_label-container").style.display = "none";
-                document.getElementById("strength-title").style.display = "none";
-                document.getElementById("strength-container").style.display = "none";
-                document.getElementById("layer_idx-title").style.display = "none";
-                document.getElementById("layer_idx-container").style.display = "none";
-                document.getElementById("delay-title").style.display = "none";
-                document.getElementById("delay-container").style.display = "none";
-                document.getElementById("start-attack-title").style.display = "block";
-                document.getElementById("start-attack-container").style.display = "block";
-                document.getElementById("stop-attack-title").style.display = "block";
-                document.getElementById("stop-attack-container").style.display = "block";
             }
         });
     </script>
