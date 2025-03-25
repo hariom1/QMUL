@@ -11,7 +11,7 @@ import math
 # "Quality-Driven Selection"    (QDS)
 class QDSTrainingPolicy(TrainingPolicy):
     MAX_HISTORIC_SIZE = 10
-    SIMILARITY_THRESHOLD = 0.8
+    SIMILARITY_THRESHOLD = 0.73
     INACTIVE_THRESHOLD = 3
     GRACE_ROUNDS = 0
     CHECK_COOLDOWN = 50
