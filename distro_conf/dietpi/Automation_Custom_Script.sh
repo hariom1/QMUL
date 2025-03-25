@@ -1,1 +1,0 @@
-curl -fsSL https://raw.githubusercontent.com/GenyaLC/nebula/refs/heads/core-devices/run.sh | sh
