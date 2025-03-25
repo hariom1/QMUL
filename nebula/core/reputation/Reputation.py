@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import time
 import numpy as np
+import asyncio
 
 from typing import TYPE_CHECKING, ClassVar
 from nebula.core.nebulaevents import RoundStartEvent, UpdateReceivedEvent, MessageEvent, AggregationEvent
@@ -51,11 +52,13 @@ def save_data(
 
     try:
         combined_data = {}
+        
+        if addr == source_ip:
+            return
 
         if type_data == "number_message":
             combined_data["number_message"] = {
                 "time": time,
-                "round": num_round,
                 "current_round": current_round,
             }
         elif type_data == "fraction_of_params_changed":
@@ -123,8 +126,9 @@ class Reputation:
         self.reputation_with_feedback = {}
         self.reputation_with_all_feedback = {}
         self.rejected_nodes = set()
-
         self.round_timing_info = {}
+        # self._messages_received_lock = asyncio.Lock()
+        self._messages_received_from_sources = {}
 
     @property
     def engine(self):
@@ -486,14 +490,12 @@ class Reputation:
                     all_metrics = json.load(json_file)
                     for metric in all_metrics:
                         if "number_message" in metric and metrics_active.get("num_messages", False):
-                            round_time = metric["number_message"]["round"]
                             current_round_time = metric["number_message"]["current_round"]
                             time = metric["number_message"]["time"]
-                            previous_round_time = self._engine.get_round() - 1
-                            if round_time == previous_round_time:
+                            #previous_round_time = self._engine.get_round() - 1
+                            if current_round_time == self._engine.get_round():
                                 Reputation.messages_number_message.append({
                                     "number_message": time,
-                                    "round": round_time,
                                     "current_round": current_round_time,
                                     "key": (addr, nei),
                                 })
@@ -1045,14 +1047,14 @@ class Reputation:
 
             if not metric_active:
                 return 0.0, 0
-
-            previous_round = current_round - 1
+            
+            previous_round = current_round
 
             current_addr_nei = (addr, nei)
             relevant_messages = [
                 msg
                 for msg in messages_number_message
-                if msg["key"] == current_addr_nei and msg["round"] == previous_round
+                if msg["key"] == current_addr_nei and msg["current_round"] == previous_round
             ]
             messages_count = len(relevant_messages) if relevant_messages else 0
 
@@ -1069,7 +1071,7 @@ class Reputation:
                 rounds_to_consider = [0]
 
             previous_counts = [
-                len([m for m in messages_number_message if m["key"] == current_addr_nei and m["round"] == r])
+                len([m for m in messages_number_message if m["key"] == current_addr_nei and m["current_round"] == r])
                 for r in rounds_to_consider
             ]
 
@@ -1077,7 +1079,7 @@ class Reputation:
                 np.percentile(previous_counts, 25) if previous_counts else 0
             )
             Reputation.previous_percentile_85_number_message[current_addr_nei] = (
-                np.percentile(previous_counts, 85) * 1.20 if previous_counts else 0
+                np.percentile(previous_counts, 85) if previous_counts else 0
             )
 
             normalized_messages = 1.0
@@ -1095,7 +1097,7 @@ class Reputation:
             data = {
                 "addr": addr,
                 "nei": nei,
-                "round": current_round,
+                "round": previous_round,
                 "messages_count": messages_count,
                 "normalized_messages": normalized_messages,
                 "percentile_25": Reputation.previous_percentile_25_number_message[current_addr_nei],
@@ -1478,17 +1480,6 @@ class Reputation:
 
         except Exception:
             logging.exception("Error creating reputation graphic")
-
-         # reputation_dict_with_values = {
-                #     f"Reputation/{self._engine.addr}": {
-                #         node_id: float(data["reputation"])
-                #         for node_id, data in self.reputation.items()
-                #         if data["reputation"] is not None
-                #     }
-                # }
-
-                # logging.info(f"Reputation dict: {reputation_dict_with_values}")
-                # self._engine.trainer._logger.log_data(reputation_dict_with_values, step=self._engine.get_round())
             
     async def update_process_aggregation(self, updates):
         """
@@ -1561,23 +1552,30 @@ class Reputation:
         if current_round not in self.round_timing_info:
             self.round_timing_info[current_round] = {}
         
-        self.round_timing_info[current_round]["model_received_time"] = current_time
-        
-        if "start_time" in self.round_timing_info[current_round]:
-            start = self.round_timing_info[current_round]["start_time"]
-            duration = current_time - start
-            self.round_timing_info[current_round]["duration"] = duration
-            logging.info(f"Round {current_round} duration: {duration:.4f} seconds")
+        if "model_received_time" not in self.round_timing_info[current_round]:
+            self.round_timing_info[current_round]["model_received_time"] = {}
 
-            save_data(
-                self._engine.experiment_name,
-                "model_arrival_latency",
-                source,
-                self._engine.addr,
-                num_round=current_round,
-                current_round=self._engine.get_round(),
-                latency=duration,
-            )
+        if source not in self.round_timing_info[current_round]["model_received_time"]:
+            self.round_timing_info[current_round]["model_received_time"][source] = current_time
+
+            if "start_time" in self.round_timing_info[current_round]:
+                start = self.round_timing_info[current_round]["start_time"]
+                received_time = self.round_timing_info[current_round]["model_received_time"][source]
+                duration = received_time - start
+                self.round_timing_info[current_round]["duration"] = duration
+                logging.info(f"Source {source} , round {current_round}, duration: {duration:.4f} seconds")
+
+                save_data(
+                    self._engine.experiment_name,
+                    "model_arrival_latency",
+                    source,
+                    self._engine.addr,
+                    num_round=current_round,
+                    current_round=self._engine.get_round(),
+                    latency=duration,
+                )
+        else:
+            logging.info(f"Model arrival latency already calculated for node {source} in round {current_round}")
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
@@ -1634,17 +1632,17 @@ class Reputation:
                         self.rejected_nodes.add(source)
 
     async def recollect_number_message(self, source, message):
-        current_time = time.time()
-        if current_time:
-            save_data(
-                self._engine.experiment_name,
-                "number_message",
-                source,
-                self._engine.addr,
-                num_round=message.round if message.round is not None else self._engine.get_round(),
-                time=current_time,
-                current_round=self._engine.get_round(),
-            )
+        if source != self._engine.addr:
+            current_time = time.time()
+            if current_time:
+                save_data(
+                    self._engine.experiment_name,
+                    "number_message",
+                    source,
+                    self._engine.addr,
+                    time=current_time,
+                    current_round=self._engine.get_round(),
+                )
 
     async def recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
