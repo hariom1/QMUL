@@ -251,8 +251,7 @@ class Engine:
             except RuntimeError:
                 pass
         except RuntimeError:
-            pass
-
+            pass     
     async def model_update_callback(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model update from {source} with round {message.round}")
         if not self.get_federation_ready_lock().locked() and len(self.get_federation_nodes()) == 0:
