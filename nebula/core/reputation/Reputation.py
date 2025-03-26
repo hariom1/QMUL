@@ -52,7 +52,6 @@ class Reputation:
         self.model_arrival_latency_history = {}
         self.previous_percentile_25_number_message = {}
         self.previous_percentile_85_number_message = {}
-        self._with_reputation = engine.with_reputation
         self._addr = engine.addr
         self._reputation_metrics = engine.reputation_metrics
         self._log_dir = engine.log_dir
@@ -140,7 +139,7 @@ class Reputation:
         """
             Setup the reputation system.
         """
-        if self._with_reputation:
+        if self._engine.with_reputation:
             logging.info("Reputation system enabled")
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
             await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
@@ -165,7 +164,7 @@ class Reputation:
             logging.error("init_reputation | No federation nodes provided")
             return
 
-        if self._with_reputation:
+        if self._engine.with_reputation:
             neighbors = self.is_valid_ip(federation_nodes)
 
             if not neighbors:
@@ -900,13 +899,17 @@ class Reputation:
                         if r in self.model_arrival_latency_history
                         for key, data in self.model_arrival_latency_history[r].items()
                         if "latency" in data and data["latency"] != 0
+
                     ]
 
                     prev_mean_latency = np.mean(all_latencies) if all_latencies else 0
                     prev_percentil_25 = np.percentile(all_latencies, 25) if all_latencies else 0
                     prev_percentil_75 = np.percentile(all_latencies, 75) if all_latencies else 0
 
-                k = 0.2
+                k = 0.05
+                logging.info(f"prev_mean_latency: {prev_mean_latency}")
+                logging.info(f"prev_percentil_25: {prev_percentil_25}")
+                logging.info(f"prev_percentil_75: {prev_percentil_75}")
                 prev_mean_latency += k * (prev_percentil_75 - prev_percentil_25)
 
                 if latency == 0.0:
@@ -932,8 +935,13 @@ class Reputation:
                     if "latency" in data and data["latency"] != 0
                 ]
 
+                logging.info(f"accumulated_latencies: {accumulated_latencies}")
+
                 updated_percentil_25 = np.percentile(accumulated_latencies, 25) if accumulated_latencies else 0
                 updated_percentil_75 = np.percentile(accumulated_latencies, 75) if accumulated_latencies else 0
+
+                logging.info(f"updated_percentil_25: {updated_percentil_25}")
+                logging.info(f"updated_percentil_75: {updated_percentil_75}")
 
                 self.model_arrival_latency_history[current_round][current_key].update({
                     "mean_latency": prev_mean_latency,
@@ -1340,12 +1348,10 @@ class Reputation:
                 ae (AggregationEvent): The aggregation event.
         """
         (updates, _, _) = await ae.get_event_data()
-        if self._with_reputation:
+        if self._engine.with_reputation:
             logging.info(f"Calculating reputation at round {self._engine.get_round()}")
             logging.info(f"Active metrics: {self._reputation_metrics}")
             logging.info(f"rejected nodes at round {self._engine.get_round()}: {self.rejected_nodes}")
-            self.rejected_nodes.clear()
-            logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
 
             neighbors = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
             history_data = self.history_data
@@ -1391,7 +1397,7 @@ class Reputation:
             if self._weighting_factor == "dynamic" and self._engine.get_round() >= 5:
                 await self._calculate_dynamic_reputation(self._addr, neighbors)
 
-            if self._engine.get_round() < 5 and self._with_reputation:
+            if self._engine.get_round() < 5 and self._engine.with_reputation:
                 federation = self._engine.config.participant["network_args"]["neighbors"].split()
                 self.init_reputation(
                     self._addr,
@@ -1476,6 +1482,8 @@ class Reputation:
                 updates.pop(rn)
 
         logging.info(f"Updates after rejected nodes: {list(updates.keys())}")
+        self.rejected_nodes.clear()
+        logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
 
     async def include_feedback_in_reputation(self):
         weight_current_reputation = 0.9
@@ -1564,7 +1572,7 @@ class Reputation:
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
-        if self._with_reputation and self._reputation_metrics.get("model_similarity"):
+        if self._engine.with_reputation and self._reputation_metrics.get("model_similarity"):
             if self._engine.config.participant["adaptive_args"]["model_similarity"]:
                 if source != self._addr:
                     logging.info("🤖  handle_model_message | Checking model similarity")
