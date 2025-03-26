@@ -31,7 +31,6 @@ class Reputation:
 
     def __init__(self, engine: "Engine"):
         self._engine = engine
-        self.model_arrival_latency_data = {}
         self.fraction_of_params_changed = {}
         self.history_data = {}
         self.metric_weights = {}
@@ -483,7 +482,6 @@ class Reputation:
         avg_model_arrival_latency = 0
         similarity_reputation = 0
         fraction_neighbors_scores = None
-        federation_nodes = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
 
         try:
             script_dir = os.path.join(self._log_dir, "reputation")
@@ -529,10 +527,7 @@ class Reputation:
                                     addr,
                                     nei,
                                     latency,
-                                    self.model_arrival_latency_data,
-                                    self._engine.get_round(),
-                                    self.engine.config.participant["aggregator_args"]["aggregation_timeout"],
-                                    federation_nodes,
+                                    self._engine.get_round()
                                 )
 
                     if self._engine.get_round() >= 5 and metrics_active.get("model_similarity", False):
@@ -847,9 +842,9 @@ class Reputation:
         except Exception:
             logging.exception("Error analyzing anomalies")
             return -1
-
+    
     def manage_model_arrival_latency(
-        self, round_num, addr, nei, latency, model_arrival_latency_data, current_round, aggregation_timeout, federation_nodes
+        self, round_num, addr, nei, latency, current_round
     ):
         """
         Manage the model_arrival_latency metric with persistent storage of mean latency.
@@ -859,10 +854,7 @@ class Reputation:
             addr (str): Source IP address.
             nei (str): Destination IP address.
             latency (float): Latency value for the current model_arrival_latency.
-            model_arrival_latency_data (dict): data.
             current_round (int): The current round of the program.
-            aggregation_timeout (int): The aggregation timeout.
-            federation_nodes (set): The set of federation nodes.
 
         Returns:
             float: Normalized model_arrival_latency latency value between 0 and 1.
@@ -879,44 +871,27 @@ class Reputation:
             }
 
             prev_mean_latency = 0
+            prev_percentil_0 = 0
             prev_percentil_25 = 0
-            prev_percentil_75 = 0
             difference = 0
 
             if current_round >= 5:
-                for r in range(current_round - 1, 4, -1):
-                    if r in self.model_arrival_latency_history and current_key in self.model_arrival_latency_history[r]:
-                        prev_mean_latency = self.model_arrival_latency_history[r][current_key].get("mean_latency", 0)
-                        prev_percentil_25 = self.model_arrival_latency_history[r][current_key].get("percentil_25", 0)
-                        prev_percentil_75 = self.model_arrival_latency_history[r][current_key].get("percentil_75", 0)
-                        if prev_mean_latency and prev_percentil_25 and prev_percentil_75:
-                            break
+                all_latencies = [
+                    data["latency"]
+                    for r in self.model_arrival_latency_history
+                    for key, data in self.model_arrival_latency_history[r].items()
+                    if "latency" in data and data["latency"] != 0
+                ]
 
-                if current_round == 5:
-                    all_latencies = [
-                        data["latency"]
-                        for r in range(5)
-                        if r in self.model_arrival_latency_history
-                        for key, data in self.model_arrival_latency_history[r].items()
-                        if "latency" in data and data["latency"] != 0
+                prev_mean_latency = np.mean(all_latencies) if all_latencies else 0
+                prev_percentil_0 = np.percentile(all_latencies, 0) if all_latencies else 0
+                prev_percentil_25 = np.percentile(all_latencies, 25) if all_latencies else 0
 
-                    ]
-
-                    prev_mean_latency = np.mean(all_latencies) if all_latencies else 0
-                    prev_percentil_25 = np.percentile(all_latencies, 25) if all_latencies else 0
-                    prev_percentil_75 = np.percentile(all_latencies, 75) if all_latencies else 0
-
-                k = 0.05
-                logging.info(f"prev_mean_latency: {prev_mean_latency}")
-                logging.info(f"prev_percentil_25: {prev_percentil_25}")
-                logging.info(f"prev_percentil_75: {prev_percentil_75}")
-                prev_mean_latency += k * (prev_percentil_75 - prev_percentil_25)
-
-                if latency == 0.0:
-                    latency = 0.5
+                k = 0.1
+                prev_mean_latency += k * (prev_percentil_25 - prev_percentil_0)
 
                 difference = latency - prev_mean_latency
-                if latency <= prev_mean_latency or latency <= aggregation_timeout:
+                if latency <= prev_mean_latency:
                     score = 1.0
                 else:
                     score = 1 / (1 + np.exp(abs(difference) / prev_mean_latency))
@@ -927,26 +902,10 @@ class Reputation:
                     penalty = penalty_factor * (1 - score)
                     score -= penalty * score
 
-                accumulated_latencies = [
-                    data["latency"]
-                    for r in range(current_round + 1)
-                    if r in self.model_arrival_latency_history
-                    for key, data in self.model_arrival_latency_history[r].items()
-                    if "latency" in data and data["latency"] != 0
-                ]
-
-                logging.info(f"accumulated_latencies: {accumulated_latencies}")
-
-                updated_percentil_25 = np.percentile(accumulated_latencies, 25) if accumulated_latencies else 0
-                updated_percentil_75 = np.percentile(accumulated_latencies, 75) if accumulated_latencies else 0
-
-                logging.info(f"updated_percentil_25: {updated_percentil_25}")
-                logging.info(f"updated_percentil_75: {updated_percentil_75}")
-
                 self.model_arrival_latency_history[current_round][current_key].update({
                     "mean_latency": prev_mean_latency,
-                    "percentil_25": updated_percentil_25,
-                    "percentil_75": updated_percentil_75,
+                    "percentil_0": prev_percentil_0,
+                    "percentil_25": prev_percentil_25,
                     "score": score,
                 })
             else:
@@ -958,8 +917,8 @@ class Reputation:
                 "round": current_round,
                 "latency": latency,
                 "mean_latency": prev_mean_latency if current_round >= 5 else None,
-                "percentil_25": prev_percentil_25 if current_round >= 5 else None,
-                "percentil_75": prev_percentil_75 if current_round >= 5 else None,
+                "prev_percentil_0": prev_percentil_0 if current_round >= 5 else None,
+                "prev_percentil_25": prev_percentil_25 if current_round >= 5 else None,
                 "difference": difference if current_round >= 5 else None,
                 "score": score,
             }
@@ -970,7 +929,7 @@ class Reputation:
         except Exception as e:
             logging.exception(f"Error managing model_arrival_latency: {e}")
             return 0
-    
+
     def save_model_arrival_latency_history(self, addr, nei, model_arrival_latency, round_num):
         """
         Save the model_arrival_latency history of a participant (addr) regarding its neighbor (nei) in memory.
