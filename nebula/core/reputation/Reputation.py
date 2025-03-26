@@ -9,6 +9,7 @@ import time
 import numpy as np
 
 from typing import TYPE_CHECKING
+from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import RoundStartEvent, UpdateReceivedEvent, MessageEvent, AggregationEvent
 from nebula.core.eventmanager import EventManager
 from datetime import datetime
@@ -23,14 +24,16 @@ from nebula.core.utils.helper import (
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
+    from nebula.config.config import Config
 
 class Reputation:
     """
     Class to define the reputation of a participant.
     """
 
-    def __init__(self, engine: "Engine"):
+    def __init__(self, engine: "Engine", config: "Config"):
         self._engine = engine
+        self._config = config
         self.fraction_of_params_changed = {}
         self.history_data = {}
         self.metric_weights = {}
@@ -52,15 +55,28 @@ class Reputation:
         self.previous_percentile_25_number_message = {}
         self.previous_percentile_85_number_message = {}
         self._addr = engine.addr
-        self._reputation_metrics = engine.reputation_metrics
         self._log_dir = engine.log_dir
         self._idx = engine.idx
-        self._initial_reputation = engine.initial_reputation
-        self._weighting_factor = engine.weighting_factor
-        self._weight_model_arrival_latency = engine.weight_model_arrival_latency
-        self._weight_model_similarity = engine.weight_model_similarity
-        self._weight_num_messages = engine.weight_num_messages
-        self._weight_fraction_params_changed = engine.weight_fraction_params_changed
+        
+        self._with_reputation = self._config.participant["defense_args"]["with_reputation"]
+        self._reputation_metrics = self._config.participant["defense_args"]["reputation_metrics"]
+        self._initial_reputation = float(self._config.participant["defense_args"]["initial_reputation"])
+        self._weighting_factor = self._config.participant["defense_args"]["weighting_factor"]
+        self._weight_model_arrival_latency = float(self._config.participant["defense_args"]["weight_model_arrival_latency"])
+        self._weight_model_similarity = float(self._config.participant["defense_args"]["weight_model_similarity"])
+        self._weight_num_messages = float(self._config.participant["defense_args"]["weight_num_messages"])
+        self._weight_fraction_params_changed = float(self._config.participant["defense_args"]["weight_fraction_params_changed"])
+        
+        msg = f"Reputation system: {self._with_reputation}"
+        msg += f"\nReputation metrics: {self._reputation_metrics}"
+        msg += f"\nInitial reputation: {self._initial_reputation}"
+        msg += f"\nWeighting factor: {self._weighting_factor}"
+        if self._weighting_factor == "static":
+            msg += f"\nWeight model arrival latency: {self._weight_model_arrival_latency}"
+            msg += f"\nWeight model similarity: {self._weight_model_similarity}"
+            msg += f"\nWeight number of messages: {self._weight_num_messages}"
+            msg += f"\nWeight fraction of parameters changed: {self._weight_fraction_params_changed}"
+        print_msg_box(msg=msg, indent=2, title="Defense information")
         
     @property
     def engine(self):
@@ -138,7 +154,7 @@ class Reputation:
         """
             Setup the reputation system.
         """
-        if self._engine.with_reputation:
+        if self._with_reputation:
             logging.info("Reputation system enabled")
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
             await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
@@ -163,7 +179,7 @@ class Reputation:
             logging.error("init_reputation | No federation nodes provided")
             return
 
-        if self._engine.with_reputation:
+        if self._with_reputation:
             neighbors = self.is_valid_ip(federation_nodes)
 
             if not neighbors:
@@ -277,7 +293,7 @@ class Reputation:
         average_weights = {}
 
         for metric_name in self.history_data.keys():
-            if self.engine.reputation_metrics.get(metric_name, False):
+            if self._reputation_metrics.get(metric_name, False):
                 valid_entries = [
                     entry for entry in self.history_data[metric_name]
                     if entry["round"] >= self._engine.get_round() and entry.get("weight") not in [None, -1]
@@ -292,7 +308,7 @@ class Reputation:
         for nei in neighbors:
             metric_values = {}
             for metric_name in self.history_data.keys():
-                if self.engine.reputation_metrics.get(metric_name, False):
+                if self._reputation_metrics.get(metric_name, False):
                     for entry in self.history_data.get(metric_name, []):
                         if entry["round"] == self._engine.get_round() and entry["metric_name"] == metric_name and entry["nei"] == nei:
                             metric_values[metric_name] = entry["metric_value"]
@@ -1307,7 +1323,7 @@ class Reputation:
                 ae (AggregationEvent): The aggregation event.
         """
         (updates, _, _) = await ae.get_event_data()
-        if self._engine.with_reputation:
+        if self._with_reputation:
             logging.info(f"Calculating reputation at round {self._engine.get_round()}")
             logging.info(f"Active metrics: {self._reputation_metrics}")
             logging.info(f"rejected nodes at round {self._engine.get_round()}: {self.rejected_nodes}")
@@ -1356,7 +1372,7 @@ class Reputation:
             if self._weighting_factor == "dynamic" and self._engine.get_round() >= 5:
                 await self._calculate_dynamic_reputation(self._addr, neighbors)
 
-            if self._engine.get_round() < 5 and self._engine.with_reputation:
+            if self._engine.get_round() < 5 and self._with_reputation:
                 federation = self._engine.config.participant["network_args"]["neighbors"].split()
                 self.init_reputation(
                     self._addr,
@@ -1531,7 +1547,7 @@ class Reputation:
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
-        if self._engine.with_reputation and self._reputation_metrics.get("model_similarity"):
+        if self._with_reputation and self._reputation_metrics.get("model_similarity"):
             if self._engine.config.participant["adaptive_args"]["model_similarity"]:
                 if source != self._addr:
                     logging.info("🤖  handle_model_message | Checking model similarity")

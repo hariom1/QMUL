@@ -127,28 +127,7 @@ class Engine:
         self.trainer.model.set_communication_manager(self._cm)
         self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
         self._addon_manager = AddonManager(self, self.config)
-
-        
-        self.with_reputation = self.config.participant["defense_args"]["with_reputation"]
-        self.reputation_metrics = self.config.participant["defense_args"]["reputation_metrics"]
-        self.initial_reputation = float(self.config.participant["defense_args"]["initial_reputation"])
-        self.weighting_factor = self.config.participant["defense_args"]["weighting_factor"]
-        self.weight_model_arrival_latency = float(self.config.participant["defense_args"]["weight_model_arrival_latency"])
-        self.weight_model_similarity = float(self.config.participant["defense_args"]["weight_model_similarity"])
-        self.weight_num_messages = float(self.config.participant["defense_args"]["weight_num_messages"])
-        self.weight_fraction_params_changed = float(self.config.participant["defense_args"]["weight_fraction_params_changed"])
-        self._reputation = Reputation(self)
-
-        msg = f"Reputation system: {self.with_reputation}"
-        msg += f"\nReputation metrics: {self.reputation_metrics}"
-        msg += f"\nInitial reputation: {self.initial_reputation}"
-        msg += f"\nWeighting factor: {self.weighting_factor}"
-        if self.weighting_factor == "static":
-            msg += f"\nWeight model arrival latency: {self.weight_model_arrival_latency}"
-            msg += f"\nWeight model similarity: {self.weight_model_similarity}"
-            msg += f"\nWeight number of messages: {self.weight_num_messages}"
-            msg += f"\nWeight fraction of parameters changed: {self.weight_fraction_params_changed}"
-        print_msg_box(msg=msg, indent=2, title="Defense information")
+        self._reputation = Reputation(self, self.config)
 
     @property
     def cm(self):
@@ -642,9 +621,6 @@ class MaliciousNode(Engine):
 
     async def _extended_learning_cycle(self):
         try:
-            if self.with_reputation:
-                self.with_reputation = False
-            logging.info(f"Reputation: {self.with_reputation}")
             await self.attack.attack()
         except Exception:
             attack_name = self.config.participant["adversarial_args"]["attacks"]

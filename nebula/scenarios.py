@@ -238,16 +238,19 @@ class Scenario:
         for node in nodes:
             node_att = "No Attack"
             malicious = False
+            with_reputation = True
             attack_sample_percent = 0
             poisoned_ratio = 0
             if (str(nodes[node]["id"]) in attacked_nodes) or (nodes[node]["malicious"]):
                 malicious = True
+                with_reputation = False
                 node_att = attack
                 attack_sample_percent = poisoned_sample_percent / 100
                 poisoned_ratio = poisoned_noise_percent / 100
                 attack_params["poisoned_percent"] = attack_sample_percent
                 attack_params["poisoned_ratio"] = poisoned_ratio
             nodes[node]["malicious"] = malicious
+            nodes[node]["with_reputation"] = with_reputation
             nodes[node]["attacks"] = node_att
             nodes[node]["attack_params"] = attack_params
         return nodes
@@ -391,7 +394,7 @@ class ScenarioManagement:
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
             participant_config["adversarial_args"]["attacks"] = node_config["attacks"]
             participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
-            participant_config["defense_args"]["with_reputation"] = self.scenario.with_reputation
+            participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
             # participant_config["defense_args"]["is_dynamic_topology"] = self.scenario.is_dynamic_topology
             # participant_config["defense_args"]["is_dynamic_aggregation"] = self.scenario.is_dynamic_aggregation
             # participant_config["defense_args"]["target_aggregation"] = self.scenario.target_aggregation
