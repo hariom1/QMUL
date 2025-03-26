@@ -128,7 +128,7 @@ class Engine:
         self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
         self._addon_manager = AddonManager(self, self.config)
 
-        self._reputation = Reputation(self)
+        
         self.with_reputation = self.config.participant["defense_args"]["with_reputation"]
         self.reputation_metrics = self.config.participant["defense_args"]["reputation_metrics"]
         self.initial_reputation = float(self.config.participant["defense_args"]["initial_reputation"])
@@ -137,6 +137,7 @@ class Engine:
         self.weight_model_similarity = float(self.config.participant["defense_args"]["weight_model_similarity"])
         self.weight_num_messages = float(self.config.participant["defense_args"]["weight_num_messages"])
         self.weight_fraction_params_changed = float(self.config.participant["defense_args"]["weight_fraction_params_changed"])
+        self._reputation = Reputation(self)
 
         msg = f"Reputation system: {self.with_reputation}"
         msg += f"\nReputation metrics: {self.reputation_metrics}"
