@@ -162,14 +162,14 @@ class Reputation:
                 await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_similarity)
             if self._reputation_metrics.get("fraction_parameters_changed", False):
                 await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_fraction_of_parameters_changed)
+            if self._reputation_metrics.get("model_arrival_latency", False):
+                await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_model_arrival_latency)
             if self._reputation_metrics.get("num_messages", False):
                 await EventManager.get_instance().subscribe(("model", "update"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("model", "initialization"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("control", "alive"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("federation", "federation_models_included"), self.recollect_number_message)
-                await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
-            if self._reputation_metrics.get("model_arrival_latency", False):
-                await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_model_arrival_latency)
+                # await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
             
     def init_reputation(self, addr, federation_nodes=None, round_num=None, last_feedback_round=None, init_reputation=None):
         """
@@ -704,6 +704,8 @@ class Reputation:
         """
         try:
             key = (addr, nei, round_num)
+            penalization_factor_fraction = 0
+            penalization_factor_threshold = 0
 
             if key not in self.fraction_changed_history:
                 prev_key = (addr, nei, round_num - 1)
@@ -760,10 +762,11 @@ class Reputation:
                     for i in range(0, round_num + 1):
                         potential_prev_key = (addr, nei, round_num - i)
                         if potential_prev_key in self.fraction_changed_history:
-                            mean_fraction_prev = self.fraction_changed_history[potential_prev_key][
-                                "mean_fraction"
-                            ]
-                            if mean_fraction_prev is not None:
+                            mean_fraction_prev = self.fraction_changed_history[potential_prev_key]["mean_fraction"]
+                            std_dev_fraction_prev = self.fraction_changed_history[potential_prev_key]["std_dev_fraction"]
+                            mean_threshold_prev = self.fraction_changed_history[potential_prev_key]["mean_threshold"]
+                            std_dev_threshold_prev = self.fraction_changed_history[potential_prev_key]["std_dev_threshold"]
+                            if mean_fraction_prev is not None and std_dev_fraction_prev is not None and mean_threshold_prev is not None and std_dev_threshold_prev is not None:
                                 prev_key = potential_prev_key
                                 break
 
@@ -776,7 +779,7 @@ class Reputation:
                     current_fraction = self.fraction_changed_history[key]["fraction_changed"]
                     current_threshold = self.fraction_changed_history[key]["threshold"]
 
-                    upper_mean_fraction_prev = (mean_fraction_prev + std_dev_fraction_prev) * 1.05
+                    upper_mean_fraction_prev = (mean_fraction_prev + std_dev_fraction_prev) * 1.20
                     upper_mean_threshold_prev = (mean_threshold_prev + std_dev_threshold_prev) * 1.10
 
                     fraction_anomaly = current_fraction > upper_mean_fraction_prev
@@ -785,39 +788,26 @@ class Reputation:
                     self.fraction_changed_history[key]["fraction_anomaly"] = fraction_anomaly
                     self.fraction_changed_history[key]["threshold_anomaly"] = threshold_anomaly
 
-                    penalization_factor_fraction = abs(current_fraction - mean_fraction_prev) / mean_fraction_prev if mean_fraction_prev != 0 else 1
-                    penalization_factor_threshold = abs(current_threshold - mean_threshold_prev) / mean_threshold_prev if mean_threshold_prev != 0 else 1
-
-                    k_fraction = penalization_factor_fraction if penalization_factor_fraction != 0 else 1
-                    k_threshold = penalization_factor_threshold if penalization_factor_threshold != 0 else 1
-
                     if fraction_anomaly:
+                        penalization_factor_fraction = abs(current_fraction - mean_fraction_prev) / mean_fraction_prev if mean_fraction_prev != 0 else 1
                         fraction_value = (
-                            1 - (1 / (1 + np.exp(-k_fraction)))
+                            1 - (1 / (1 + np.exp(-penalization_factor_fraction)))
                             if current_fraction is not None and mean_fraction_prev is not None
                             else 0
                         )
                     else:
-                        fraction_value = (
-                            1 - (1 / (1 + np.exp(k_fraction)))
-                            if current_fraction is not None and mean_fraction_prev is not None
-                            else 0
-                        )
+                        fraction_value = 1
 
                     if threshold_anomaly:
+                        penalization_factor_threshold = abs(current_threshold - mean_threshold_prev) / mean_threshold_prev if mean_threshold_prev != 0 else 1
                         threshold_value = (
-                            1 - (1 / (1 + np.exp(-k_threshold)))
+                            1 - (1 / (1 + np.exp(-penalization_factor_threshold)))
                             if current_threshold is not None and mean_threshold_prev is not None
                             else 0
                         )
                     else:
-                        threshold_value = (
-                            1 - (1 / (1 + np.exp(k_threshold)))
-                            if current_threshold is not None and mean_threshold_prev is not None
-                            else 0
-                        )
+                        threshold_value = 1
                 
-
                     fraction_weight = 0.5
                     threshold_weight = 0.5
 
@@ -842,10 +832,8 @@ class Reputation:
                         "upper_mean_threshold": upper_mean_threshold_prev,
                         "fraction_anomaly": fraction_anomaly,
                         "threshold_anomaly": threshold_anomaly,
-                        "penalization_factor_fraction": penalization_factor_fraction,
-                        "penalization_factor_threshold": penalization_factor_threshold,
-                        "k_fraction": k_fraction,
-                        "k_threshold": k_threshold,
+                        "penalization_factor_fraction": penalization_factor_fraction if penalization_factor_fraction != 0 else 0,
+                        "penalization_factor_threshold": penalization_factor_threshold if penalization_factor_threshold != 0 else 0,
                         "fraction_value": fraction_value,
                         "threshold_value": threshold_value,
                         "fraction_score": fraction_score,
@@ -887,8 +875,8 @@ class Reputation:
             }
 
             prev_mean_latency = 0
-            prev_percentil_0 = 0
-            prev_percentil_25 = 0
+            # prev_percentil_0 = 0
+            # prev_percentil_30 = 0
             difference = 0
 
             if current_round >= 5:
@@ -900,14 +888,15 @@ class Reputation:
                 ]
 
                 prev_mean_latency = np.mean(all_latencies) if all_latencies else 0
-                prev_percentil_0 = np.percentile(all_latencies, 0) if all_latencies else 0
-                prev_percentil_25 = np.percentile(all_latencies, 25) if all_latencies else 0
+                # prev_percentil_0 = np.percentile(all_latencies, 0) if all_latencies else 0
+                # prev_percentil_30 = np.percentile(all_latencies, 30) if all_latencies else 0
 
-                k = 0.1
-                prev_mean_latency += k * (prev_percentil_25 - prev_percentil_0)
+                # k = 0.25
+                # prev_mean_latency += k * (prev_percentil_30 - prev_percentil_0)
+                aument_mean_latency = prev_mean_latency * 1.15
+                difference = latency - aument_mean_latency
 
-                difference = latency - prev_mean_latency
-                if latency <= prev_mean_latency:
+                if latency <= aument_mean_latency:
                     score = 1.0
                 else:
                     score = 1 / (1 + np.exp(abs(difference) / prev_mean_latency))
@@ -920,8 +909,8 @@ class Reputation:
 
                 self.model_arrival_latency_history[current_round][current_key].update({
                     "mean_latency": prev_mean_latency,
-                    "percentil_0": prev_percentil_0,
-                    "percentil_25": prev_percentil_25,
+                    # "percentil_0": prev_percentil_0,
+                    # "percentil_30": prev_percentil_30,
                     "score": score,
                 })
             else:
@@ -933,8 +922,9 @@ class Reputation:
                 "round": current_round,
                 "latency": latency,
                 "mean_latency": prev_mean_latency if current_round >= 5 else None,
-                "prev_percentil_0": prev_percentil_0 if current_round >= 5 else None,
-                "prev_percentil_25": prev_percentil_25 if current_round >= 5 else None,
+                "aument_mean_latency": aument_mean_latency if current_round >= 5 else None,
+                # "prev_percentil_0": prev_percentil_0 if current_round >= 5 else None,
+                # "prev_percentil_30": prev_percentil_30 if current_round >= 5 else None,
                 "difference": difference if current_round >= 5 else None,
                 "score": score,
             }
@@ -1027,44 +1017,46 @@ class Reputation:
             if not metric_active:
                 return 0.0, 0
             
-            previous_round = current_round
+            previous_round = current_round - 1
 
             current_addr_nei = (addr, nei)
             relevant_messages = [
                 msg
                 for msg in messages_number_message
-                if msg["key"] == current_addr_nei and msg["current_round"] == previous_round
+                if msg["key"] == current_addr_nei and msg["current_round"] == current_round
             ]
             messages_count = len(relevant_messages) if relevant_messages else 0
+            logging.info(f"Messages count: {messages_count}")
 
             rounds_to_consider = []
-            if previous_round >= 4:
-                rounds_to_consider = [previous_round - 4, previous_round - 3, previous_round - 2, previous_round - 1]
-            elif previous_round == 3:
+            if current_round >= 4:
+                rounds_to_consider = [current_round - 4, current_round - 3, current_round - 2, current_round - 1]
+            elif current_round == 3:
                 rounds_to_consider = [0, 1, 2, 3]
-            elif previous_round == 2:
+            elif current_round == 2:
                 rounds_to_consider = [0, 1, 2]
-            elif previous_round == 1:
+            elif current_round == 1:
                 rounds_to_consider = [0, 1]
-            elif previous_round == 0:
+            elif current_round == 0:
                 rounds_to_consider = [0]
 
             previous_counts = [
                 len([m for m in messages_number_message if m["key"] == current_addr_nei and m["current_round"] == r])
                 for r in rounds_to_consider
             ]
+            logging.info(f"Previous counts: {previous_counts}")
 
             self.previous_percentile_25_number_message[current_addr_nei] = (
                 np.percentile(previous_counts, 25) if previous_counts else 0
             )
             self.previous_percentile_85_number_message[current_addr_nei] = (
-                np.percentile(previous_counts, 85) if previous_counts else 0
+                np.percentile(previous_counts, 100) * 1.5 if previous_counts else 0
             )
 
             normalized_messages = 1.0
             relative_position = 0
 
-            if previous_round > 4:
+            if current_round > 4:
                 percentile_25 = self.previous_percentile_25_number_message.get(current_addr_nei, 0)
                 percentile_85 = self.previous_percentile_85_number_message.get(current_addr_nei, 0)
                 if messages_count > percentile_85:
@@ -1076,7 +1068,7 @@ class Reputation:
             data = {
                 "addr": addr,
                 "nei": nei,
-                "round": previous_round,
+                "round": current_round,
                 "messages_count": messages_count,
                 "normalized_messages": normalized_messages,
                 "percentile_25": self.previous_percentile_25_number_message[current_addr_nei],
@@ -1514,36 +1506,41 @@ class Reputation:
         expected_nodes.difference_update(self.rejected_nodes)
 
     async def recollect_model_arrival_latency(self, ure: UpdateReceivedEvent):
+        logging.info("🤖  handle_model_message | Recollecting model arrival latency")
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
         current_time = time.time()
         current_round = round_num
 
-        if current_round not in self.round_timing_info:
-            self.round_timing_info[current_round] = {}
+        logging.info(f"Source: {source}, round: {round_num}, current_round: {current_round}")
+        if round_num > current_round:
+            logging.info(f"Out-of-order model detected: Source {source}, model from round {round_num} arriving in round {current_round}")
+
+        if round_num not in self.round_timing_info:
+            self.round_timing_info[round_num] = {}
         
-        if "model_received_time" not in self.round_timing_info[current_round]:
-            self.round_timing_info[current_round]["model_received_time"] = {}
+        if "model_received_time" not in self.round_timing_info[round_num]:
+            self.round_timing_info[round_num]["model_received_time"] = {}
 
-        if source not in self.round_timing_info[current_round]["model_received_time"]:
-            self.round_timing_info[current_round]["model_received_time"][source] = current_time
+        if source not in self.round_timing_info[round_num]["model_received_time"]:
+            self.round_timing_info[round_num]["model_received_time"][source] = current_time
 
-            if "start_time" in self.round_timing_info[current_round]:
-                start = self.round_timing_info[current_round]["start_time"]
-                received_time = self.round_timing_info[current_round]["model_received_time"][source]
+            if "start_time" in self.round_timing_info[round_num]:
+                start = self.round_timing_info[round_num]["start_time"]
+                received_time = self.round_timing_info[round_num]["model_received_time"][source]
                 duration = received_time - start
-                self.round_timing_info[current_round]["duration"] = duration
-                logging.info(f"Source {source} , round {current_round}, duration: {duration:.4f} seconds")
+                self.round_timing_info[round_num]["duration"] = duration
+                logging.info(f"Source {source} , round {round_num}, duration: {duration:.4f} seconds")
 
                 self.save_data(
                     "model_arrival_latency",
                     source,
                     self._addr,
-                    num_round=current_round,
-                    current_round=self._engine.get_round(),
+                    num_round=round_num,
+                    current_round=current_round,
                     latency=duration,
                 )
         else:
-            logging.info(f"Model arrival latency already calculated for node {source} in round {current_round}")
+            logging.info(f"Model arrival latency already calculated for node {source} in round {round_num}")
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
@@ -1611,7 +1608,7 @@ class Reputation:
                     current_round=self._engine.get_round(),
                 )
 
-    async def recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
+    async def  recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
         current_round = self._engine.get_round()
         parameters_local = self._engine.trainer.get_model_parameters()
