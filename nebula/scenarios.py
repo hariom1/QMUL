@@ -238,7 +238,7 @@ class Scenario:
         for node in nodes:
             node_att = "No Attack"
             malicious = False
-            with_reputation = True
+            with_reputation = self.with_reputation
             attack_sample_percent = 0
             poisoned_ratio = 0
             if (str(nodes[node]["id"]) in attacked_nodes) or (nodes[node]["malicious"]):
