@@ -200,21 +200,6 @@ class Reputation:
 
                 avg_reputation = self.save_reputation_history_in_memory(self._addr, nei, init_reputation)
 
-                metrics_data = {
-                    "addr": addr,
-                    "nei": nei,
-                    "round": round_num,
-                    "reputation_without_feedback": avg_reputation,
-                }
-
-                self.metrics(
-                    metrics_data,
-                    addr,
-                    nei,
-                    type="reputation",
-                    update_field="reputation_without_feedback",
-                )
-
     def is_valid_ip(self, federation_nodes):
         """
         Check if the IP addresses are valid.
@@ -358,14 +343,6 @@ class Reputation:
         if self.reputation[nei]["reputation"] < 0.6:
             self.rejected_nodes.add(nei)
             logging.info(f"Rejected node {nei} at round {self._engine.get_round()}")
-
-        self.metrics(
-            data,
-            self._addr,
-            nei,
-            type="reputation",
-            update_field="reputation_without_feedback",
-        )
  
     def calculate_weighted_values(
         self,
@@ -667,18 +644,6 @@ class Reputation:
             if model_arrival_latency_dict is not None:
                 self.engine.trainer._logger.log_data(model_arrival_latency_dict, step=current_round)
 
-            data = {
-                "addr": addr,
-                "nei": nei,
-                "round": current_round,
-                "number_message_count": number_message_count,
-                "number_message_norm": number_message_norm,
-                "similarity": similarity,
-                "fraction": fraction,
-                "model_arrival_latency": model_arrival_latency,
-            }
-            self.metrics(data, addr, nei, type="reputation")
-
     def analyze_anomalies(
         self,
         addr,
@@ -828,30 +793,6 @@ class Reputation:
                     self.fraction_changed_history[key]["mean_threshold"] = (current_threshold + mean_threshold_prev) / 2
                     self.fraction_changed_history[key]["std_dev_threshold"] = np.sqrt(((0.1 * (current_threshold - mean_threshold_prev) ** 2) + std_dev_threshold_prev**2) / 2)
 
-                    data = {
-                        "addr": addr,
-                        "nei": nei,
-                        "round": current_round,
-                        "fraction_changed": current_fraction,
-                        "threshold": current_threshold,
-                        "mean_fraction": mean_fraction_prev,
-                        "std_dev_fraction": std_dev_fraction_prev,
-                        "mean_threshold": mean_threshold_prev,
-                        "std_dev_threshold": std_dev_threshold_prev,
-                        "upper_mean_fraction": upper_mean_fraction_prev,
-                        "upper_mean_threshold": upper_mean_threshold_prev,
-                        "fraction_anomaly": fraction_anomaly,
-                        "threshold_anomaly": threshold_anomaly,
-                        "penalization_factor_fraction": penalization_factor_fraction,
-                        "penalization_factor_threshold": penalization_factor_threshold,
-                        "k_fraction": k_fraction,
-                        "k_threshold": k_threshold,
-                        "fraction_value": fraction_value,
-                        "threshold_value": threshold_value,
-                        "fraction_score": fraction_score,
-                    }
-                    self.metrics(data, addr, nei, type="fraction_changed")
-
                     return max(fraction_score, 0)
                 else:
                     return -1
@@ -926,19 +867,6 @@ class Reputation:
                 })
             else:
                 score = 0
-
-            data = {
-                "addr": addr,
-                "nei": nei,
-                "round": current_round,
-                "latency": latency,
-                "mean_latency": prev_mean_latency if current_round >= 5 else None,
-                "prev_percentil_0": prev_percentil_0 if current_round >= 5 else None,
-                "prev_percentil_25": prev_percentil_25 if current_round >= 5 else None,
-                "difference": difference if current_round >= 5 else None,
-                "score": score,
-            }
-            self.metrics(data, addr, nei, type="model_arrival_latency")
 
             return score
 
@@ -1072,17 +1000,6 @@ class Reputation:
                     normalized_messages = np.exp(-relative_position)
 
                 normalized_messages = max(0.01, normalized_messages)
-
-            data = {
-                "addr": addr,
-                "nei": nei,
-                "round": previous_round,
-                "messages_count": messages_count,
-                "normalized_messages": normalized_messages,
-                "percentile_25": self.previous_percentile_25_number_message[current_addr_nei],
-                "percentile_85": self.previous_percentile_85_number_message[current_addr_nei],
-            }
-            self.metrics(data, addr, nei, type="number_message")
 
             return normalized_messages, messages_count
         except Exception:
@@ -1260,60 +1177,6 @@ class Reputation:
             logging.exception(f"Error reading similarity file: {e}")
 
         return similarity
-        
-    def metrics(self, data, addr, nei, type, update_field=None):
-        current_dir = os.path.join(self._log_dir, "reputation")
-        csv_path = os.path.join(current_dir, "metrics", type, f"{addr}_{nei}_{type}.csv")
-        os.makedirs(os.path.dirname(csv_path),  exist_ok=True)
-
-        if type != "reputation":
-            try:
-                with open(csv_path, mode="a", newline="") as file:
-                    writer = csv.DictWriter(file, fieldnames=data.keys())
-                    if file.tell() == 0:
-                        writer.writeheader()
-                    writer.writerow(data)
-            except Exception:
-                logging.exception("Error saving messages number_message data to CSV")
-        else:
-            rows = []
-            updated = False
-
-            fieldnames = [
-                "addr",
-                "nei",
-                "round",
-                "number_message_count",
-                "number_message_norm",
-                "similarity",
-                "fraction",
-                "model_arrival_latency",
-                "reputation_without_feedback",
-                "reputation_with_feedback",
-                "average_model_arrival_latency",
-                "average_model_similarity",
-                "average_fraction_parameters_changed",
-                "average_num_messages",
-            ]
-
-            if os.path.exists(csv_path):
-                with open(csv_path, newline="") as file:
-                    rows = list(csv.DictReader(file))
-
-                if update_field:
-                    for row in rows:
-                        if int(row["round"]) == int(data["round"]):
-                            row.update(data)
-                            updated = True
-                            break
-
-            if not updated:
-                rows.append(data)
-
-            with open(csv_path, mode="w", newline="") as file:
-                writer = csv.DictWriter(file, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(rows)
 
     async def calculate_reputation(self, ae: AggregationEvent):
         """
@@ -1413,21 +1276,6 @@ class Reputation:
                     logging.info(
                         f"Sending reputation to node {nei} from node {neighbor} with reputation {data['reputation']}"
                     )
-
-                metrics_data = {
-                    "addr": self._addr,
-                    "nei": nei,
-                    "round": self._engine.get_round(),
-                    "reputation_with_feedback": data["reputation"],
-                }
-
-                self.metrics(
-                    metrics_data,
-                    self._addr,
-                    nei,
-                    type="reputation",
-                    update_field="reputation_with_feedback",
-                )
     
     def create_graphic_reputation(self, addr, round_num):
         """
