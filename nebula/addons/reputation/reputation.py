@@ -1,5 +1,4 @@
 import csv
-import json
 import logging
 import os
 import random
@@ -48,14 +47,14 @@ class Metrics:
         }
 
         self.messages = []
-        
+
+        self.similarity = []
 
 
 class Reputation:
     """
     Class to define the reputation of a participant.
     """
-
     def __init__(self, engine: "Engine", config: "Config"):
         self._engine = engine
         self._config = config
@@ -170,7 +169,7 @@ class Reputation:
     
     async def setup(self):
         """
-            Setup the reputation system.
+        Setup the reputation system.
         """
         if self._with_reputation:
             logging.info("Reputation system enabled")
@@ -545,8 +544,8 @@ class Reputation:
                     )
 
             if current_round >= 5 and metrics_active.get("model_similarity", False):
-                similarity_file = os.path.join(log_dir, f"participant_{id_node}_similarity.csv")
-                similarity_reputation = self.read_similarity_file(similarity_file, nei, current_round)
+                similarity_reputation = self.calculate_similarity_from_metrics(nei, current_round)
+                logging.info("[FER] Similarity reputation: %s", similarity_reputation)
             else:
                 similarity_reputation = 0
 
@@ -623,7 +622,6 @@ class Reputation:
 
         except Exception as e:
             logging.exception(f"Error calculating reputation. Type: {type(e).__name__}")
-
 
     def create_graphics_to_metrics(
         self,
@@ -1095,7 +1093,6 @@ class Reputation:
             avg_reputation = 0
             current_round = self._engine.get_round()
             rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:2]
-            # logging.info(f"Rounds in save_reputation_history: {rounds}")
 
             if len(rounds) >= 2:
                 current_round = rounds[0]
@@ -1108,26 +1105,9 @@ class Reputation:
                 avg_reputation = (current_rep * 0.8) + (previous_rep * 0.2)
                 logging.info(f"Reputation ponderated: {avg_reputation}")
             else:
-                # logging.info(f"Reputation history: {self.reputation_history}")
                 avg_reputation = self.reputation_history[key][current_round]
-                # logging.info(f"Current reputation: {avg_reputation}")
 
             return avg_reputation
-
-            # for i, n_round in enumerate(rounds, start=1):
-            #     rep = self.reputation_history[key][n_round]
-            #     decay_factor = self.calculate_decay_rate(rep) ** i
-            #     total_reputation += rep * decay_factor
-            #     total_weights += decay_factor
-            #     logging.info(
-            #         f"Round: {n_round}, Reputation: {rep}, Decay: {decay_factor}, Total reputation: {total_reputation}"
-            #     )
-
-            # avg_reputation = total_reputation / total_weights
-            # if total_weights > 0:
-            #     return avg_reputation
-            # else:
-            #     return -1
 
         except Exception:
             logging.exception("Error saving reputation history")
@@ -1155,48 +1135,49 @@ class Reputation:
         else:
             return 0.1  # Very high decay
 
-    def read_similarity_file(self, file_path, nei, current_round):
+    def calculate_similarity_from_metrics(self, nei, current_round):
         """
-        Read a similarity file and extract relevant data for each IP.
+        Calculate the similarity value from the stored metrics in the 'similarity'
+        attribute of the Metrics instance for the given neighbor (nei) and current round.
 
         Args:
-            file_path (str): Path to the similarity file.
             nei (str): The IP address of the neighbor.
             current_round (int): The current round number.
 
         Returns:
-            float: The similarity value.
+            float: The computed similarity value.
         """
-        similarity = 0.0
-        try:
-            with open(file_path, "r") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    source_ip = row["source_ip"].strip()
-                    round_in_file = int(row.get("round", -1).strip())
-                    if source_ip == nei and round_in_file == current_round:
-                        weight_cosine = 0.25
-                        weight_euclidean = 0.25
-                        weight_manhattan = 0.25
-                        weight_pearson = 0.25
+        similarity_value = 0.0
 
-                        cosine = float(row["cosine"])
-                        euclidean = float(row["euclidean"])
-                        manhattan = float(row["manhattan"])
-                        pearson_correlation = float(row["pearson_correlation"])
+        metrics_instance = self.connection_metrics.get(nei)
+        if metrics_instance is None:
+            logging.error(f"No metrics instance found for neighbor {nei}")
+            return similarity_value
 
-                        similarity = (
-                            weight_cosine * cosine
-                            + weight_euclidean * euclidean
-                            + weight_manhattan * manhattan
-                            + weight_pearson * pearson_correlation
-                        )                    
-        except FileNotFoundError:
-            logging.error(f"File {file_path} not found.")
-        except Exception as e:
-            logging.exception(f"Error reading similarity file: {e}")
+        for metric in metrics_instance.similarity:
+            source_ip = metric.get("nei")
+            round_in_metric = metric.get("round")
 
-        return similarity
+            logging.info(f"[FER] source_ip {source_ip}, round_in_metric {round_in_metric}, current_round {current_round}")
+            if source_ip == nei and round_in_metric == current_round:
+                weight_cosine = 0.25
+                weight_euclidean = 0.25
+                weight_manhattan = 0.25
+                weight_pearson = 0.25
+
+                cosine = float(metric.get("cosine", 0))
+                euclidean = float(metric.get("euclidean", 0))
+                manhattan = float(metric.get("manhattan", 0))
+                pearson_correlation = float(metric.get("pearson_correlation", 0))
+
+                similarity_value = (
+                    weight_cosine * cosine +
+                    weight_euclidean * euclidean +
+                    weight_manhattan * manhattan +
+                    weight_pearson * pearson_correlation
+                )
+
+        return similarity_value
 
     async def calculate_reputation(self, ae: AggregationEvent):
         """
@@ -1414,10 +1395,10 @@ class Reputation:
             logging.info(f"Model arrival latency already calculated for node {source} in round {current_round}")
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
-        (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
+        (decoded_model, weight, nei, round_num, local) = await ure.get_event_data()
         if self._with_reputation and self._reputation_metrics.get("model_similarity"):
             if self._engine.config.participant["adaptive_args"]["model_similarity"]:
-                if source != self._addr:
+                if nei != self._addr:
                     logging.info("🤖  handle_model_message | Checking model similarity")
                     cosine_value = cosine_metric(
                         self._engine.trainer.get_model_parameters(),
@@ -1450,22 +1431,29 @@ class Reputation:
                         decoded_model,
                         similarity=True,
                     )
-                    file = f"{self._log_dir}/participant_{self._idx}_similarity.csv"
-                    directory = os.path.dirname(file)
-                    os.makedirs(directory, exist_ok=True)
-                    if not os.path.isfile(file):
-                        with open(file, "w") as f:
-                            f.write(
-                                "timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n"
-                            )
-                    with open(file, "a") as f:
-                        f.write(
-                            f"{datetime.now()}, {source}, {round_num}, {self._engine.get_round()}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n"
-                        )
+
+                    similarity_metrics = {
+                        "timestamp": datetime.now(),
+                        "nei": nei,
+                        "round": round_num,
+                        "current_round": self._engine.get_round(),
+                        "cosine": cosine_value,
+                        "euclidean": euclidean_value,
+                        "minkowski": minkowski_value,
+                        "manhattan": manhattan_value,
+                        "pearson_correlation": pearson_correlation_value,
+                        "jaccard": jaccard_value,
+                    }
+
+                    if nei in self.connection_metrics:
+                        self.connection_metrics[nei].similarity.append(similarity_metrics)
+                        logging.info(f"Stored similarity metrics for {nei}: {similarity_metrics}")
+                    else:
+                        logging.warning(f"No metrics instance found for neighbor {nei}")
 
                     if cosine_value < 0.6:
                         logging.info("🤖  handle_model_message | Model similarity is less than 0.6")
-                        self.rejected_nodes.add(source)
+                        self.rejected_nodes.add(nei)
 
     async def recollect_number_message(self, source, message):
         if source != self._addr:
@@ -1494,12 +1482,10 @@ class Reputation:
             prev_threshold = self.fraction_of_params_changed[source][current_round - 1][-1]["threshold"]
 
         for key in parameters_local.keys():
-            # logging.info(f"🤖  fraction_of_parameters_changed | Key: {key}")
             if key in parameters_received:
                 diff = torch.abs(parameters_local[key] - parameters_received[key])
                 differences.extend(diff.flatten().tolist())
                 total_params += diff.numel()
-                # logging.info(f"🤖  fraction_of_parameters_changed | Total params: {total_params}")
 
         if differences:
             mean_threshold = torch.mean(torch.tensor(differences)).item()
