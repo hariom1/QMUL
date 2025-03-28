@@ -26,6 +26,31 @@ if TYPE_CHECKING:
     from nebula.core.engine import Engine
     from nebula.config.config import Config
 
+class Metrics:
+    def __init__(
+        self,
+        num_round=None,
+        current_round=None,
+        fraction_changed=None,
+        threshold=None,
+        latency=None,
+    ):
+        self.fraction_of_params_changed = {
+            "fraction_changed": fraction_changed,
+            "threshold": threshold,
+            "round": num_round
+        }
+
+        self.model_arrival_latency = {
+            "latency": latency,
+            "round": num_round,
+            "round_received": current_round
+        }
+
+        self.messages = []
+        
+
+
 class Reputation:
     """
     Class to define the reputation of a participant.
@@ -57,6 +82,12 @@ class Reputation:
         self._addr = engine.addr
         self._log_dir = engine.log_dir
         self._idx = engine.idx
+        self.connection_metrics = []
+        
+        neighbors:str = self._config.participant["network_args"]["neighbors"]
+        self.connection_metrics = {}
+        for nei in neighbors.split():
+            self.connection_metrics[f"{nei}"] = Metrics()
         
         self._with_reputation = self._config.participant["defense_args"]["with_reputation"]
         self._reputation_metrics = self._config.participant["defense_args"]["reputation_metrics"]
@@ -85,7 +116,7 @@ class Reputation:
     def save_data(
         self,
         type_data,
-        source_ip,
+        nei,
         addr,
         num_round=None,
         time=None,
@@ -100,12 +131,11 @@ class Reputation:
         """
         Save data between nodes and aggregated models.
         """
-
         try:
-            combined_data = {}
-            
-            if addr == source_ip:
+            if addr == nei:
                 return
+
+            combined_data = {}
 
             if type_data == "number_message":
                 combined_data["number_message"] = {
@@ -114,11 +144,8 @@ class Reputation:
                 }
             elif type_data == "fraction_of_params_changed":
                 combined_data["fraction_of_params_changed"] = {
-                    "total_params": total_params,
-                    "changed_params": changed_params,
                     "fraction_changed": fraction_changed,
                     "threshold": threshold,
-                    "changes_record": changes_record,
                     "round": num_round,
                 }
             elif type_data == "model_arrival_latency":
@@ -128,24 +155,15 @@ class Reputation:
                     "round_received": current_round,
                 }
 
-            script_dir = os.path.join(self._log_dir, "reputation")
-            file_name = f"{addr}_storing_{source_ip}_info.json"
-            full_file_path = os.path.join(script_dir, file_name)
-            os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
-
-            all_metrics = []
-            if os.path.exists(full_file_path):
-                with open(full_file_path) as existing_file:
-                    try:
-                        all_metrics = json.load(existing_file)
-                    except json.JSONDecodeError:
-                        logging.exception(f"JSON decode error in file: {full_file_path}")
-                        all_metrics = []
-
-            all_metrics.append(combined_data)
-
-            with open(full_file_path, "w") as json_file:
-                json.dump(all_metrics, json_file, indent=4)
+            if nei in self.connection_metrics:
+                if type_data == "number_message":
+                    if not isinstance(self.connection_metrics[nei].messages, list):
+                        self.connection_metrics[nei].messages = []
+                    self.connection_metrics[nei].messages.append(combined_data["number_message"])
+                elif type_data == "fraction_of_params_changed":
+                    self.connection_metrics[nei].fraction_of_params_changed.update(combined_data["fraction_of_params_changed"])
+                elif type_data == "model_arrival_latency":
+                    self.connection_metrics[nei].model_arrival_latency.update(combined_data["model_arrival_latency"])
 
         except Exception:
             logging.exception("Error saving data")
@@ -455,7 +473,7 @@ class Reputation:
 
     async def calculate_value_metrics(self, log_dir, id_node, addr, nei, metrics_active=None):
         """
-        Calculate the reputation of each participant based on the data stored.
+        Calculate the reputation of each participant based on the data stored in self.connection_metrics.
 
         Args:
             log_dir (str): Log directory.
@@ -464,11 +482,9 @@ class Reputation:
             nei (str): Destination IP address.
             metrics_active (dict): The active metrics.
         """
-
         messages_number_message_normalized = 0
         messages_number_message_count = 0
         avg_messages_number_message_normalized = 0
-        fraction_score = 0
         fraction_score_normalized = 0
         fraction_score_asign = 0
         messages_model_arrival_latency_normalized = 0
@@ -477,133 +493,137 @@ class Reputation:
         fraction_neighbors_scores = None
 
         try:
-            script_dir = os.path.join(self._log_dir, "reputation")
-            file_name = f"{addr}_storing_{nei}_info.json"
-            full_file_path = os.path.join(script_dir, file_name)
-            os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
+            current_round = self._engine.get_round()
 
-            if os.path.exists(full_file_path) and os.path.getsize(full_file_path) > 0:
-                with open(full_file_path) as json_file:
-                    all_metrics = json.load(json_file)
-                    for metric in all_metrics:
-                        if "number_message" in metric and metrics_active.get("num_messages", False):
-                            current_round_time = metric["number_message"]["current_round"]
-                            time = metric["number_message"]["time"]
-                            if current_round_time == self._engine.get_round():
-                                self.messages_number_message.append({
-                                    "number_message": time,
-                                    "current_round": current_round_time,
-                                    "key": (addr, nei),
-                                })
+            metrics_instance = self.connection_metrics.get(nei)
+            if not metrics_instance:
+                logging.warning(f"No metrics found for neighbor {nei}")
+                return avg_messages_number_message_normalized, similarity_reputation, fraction_score_asign, avg_model_arrival_latency
 
-                        if "fraction_of_params_changed" in metric and metrics_active.get("fraction_parameters_changed", False):
-                            round_fraction = metric["fraction_of_params_changed"]["round"]
-                            fraction_changed = metric["fraction_of_params_changed"]["fraction_changed"]
-                            threshold = metric["fraction_of_params_changed"]["threshold"]
-                            if round_fraction == self._engine.get_round():
-                                fraction_score_normalized = self.analyze_anomalies(
-                                    addr,
-                                    nei,
-                                    round_fraction,
-                                    self._engine.get_round(),
-                                    fraction_changed,
-                                    threshold,
-                                )
+            if metrics_active.get("num_messages", False):
+                filtered_messages = [msg for msg in metrics_instance.messages if msg.get("current_round") == current_round]
+                for msg in filtered_messages:
+                    self.messages_number_message.append({
+                        "number_message": msg.get("time"),
+                        "current_round": msg.get("current_round"),
+                        "key": (addr, nei),
+                    })
 
-                        if "model_arrival_latency" in metric and metrics_active.get("model_arrival_latency", False):
-                            round_latency = metric["model_arrival_latency"]["round"]
-                            round_received = metric["model_arrival_latency"]["round_received"]
-                            latency = metric["model_arrival_latency"]["latency"]
-                            if round_received == self._engine.get_round():
-                                messages_model_arrival_latency_normalized = self.manage_model_arrival_latency(
-                                    round_latency,
-                                    addr,
-                                    nei,
-                                    latency,
-                                    self._engine.get_round()
-                                )
+                messages_number_message_normalized, messages_number_message_count = self.manage_metric_number_message(
+                    self.messages_number_message, addr, nei, current_round, True
+                )
+                avg_messages_number_message_normalized = self.save_number_message_history(
+                    addr, nei, messages_number_message_normalized, current_round
+                )
+                if avg_messages_number_message_normalized is None and current_round > 4:
+                    avg_messages_number_message_normalized = self.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
 
-                    if self._engine.get_round() >= 5 and metrics_active.get("model_similarity", False):
-                        similarity_file = os.path.join(log_dir, f"participant_{id_node}_similarity.csv")
-                        similarity_reputation = self.read_similarity_file(similarity_file, nei, self._engine.get_round())
-                    else:
-                        similarity_reputation = 0
-
-                    if messages_model_arrival_latency_normalized >= 0:
-                        avg_model_arrival_latency = self.save_model_arrival_latency_history(
-                            addr, nei, messages_model_arrival_latency_normalized, self._engine.get_round()
-                        )
-                        if avg_model_arrival_latency is None and self._engine.get_round() > 4:
-                            avg_model_arrival_latency = self.model_arrival_latency_history[(addr, nei)][
-                                self._engine.get_round() - 1
-                            ]["score"]
-
-                    if self.messages_number_message is not None:
-                        messages_number_message_normalized, messages_number_message_count = self.manage_metric_number_message(
-                                self.messages_number_message, addr, nei, self._engine.get_round(), metrics_active.get("num_messages", False)
-                            )
-                        
-                        avg_messages_number_message_normalized = self.save_number_message_history(
-                            addr, nei, messages_number_message_normalized, self._engine.get_round()
-                        )
-                        if avg_messages_number_message_normalized is None and self._engine.get_round() > 4:
-                            avg_messages_number_message_normalized = self.number_message_history[(addr, nei)][self._engine.get_round() - 1]["avg_number_message"]
-
-                    if self._engine.get_round() >= 5:
-                        if fraction_score_normalized > 0:
-                            key_previous_round = (addr, nei, self._engine.get_round() - 1) if self._engine.get_round() - 1 > 0 else None
-                            fraction_previous_round = None
-
-                            if (key_previous_round is not None and key_previous_round in self.fraction_changed_history):
-                                fraction_score = self.fraction_changed_history[key_previous_round].get("fraction_score")
-                                fraction_previous_round = fraction_score if fraction_score is not None else None
-
-                            if fraction_previous_round is not None:
-                                fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
-                                self.fraction_changed_history[(addr, nei, self._engine.get_round())]["fraction_score"] = (fraction_score_asign)
-                            else:
-                                fraction_score_asign = fraction_score_normalized
-                                self.fraction_changed_history[(addr, nei, self._engine.get_round())]["fraction_score"] = (fraction_score_asign)
-                        else:
-                            fraction_previous_round = None
-                            key_previous_round = (addr, nei, self._engine.get_round() - 1) if self._engine.get_round() - 1 > 0 else None
-                            if (key_previous_round is not None and key_previous_round in self.fraction_changed_history):
-                                fraction_score = self.fraction_changed_history[key_previous_round].get("fraction_score")
-                                fraction_previous_round = fraction_score if fraction_score is not None else None
-
-                            if fraction_previous_round is not None:
-                                fraction_score_asign = fraction_previous_round - (fraction_previous_round * 0.5)
-                            else:
-                                if fraction_neighbors_scores is None:
-                                    fraction_neighbors_scores = {}
-
-                                for key, value in self.fraction_changed_history.items():
-                                    score = value.get("fraction_score")
-                                    if score is not None:
-                                        fraction_neighbors_scores[key] = score
-
-                                if fraction_neighbors_scores:
-                                    fraction_score_asign = np.mean(list(fraction_neighbors_scores.values()))
-                                else:
-                                    fraction_score_asign = 0 
-                    else:
-                        fraction_score_asign = 0
-
-                    self.create_graphics_to_metrics(
-                        messages_number_message_count,
-                        avg_messages_number_message_normalized,
-                        similarity_reputation,
-                        fraction_score_asign,
-                        avg_model_arrival_latency,
+            if metrics_active.get("fraction_parameters_changed", False):
+                # Se verifica si la métrica corresponde a la ronda actual
+                if metrics_instance.fraction_of_params_changed.get("round") == current_round:
+                    fraction_changed = metrics_instance.fraction_of_params_changed.get("fraction_changed")
+                    threshold = metrics_instance.fraction_of_params_changed.get("threshold")
+                    fraction_score_normalized = self.analyze_anomalies(
                         addr,
                         nei,
-                        self._engine.get_round(),
-                        self.engine.total_rounds,
+                        current_round,
+                        current_round,  # Se asume round_received igual a la ronda actual
+                        fraction_changed,
+                        threshold,
                     )
 
+            if metrics_active.get("model_arrival_latency", False):
+                if metrics_instance.model_arrival_latency.get("round_received") == current_round:
+                    round_latency = metrics_instance.model_arrival_latency.get("round")
+                    latency = metrics_instance.model_arrival_latency.get("latency")
+                    messages_model_arrival_latency_normalized = self.manage_model_arrival_latency(
+                        round_latency,
+                        addr,
+                        nei,
+                        latency,
+                        current_round
+                    )
+
+            if current_round >= 5 and metrics_active.get("model_similarity", False):
+                similarity_file = os.path.join(log_dir, f"participant_{id_node}_similarity.csv")
+                similarity_reputation = self.read_similarity_file(similarity_file, nei, current_round)
+            else:
+                similarity_reputation = 0
+
+            if messages_model_arrival_latency_normalized >= 0:
+                avg_model_arrival_latency = self.save_model_arrival_latency_history(
+                    addr, nei, messages_model_arrival_latency_normalized, current_round
+                )
+                if avg_model_arrival_latency is None and current_round > 4:
+                    avg_model_arrival_latency = self.model_arrival_latency_history[(addr, nei)][current_round - 1]["score"]
+
+            if self.messages_number_message is not None:
+                messages_number_message_normalized, messages_number_message_count = self.manage_metric_number_message(
+                    self.messages_number_message, addr, nei, current_round, metrics_active.get("num_messages", False)
+                )
+                avg_messages_number_message_normalized = self.save_number_message_history(
+                    addr, nei, messages_number_message_normalized, current_round
+                )
+                if avg_messages_number_message_normalized is None and current_round > 4:
+                    avg_messages_number_message_normalized = self.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
+
+            if current_round >= 5:
+                if fraction_score_normalized > 0:
+                    key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                    fraction_previous_round = None
+
+                    if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
+                        fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
+                        fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+
+                    if fraction_previous_round is not None:
+                        fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
+                        self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
+                    else:
+                        fraction_score_asign = fraction_score_normalized
+                        self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
+                else:
+                    fraction_previous_round = None
+                    key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                    if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
+                        fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
+                        fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+
+                    if fraction_previous_round is not None:
+                        fraction_score_asign = fraction_previous_round - (fraction_previous_round * 0.5)
+                    else:
+                        if fraction_neighbors_scores is None:
+                            fraction_neighbors_scores = {}
+
+                        for key, value in self.fraction_changed_history.items():
+                            score = value.get("fraction_score")
+                            if score is not None:
+                                fraction_neighbors_scores[key] = score
+
+                        if fraction_neighbors_scores:
+                            fraction_score_asign = np.mean(list(fraction_neighbors_scores.values()))
+                        else:
+                            fraction_score_asign = 0 
+            else:
+                fraction_score_asign = 0
+
+            self.create_graphics_to_metrics(
+                messages_number_message_count,
+                avg_messages_number_message_normalized,
+                similarity_reputation,
+                fraction_score_asign,
+                avg_model_arrival_latency,
+                addr,
+                nei,
+                current_round,
+                self.engine.total_rounds,
+            )
+
             return avg_messages_number_message_normalized, similarity_reputation, fraction_score_asign, avg_model_arrival_latency
+
         except Exception as e:
             logging.exception(f"Error calculating reputation. Type: {type(e).__name__}")
+
 
     def create_graphics_to_metrics(
         self,

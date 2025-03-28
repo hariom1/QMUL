@@ -13,7 +13,7 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
-from nebula.core.reputation.Reputation import Reputation
+from nebula.addons.reputation.Reputation import Reputation
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
