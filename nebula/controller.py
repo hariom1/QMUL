@@ -9,12 +9,13 @@ import subprocess
 import sys
 import threading
 import time
+from typing import Annotated
 
 import docker
 import psutil
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Body, FastAPI, status, HTTPException, Path
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
@@ -39,7 +40,6 @@ class TermEscapeCodeFormatter(logging.Formatter):
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI()
-
 
 # Define endpoints outside the Controller class
 @app.get("/")
@@ -142,6 +142,174 @@ async def get_available_gpu():
             }
         except Exception:  # noqa: S110
             pass
+
+
+@app.get("/scenarios/{user}/{role}")
+async def get_scenarios(
+    user: Annotated[
+        str, 
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid username"
+        )
+    ],
+    role: Annotated[
+        str, 
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid role"
+        )
+    ]
+):
+    from nebula.frontend.database import get_all_scenarios_and_check_completed, get_running_scenario
+
+    try:
+        scenarios = get_all_scenarios_and_check_completed(username=user, role=role)
+        scenario_running = get_running_scenario()
+    except Exception as e:
+        logging.error(f"Error obtaining scenarios: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"scenarios": scenarios, "scenario_running": scenario_running}
+
+
+@app.get("/users/list")
+async def list_users_controller(all_info: bool = False):
+    """
+    Controller endpoint to retrieve the list of users.
+    If all_info is True, returns the complete information converted into dictionaries.
+    """
+    from nebula.frontend.database import list_users
+
+    try:
+        user_list = list_users(all_info)
+        if all_info:
+            # Convert each sqlite3.Row to a dictionary so that it is JSON serializable.
+            user_list = [dict(user) for user in user_list]
+        return {"users": user_list}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving users: {e}"
+        )
+    
+
+@app.post("/user/add")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...)
+):
+    """
+    Controller endpoint that inserts a new user into the database.
+    
+    Parameters:
+    - user: The username for the new user.
+    - password: The user's password.
+    - role: The role assigned to the new user.
+    
+    Returns a success message if the user is added, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import add_user
+
+    try:
+        add_user(user, password, role)
+        return {"detail": "User added successfully"}
+    except Exception as e:
+        logging.error(f"Error adding user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error adding user: {e}"
+        )
+    
+
+@app.post("/user/delete")
+async def add_user_controller(
+    user: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint that inserts a new user into the database.
+    
+    Parameters:
+    - user: The username for the new user.
+    
+    Returns a success message if the user is deleted, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import delete_user_from_db
+
+    try:
+        delete_user_from_db(user)
+        return {"detail": "User deleted successfully"}
+    except Exception as e:
+        logging.error(f"Error deleting user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting user: {e}"
+        )
+    
+
+@app.post("/user/update")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...)
+):
+    """
+    Controller endpoint that modifies a user of the database.
+    
+    Parameters:
+    - user: The username of the user.
+    - password: The user's password.
+    - role: The role of the user.
+    
+    Returns a success message if the user is updated, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import update_user
+
+    try:
+        update_user(user, password, role)
+        return {"detail": "User updated successfully"}
+    except Exception as e:
+        logging.error(f"Error updating user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating user: {e}"
+        )
+    
+
+@app.post("/user/verify")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...)
+):
+    """
+    Controller endpoint that verifies if it's a valid user.
+    
+    Parameters:
+    - user: The username of the user.
+    - password: The user's password.
+    
+    Returns a success message if the user is verified, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import list_users, verify, get_user_info
+
+    try:
+        user_submitted = user.upper()
+        if (user_submitted in list_users()) and verify(user_submitted, password):
+            user_info = get_user_info(user_submitted)
+            return {"user": user_submitted, "role": user_info[2]}
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        logging.error(f"Error verifying user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error verifying user: {e}"
+        )
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -449,6 +617,10 @@ class Controller:
         app_thread = threading.Thread(target=self.run_controller_api, daemon=True)
         app_thread.start()
         logging.info(f"NEBULA Controller is running at port {self.controller_port}")
+
+        from nebula.frontend.database import initialize_databases
+
+        asyncio.run(initialize_databases(self.databases_dir))
 
         if self.production:
             self.run_waf()

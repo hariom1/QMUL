@@ -2,15 +2,16 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import sqlite3
 
 import aiosqlite
 from argon2 import PasswordHasher
 
-user_db_file_location = "databases/users.db"
-node_db_file_location = "databases/nodes.db"
-scenario_db_file_location = "databases/scenarios.db"
-notes_db_file_location = "databases/notes.db"
+user_db_file_location = "users.db"
+node_db_file_location = "nodes.db"
+scenario_db_file_location = "scenarios.db"
+notes_db_file_location = "notes.db"
 
 _node_lock = asyncio.Lock()
 
@@ -45,7 +46,14 @@ async def ensure_columns(conn, table_name, desired_columns):
     await conn.commit()
 
 
-async def initialize_databases():
+async def initialize_databases(databases_dir):
+    global user_db_file_location, node_db_file_location, scenario_db_file_location, notes_db_file_location
+    
+    user_db_file_location = os.path.join(databases_dir, user_db_file_location)
+    node_db_file_location = os.path.join(databases_dir, node_db_file_location)
+    scenario_db_file_location = os.path.join(databases_dir, scenario_db_file_location)
+    notes_db_file_location = os.path.join(databases_dir, notes_db_file_location)
+
     await setup_database(user_db_file_location)
     await setup_database(node_db_file_location)
     await setup_database(scenario_db_file_location)
@@ -223,6 +231,12 @@ async def initialize_databases():
         )
         desired_columns = {"scenario": "TEXT PRIMARY KEY", "scenario_notes": "TEXT"}
         await ensure_columns(conn, "notes", desired_columns)
+
+    # Add default user
+    if not list_users():
+        add_user("admin", "admin", "admin")
+    if not verify_hash_algorithm("admin"):
+        update_user("admin", "admin", "admin")
 
 
 def list_users(all_info=False):

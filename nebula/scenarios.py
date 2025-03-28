@@ -254,7 +254,7 @@ class Scenario:
 class ScenarioManagement:
     def __init__(self, scenario, user=None):
         # Current scenario
-        self.scenario = Scenario.from_dict(scenario)
+        self.scenario = scenario
         # Uid of the user
         self.user = user
         # Scenario management settings

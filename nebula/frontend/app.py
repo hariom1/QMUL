@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 import aiohttp
 import requests
 from dotenv import load_dotenv
+from yarl import URL
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -224,21 +225,6 @@ def get_session(request: Request) -> dict:
     return request.session
 
 
-def set_default_user():
-    username = os.environ.get("NEBULA_DEFAULT_USER", "admin")
-    password = os.environ.get("NEBULA_DEFAULT_PASSWORD", "admin")
-    if not list_users():
-        add_user(username, password, "admin")
-    if not verify_hash_algorithm(username):
-        update_user(username, password, "admin")
-
-
-@app.on_event("startup")
-async def startup_event():
-    await initialize_databases()
-    set_default_user()
-
-
 class UserData:
     def __init__(self):
         self.nodes_registration = {}
@@ -279,6 +265,80 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return await request.app.default_exception_handler(request, exc)
 
 
+async def get_available_gpus():
+    url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            try:
+                return await response.json()
+            except Exception as e:
+                return {"error": f"Failed to parse JSON: {e}"}
+        else:
+            return None
+
+
+async def get_least_memory_gpu():
+    url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            try:
+                return await response.json()
+            except Exception as e:
+                return {"error": f"Failed to parse JSON: {e}"}
+        else:
+            return None
+        
+        
+async def get_scenarios(user, role):
+    try:
+        base_url = URL(f"http://{settings.controller_host}:{settings.controller_port}/scenarios")
+        url = base_url / user / role
+        logging.info(f"Requesting URL: {url}")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    try:
+                        return await response.json()
+                    except Exception as e:
+                        logging.error(f"Error parsing JSON: {e}")
+                        return {"error": f"Error parsing JSON: {e}"}
+                else:
+                    logging.error(f"Request error: {response.status}")
+                    return {"error": f"Request error: {response.status}"}
+    except Exception as e:
+        logging.error(f"Unexpected error in call_get_scenarios: {e}")
+        return {"error": f"Unexpected error: {e}"}
+
+
+async def list_users(allinfo=True):
+    """
+    Retrieves the list of users by calling the controller endpoint.
+    
+    Parameters:
+    - all_info (bool): If True, retrieves detailed information for each user.
+    
+    Returns:
+    - A list of users, as provided by the controller.
+    """
+    controller_url = f"http://{settings.controller_host}:{settings.controller_port}/users/list?all_info={allinfo}"
+    try:
+        async with aiohttp.ClientSession() as client:
+            async with client.get(controller_url, timeout=10) as resp:
+                if resp.status != 200:
+                    raise HTTPException(
+                        status_code=resp.status,
+                        detail="Error retrieving user list from controller"
+                    )
+                data = await resp.json()
+                user_list = data["users"]
+    except Exception as e:
+        logging.error(f"Error calling controller endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Controller request failed: {e}")
+
+    return user_list
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return RedirectResponse(url="/platform")
@@ -313,11 +373,12 @@ async def nebula_dashboard_private(request: Request, scenario_name: str, session
 @app.get("/platform/admin", response_class=HTMLResponse)
 async def nebula_admin(request: Request, session: dict = Depends(get_session)):
     if session.get("role") == "admin":
-        user_list = list_users(all_info=True)
+        user_list = await list_users()
+        
         user_table = zip(
             range(1, len(user_list) + 1),
-            [user[0] for user in user_list],
-            [user[2] for user in user_list],
+            [user["user"] for user in user_list],
+            [user["role"] for user in user_list],
             strict=False,
         )
         return templates.TemplateResponse("admin.html", {"request": request, "users": user_table})
@@ -379,14 +440,22 @@ async def nebula_login(
     user: str = Form(...),
     password: str = Form(...),
 ):
-    user_submitted = user.upper()
-    if (user_submitted in list_users()) and verify(user_submitted, password):
-        user_info = get_user_info(user_submitted)
-        session["user"] = user_submitted
-        session["role"] = user_info[2]
-        return JSONResponse({"message": "Login successful"}, status_code=200)
-    else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    controller_url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
+    payload = {"user": user, "password": password}
+    try:
+        async with aiohttp.ClientSession() as client:
+            async with client.post(controller_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    # Successful response from the controller.
+                    data = await resp.json()
+                    session["user"] = data.get("user")
+                    session["role"] = data.get("role")
+                    return JSONResponse({"message": "Login successful"}, status_code=200)
+                else:
+                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        logging.error(f"Error calling controller endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Controller request failed: {e}")
 
 
 @app.get("/platform/logout")
@@ -403,8 +472,22 @@ async def nebula_delete_user(user: str, request: Request, session: dict = Depend
         if user == session["user"]:  # Current user can't delete himself.
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
-        delete_user_from_db(user)
-        return RedirectResponse(url="/platform/admin")
+        controller_url = f"http://{settings.controller_host}:{settings.controller_port}/user/delete"
+        payload = {"user": user}
+
+        try:
+            async with aiohttp.ClientSession() as client:
+                async with client.post(controller_url, json=payload, timeout=10) as resp:
+                    if resp.status == 200:
+                        # Successful response from the controller.
+                        return RedirectResponse(url="/platform/admin")
+                    else:
+                        error_text = await resp.text()
+                        logging.error(f"Controller error: {error_text}")
+                        raise HTTPException(status_code=resp.status, detail=error_text)
+        except Exception as e:
+            logging.error(f"Error calling controller endpoint: {e}")
+            raise HTTPException(status_code=500, detail=f"Controller request failed: {e}")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
@@ -417,15 +500,33 @@ async def nebula_add_user(
     password: str = Form(...),
     role: str = Form(...),
 ):
-    if session.get("role") == "admin":  # only Admin should be able to add user.
-        user_list = list_users(all_info=True)
-        if user.upper() in user_list or " " in user or "'" in user or '"' in user:
-            return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
-        else:
-            add_user(user, password, role)
-            return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
-    else:
+    # Only admin users can add new users.
+    if session.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    
+    # Basic validation on the user value before calling the controller.
+    user_list = await list_users()
+    
+    if user.upper() in user_list or " " in user or "'" in user or '"' in user:
+        return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
+    
+    # Call the controller's endpoint to add the user.
+    controller_url = f"http://{settings.controller_host}:{settings.controller_port}/user/add"
+    payload = {"user": user, "password": password, "role": role}
+    
+    try:
+        async with aiohttp.ClientSession() as client:
+            async with client.post(controller_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    # Successful response from the controller.
+                    return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
+                else:
+                    error_text = await resp.text()
+                    logging.error(f"Controller error: {error_text}")
+                    raise HTTPException(status_code=resp.status, detail=error_text)
+    except Exception as e:
+        logging.error(f"Error calling controller endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Controller request failed: {e}")
 
 
 @app.post("/platform/user/update")
@@ -438,8 +539,23 @@ async def nebula_update_user(
 ):
     if "user" not in session or session["role"] != "admin":
         return RedirectResponse(url="/platform", status_code=status.HTTP_302_FOUND)
-    update_user(user, password, role)
-    return RedirectResponse(url="/platform/admin", status_code=status.HTTP_302_FOUND)
+    
+    controller_url = f"http://{settings.controller_host}:{settings.controller_port}/user/update"
+    payload = {"user": user, "password": password, "role": role}
+    
+    try:
+        async with aiohttp.ClientSession() as client:
+            async with client.post(controller_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    # Successful response from the controller.
+                    return RedirectResponse(url="/platform/admin", status_code=status.HTTP_302_FOUND)
+                else:
+                    error_text = await resp.text()
+                    logging.error(f"Controller error: {error_text}")
+                    raise HTTPException(status_code=resp.status, detail=error_text)
+    except Exception as e:
+        logging.error(f"Error calling controller endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Controller request failed: {e}")
 
 
 @app.get("/platform/api/dashboard/runningscenario", response_class=JSONResponse)
@@ -455,30 +571,6 @@ async def nebula_dashboard_runningscenario():
 
 async def get_host_resources():
     url = f"http://{settings.controller_host}:{settings.controller_port}/resources"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
-
-
-async def get_available_gpus():
-    url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
-
-
-async def get_least_memory_gpu():
-    url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
     async with aiohttp.ClientSession() as session, session.get(url) as response:
         if response.status == 200:
             try:
@@ -557,10 +649,10 @@ except Exception as e:
 @app.get("/platform/dashboard", response_class=HTMLResponse)
 async def nebula_dashboard(request: Request, session: dict = Depends(get_session)):
     if "user" in session:
-        scenarios = get_all_scenarios_and_check_completed(
-            username=session["user"], role=session["role"]
-        )  # Get all scenarios after checking if they are completed
-        scenario_running = get_running_scenario()
+        response = await get_scenarios(session["user"], session["role"])
+        scenarios = response.get("scenarios")
+        scenario_running = response.get("scenario_running")
+
         if session["user"] not in user_data_store:
             user_data_store[session["user"]] = UserData()
 
@@ -875,10 +967,7 @@ async def nebula_monitor_log(scenario_name: str, id: str):
         raise HTTPException(status_code=404, detail="Log file not found")
 
 
-@app.get(
-    "/platform/dashboard/{scenario_name}/node/{id}/infolog/{number}",
-    response_class=PlainTextResponse,
-)
+@app.get("/platform/dashboard/{scenario_name}/node/{id}/infolog/{number}", response_class=PlainTextResponse,)
 async def nebula_monitor_log_x(scenario_name: str, id: str, number: int):
     logs = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, f"participant_{id}.log"))
     if os.path.exists(logs):
