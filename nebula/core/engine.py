@@ -13,7 +13,7 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
-from nebula.core.reputation.Reputation import Reputation
+from nebula.addons.reputation.reputation import Reputation
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -295,7 +295,6 @@ class Engine:
                     self._reputation.reputation_with_all_feedback[key] = []
 
                 self._reputation.reputation_with_all_feedback[key].append(message.score)
-                #logging.info(f"Reputation with all feedback: {self.reputation_with_all_feedback}")
 
         except Exception as e:
             logging.exception(f"Error handling reputation message: {e}")

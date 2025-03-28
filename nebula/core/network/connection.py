@@ -6,14 +6,9 @@ import lzma
 import time
 import uuid
 import zlib
+import lz4.frame
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-
-import lz4.frame
-
-from nebula.core.reputation.Reputation import (
-    Reputation,
-)
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
