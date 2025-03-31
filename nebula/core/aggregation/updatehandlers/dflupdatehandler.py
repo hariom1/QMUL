@@ -133,6 +133,7 @@ class DFLUpdateHandler(UpdateHandler):
             logging.info(f"Missing updates from sources: {updates_missing}")
         else:
             self._missing_ones.clear()
+            
         self._nodes_using_historic.clear()
         updates = {}
         for sr in self._sources_received:
