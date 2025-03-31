@@ -34,6 +34,16 @@ class Metrics:
         threshold=None,
         latency=None,
     ):
+        """
+        Initialize a Metrics instance to store various evaluation metrics for a participant.
+
+        Args:
+            num_round (optional): The current round number.
+            current_round (optional): The round when the metric is measured.
+            fraction_changed (optional): Fraction of parameters changed.
+            threshold (optional): Threshold used for evaluating changes.
+            latency (optional): Latency value for model arrival.
+        """
         self.fraction_of_params_changed = {
             "fraction_changed": fraction_changed,
             "threshold": threshold,
@@ -53,9 +63,19 @@ class Metrics:
 
 class Reputation:
     """
-    Class to define the reputation of a participant.
+    Class to define and manage the reputation of a participant in the network.
+    
+    The class handles collection of metrics, calculation of static and dynamic reputation,
+    updating history, and communication of reputation scores to neighbors.
     """
     def __init__(self, engine: "Engine", config: "Config"):
+        """
+        Initialize the Reputation system.
+
+        Args:
+            engine (Engine): The engine instance providing the runtime context.
+            config (Config): The configuration object with participant settings.
+        """
         self._engine = engine
         self._config = config
         self.fraction_of_params_changed = {}
@@ -83,7 +103,7 @@ class Reputation:
         self._idx = engine.idx
         self.connection_metrics = []
         
-        neighbors:str = self._config.participant["network_args"]["neighbors"]
+        neighbors: str = self._config.participant["network_args"]["neighbors"]
         self.connection_metrics = {}
         for nei in neighbors.split():
             self.connection_metrics[f"{nei}"] = Metrics()
@@ -110,6 +130,7 @@ class Reputation:
         
     @property
     def engine(self):
+        """Return the engine instance."""
         return self._engine
     
     def save_data(
@@ -128,7 +149,21 @@ class Reputation:
         latency=None,
     ):
         """
-        Save data between nodes and aggregated models.
+        Save data received from nodes for further reputation calculations.
+
+        Args:
+            type_data (str): The type of data being saved ("number_message", "fraction_of_params_changed", or "model_arrival_latency").
+            nei (str): The neighbor node address.
+            addr (str): The current node address.
+            num_round (optional): The round number associated with the data.
+            time (optional): Timestamp or time value.
+            current_round (optional): The current round number.
+            fraction_changed (optional): Fraction of parameters changed.
+            total_params (optional): Total number of parameters.
+            changed_params (optional): Number of changed parameters.
+            threshold (optional): Threshold used for metrics.
+            changes_record (optional): Record of parameter changes.
+            latency (optional): Latency value.
         """
         try:
             if addr == nei:
@@ -169,7 +204,9 @@ class Reputation:
     
     async def setup(self):
         """
-        Setup the reputation system.
+        Setup the reputation system by subscribing to various events.
+        
+        This function enables the reputation system and subscribes to events based on active metrics.
         """
         if self._with_reputation:
             logging.info("Reputation system enabled")
@@ -190,7 +227,14 @@ class Reputation:
             
     def init_reputation(self, addr, federation_nodes=None, round_num=None, last_feedback_round=None, init_reputation=None):
         """
-        Initialize the reputation system.
+        Initialize the reputation for each federation node.
+
+        Args:
+            addr (str): The address of the current node.
+            federation_nodes (list): List of federation nodes' addresses.
+            round_num (int): The current round number.
+            last_feedback_round (int): The last round in which feedback was provided.
+            init_reputation (float): The initial reputation value.
         """
         if not federation_nodes:
             logging.error("init_reputation | No federation nodes provided")
@@ -219,7 +263,13 @@ class Reputation:
 
     def is_valid_ip(self, federation_nodes):
         """
-        Check if the IP addresses are valid.
+        Check if the IP addresses provided are valid.
+
+        Args:
+            federation_nodes (list): List of federation node addresses.
+
+        Returns:
+            list: A list of valid IP addresses.
         """
         valid_ip = []
         for i in federation_nodes:   
@@ -230,24 +280,20 @@ class Reputation:
     def _calculate_static_reputation(self, addr, nei, metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency,
                                      weight_messages_number, weight_similarity, weight_fraction, weight_model_arrival_latency):
         """
-        Calculate the static reputation of a participant.
+        Calculate the static reputation of a participant using fixed weights.
 
         Args:
-            addr (str): The IP address of the participant.
-            nei (str): The IP address of the participant.
-            metric_messages_number (float): The number of messages.
-            metric_similarity (float): The similarity between models.
-            metric_fraction (float): The fraction of parameters changed.
-            metric_model_arrival_latency (float): The model arrival latency.
-            weight_messages_number (float): The weight of the number of messages.
-            weight_similarity (float): The weight of the similarity.
-            weight_fraction (float): The weight of the fraction.
-            weight_model_arrival_latency (float): The weight of the model arrival latency.
-
-        Returns:
-            float: The static reputation of the participant.
+            addr (str): The IP address of the current node.
+            nei (str): The neighbor node's IP address.
+            metric_messages_number (float): Metric value for number of messages.
+            metric_similarity (float): Metric value for model similarity.
+            metric_fraction (float): Metric value for fraction of parameters changed.
+            metric_model_arrival_latency (float): Metric value for model arrival latency.
+            weight_messages_number (float): Weight for number of messages.
+            weight_similarity (float): Weight for model similarity.
+            weight_fraction (float): Weight for fraction of parameters changed.
+            weight_model_arrival_latency (float): Weight for model arrival latency.
         """
-
         static_weights = {
             "num_messages": weight_messages_number,
             "model_similarity": weight_similarity,
@@ -283,14 +329,14 @@ class Reputation:
 
     async def _calculate_dynamic_reputation(self, addr, neighbors):
         """
-        Calculate the dynamic reputation of a participant.
+        Calculate the dynamic reputation of a participant based on historical metric data.
 
         Args:
-            addr (str): The IP address of the participant.
-            neighbors (list): The list of neighbors.
+            addr (str): The address of the current node.
+            neighbors (list): List of neighbor node addresses.
 
         Returns:
-            dict: The dynamic reputation of the participant.
+            dict: Updated dynamic reputation values.
         """
         average_weights = {}
 
@@ -339,12 +385,12 @@ class Reputation:
 
     def _update_reputation_record(self, nei, reputation, data):
         """
-        Update the reputation record of a participant.
+        Update the reputation record of a neighbor.
 
         Args:
-            nei (str): The IP address of the participant.
-            reputation (float): The reputation of the participant.
-            data (dict): The data to update.
+            nei (str): The neighbor node's address.
+            reputation (float): The computed reputation value.
+            data (dict): Additional metrics data associated with the reputation.
         """
         if nei not in self.reputation:
             self.reputation[nei] = {
@@ -374,7 +420,18 @@ class Reputation:
         reputation_metrics
     ):
         """
-        Calculate the weighted values for each metric.
+        Calculate the weighted values for each metric based on current measurements and historical data.
+
+        Args:
+            avg_messages_number_message_normalized (float): Normalized average message count.
+            similarity_reputation (float): Reputation score based on model similarity.
+            fraction_score_asign (float): Score assigned from fraction of parameters changed.
+            avg_model_arrival_latency (float): Average model arrival latency.
+            history_data (dict): Historical metrics data.
+            current_round (int): The current round number.
+            addr (str): The address of the current node.
+            nei (str): The neighbor node's address.
+            reputation_metrics (dict): Dictionary indicating which metrics are active.
         """
         if current_round is not None:
 
@@ -472,14 +529,22 @@ class Reputation:
 
     async def calculate_value_metrics(self, log_dir, id_node, addr, nei, metrics_active=None):
         """
-        Calculate the reputation of each participant based on the data stored in self.connection_metrics.
+        Calculate various metrics (message count, model similarity, fraction of parameters changed, and model arrival latency)
+        for a given neighbor node based on stored connection data.
 
         Args:
-            log_dir (str): Log directory.
-            id_node (str): Node ID.
-            addr (str): Source IP address.
-            nei (str): Destination IP address.
-            metrics_active (dict): The active metrics.
+            log_dir (str): Directory for log files.
+            id_node (str): Identifier for the node.
+            addr (str): The address of the current node.
+            nei (str): The neighbor node's address.
+            metrics_active (dict): Dictionary indicating which metrics are active.
+
+        Returns:
+            tuple: A tuple containing:
+                - avg_messages_number_message_normalized (float)
+                - similarity_reputation (float)
+                - fraction_score_asign (float)
+                - avg_model_arrival_latency (float)
         """
         messages_number_message_normalized = 0
         messages_number_message_count = 0
@@ -518,7 +583,6 @@ class Reputation:
                     avg_messages_number_message_normalized = self.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
 
             if metrics_active.get("fraction_parameters_changed", False):
-                # Se verifica si la métrica corresponde a la ronda actual
                 if metrics_instance.fraction_of_params_changed.get("round") == current_round:
                     fraction_changed = metrics_instance.fraction_of_params_changed.get("fraction_changed")
                     threshold = metrics_instance.fraction_of_params_changed.get("threshold")
@@ -526,7 +590,7 @@ class Reputation:
                         addr,
                         nei,
                         current_round,
-                        current_round,  # Se asume round_received igual a la ronda actual
+                        current_round,  # Assumes round_received is the current round.
                         fraction_changed,
                         threshold,
                     )
@@ -545,7 +609,6 @@ class Reputation:
 
             if current_round >= 5 and metrics_active.get("model_similarity", False):
                 similarity_reputation = self.calculate_similarity_from_metrics(nei, current_round)
-                logging.info("[FER] Similarity reputation: %s", similarity_reputation)
             else:
                 similarity_reputation = 0
 
@@ -636,11 +699,20 @@ class Reputation:
         total_rounds,
     ):
         """
-        Create graphics to metrics.
+        Create and log graphics representing different metric values over the rounds.
+
+        Args:
+            number_message_count (int): Count of messages.
+            number_message_norm (float): Normalized number of messages.
+            similarity (float): Similarity metric value.
+            fraction (float): Fraction score metric.
+            model_arrival_latency (float): Latency metric score.
+            addr (str): The current node's address.
+            nei (str): The neighbor node's address.
+            current_round (int): The current round number.
+            total_rounds (int): Total rounds in the session.
         """
-
         if current_round is not None and current_round < total_rounds:
-
             model_arrival_latency_dict = {f"R-Model_arrival_latency_reputation/{addr}": {nei: model_arrival_latency}}
             messages_number_message_count_dict = {f"R-Count_messages_number_message_reputation/{addr}": {nei: number_message_count}}
             messages_number_message_norm_dict = {f"R-number_message_reputation/{addr}": {nei: number_message_norm}}
@@ -672,18 +744,18 @@ class Reputation:
         threshold,
     ):
         """
-        Analyze anomalies in the fraction of parameters changed.
+        Analyze anomalies in the fraction of parameters changed and calculate a corresponding score.
 
         Args:
-            addr (str): Source IP address.
-            nei (str): Destination IP address.
-            round_num (int): Round number.
-            current_round (int): Current round number.
+            addr (str): The source node's address.
+            nei (str): The neighbor node's address.
+            round_num (int): The round number for the metric.
+            current_round (int): The current round number.
             fraction_changed (float): Fraction of parameters changed.
-            threshold (float): Threshold value.
+            threshold (float): Threshold value for changes.
 
         Returns:
-            float: The fraction score between 0 and 1.
+            float: A normalized fraction score between 0 and 1.
         """
         try:
             key = (addr, nei, round_num)
@@ -800,7 +872,6 @@ class Reputation:
                             else 0
                         )
                 
-
                     fraction_weight = 0.5
                     threshold_weight = 0.5
 
@@ -822,17 +893,17 @@ class Reputation:
         self, round_num, addr, nei, latency, current_round
     ):
         """
-        Manage the model_arrival_latency metric with persistent storage of mean latency.
+        Manage the model arrival latency metric and normalize it based on historical latencies.
 
         Args:
-            round_num (int): The round number.
-            addr (str): Source IP address.
-            nei (str): Destination IP address.
-            latency (float): Latency value for the current model_arrival_latency.
-            current_round (int): The current round of the program.
+            round_num (int): The round number when the model was sent.
+            addr (str): The address of the current node.
+            nei (str): The neighbor node's address.
+            latency (float): The measured latency.
+            current_round (int): The current round number.
 
         Returns:
-            float: Normalized model_arrival_latency latency value between 0 and 1.
+            float: Normalized latency score between 0 and 1.
         """
         try:
             current_key = nei
@@ -894,16 +965,16 @@ class Reputation:
 
     def save_model_arrival_latency_history(self, addr, nei, model_arrival_latency, round_num):
         """
-        Save the model_arrival_latency history of a participant (addr) regarding its neighbor (nei) in memory.
+        Save and update the model arrival latency history in memory.
 
         Args:
-            addr (str): The identifier of the node whose model_arrival_latency history is being saved.
-            nei (str): The neighboring node involved.
-            model_arrival_latency (float): The model_arrival_latency value to be saved.
+            addr (str): The current node's address.
+            nei (str): The neighbor node's address.
+            model_arrival_latency (float): The normalized latency score.
             round_num (int): The current round number.
 
         Returns:
-            float: The cumulative model_arrival_latency including the current round.
+            float: The updated average model arrival latency.
         """
         try:
             current_key = nei
@@ -953,18 +1024,17 @@ class Reputation:
     
     def manage_metric_number_message(self, messages_number_message, addr, nei, current_round, metric_active=True):
         """
-        Manage the number_message metric using percentiles for normalization, considering the last 5 rounds dynamically.
+        Manage and normalize the number of messages metric using percentiles.
 
         Args:
-            messages_number_message (list): List of messages number_message.
-            addr (str): Source IP address.
-            nei (str): Destination IP address.
-            current_round (int): Current round number.
-            metric_active (bool): The metric status.
+            messages_number_message (list): List containing message data.
+            addr (str): The current node's address.
+            nei (str): The neighbor node's address.
+            current_round (int): The current round number.
+            metric_active (bool): Flag indicating whether the metric is active.
 
         Returns:
-            float: Normalized number_message value.
-            int: Messages count.
+            tuple: A tuple with the normalized number_message value (float) and the count of messages (int).
         """
         try:
             if current_round == 0:
@@ -1026,18 +1096,17 @@ class Reputation:
     
     def save_number_message_history(self, addr, nei, messages_number_message_normalized, current_round):
         """
-        Save the number_message history of a participant (addr) regarding its neighbor (nei) in memory.
+        Save the normalized number_message history in memory and calculate a weighted average.
 
         Args:
-            addr (str): The identifier of the node whose number_message history is being saved.
-            nei (str): The neighboring node involved.
-            messages_number_message_normalized (float): The number_message value to be saved.
+            addr (str): The current node's address.
+            nei (str): The neighbor node's address.
+            messages_number_message_normalized (float): The normalized number_message value.
             current_round (int): The current round number.
 
         Returns:
-            float: The cumulative number_message including the current round.
+            float: The weighted average of the number_message metric.
         """
-
         try:
             key = (addr, nei)
             avg_number_message = 0
@@ -1071,16 +1140,15 @@ class Reputation:
     
     def save_reputation_history_in_memory(self, addr, nei, reputation):
         """
-        Save the reputation history of a participant (addr) regarding its neighbor (nei) in memory
-        and calculate the average reputation.
+        Save the reputation history for a neighbor and compute an average reputation.
 
         Args:
-            addr (str): The identifier of the node whose reputation is being saved.
-            nei (str): The neighboring node involved.
-            reputation (float): The reputation value to be saved.
+            addr (str): The current node's address.
+            nei (str): The neighbor node's address.
+            reputation (float): The computed reputation for the current round.
 
         Returns:
-            float: The cumulative reputation including the current round.
+            float: The updated (weighted) reputation.
         """
         try:
             key = (addr, nei)
@@ -1115,15 +1183,14 @@ class Reputation:
 
     def calculate_decay_rate(self, reputation):
         """
-        Calculate the decay rate for a reputation value.
+        Calculate the decay rate for a given reputation value.
 
         Args:
-            reputation (float): Reputation value.
+            reputation (float): The current reputation value.
 
         Returns:
-            float: Decay rate.
+            float: The decay rate.
         """
-
         if reputation > 0.8:
             return 0.9  # Very low decay
         elif reputation > 0.7:
@@ -1137,15 +1204,14 @@ class Reputation:
 
     def calculate_similarity_from_metrics(self, nei, current_round):
         """
-        Calculate the similarity value from the stored metrics in the 'similarity'
-        attribute of the Metrics instance for the given neighbor (nei) and current round.
+        Calculate the similarity score based on stored similarity metrics.
 
         Args:
-            nei (str): The IP address of the neighbor.
+            nei (str): The neighbor node's address.
             current_round (int): The current round number.
 
         Returns:
-            float: The computed similarity value.
+            float: The aggregated similarity score.
         """
         similarity_value = 0.0
 
@@ -1158,7 +1224,6 @@ class Reputation:
             source_ip = metric.get("nei")
             round_in_metric = metric.get("round")
 
-            logging.info(f"[FER] source_ip {source_ip}, round_in_metric {round_in_metric}, current_round {current_round}")
             if source_ip == nei and round_in_metric == current_round:
                 weight_cosine = 0.25
                 weight_euclidean = 0.25
@@ -1181,10 +1246,13 @@ class Reputation:
 
     async def calculate_reputation(self, ae: AggregationEvent):
         """
-            Calculate the reputation of the node based on the active metrics.
+        Calculate and update the reputation for all neighbor nodes based on active metrics.
 
-            Args:
-                ae (AggregationEvent): The aggregation event.
+        This method processes the aggregated updates and then, based on the selected weighting factor (static or dynamic),
+        calculates the reputation. It also includes feedback and sends the reputation scores to neighbors.
+
+        Args:
+            ae (AggregationEvent): The event containing aggregated updates.
         """
         (updates, _, _) = await ae.get_event_data()
         if self._with_reputation:
@@ -1243,7 +1311,7 @@ class Reputation:
                     federation_nodes=federation,
                     round_num=self._engine.get_round(),
                     last_feedback_round=-1,
-                    init_reputation = self._initial_reputation,
+                    init_reputation=self._initial_reputation,
                 )
 
             status = await self.include_feedback_in_reputation()
@@ -1263,7 +1331,10 @@ class Reputation:
 
     async def send_reputation_to_neighbors(self, neighbors):
         """
-            Send the calculated reputation to the neighbors.
+        Send the calculated reputation scores to all neighbors.
+
+        Args:
+            neighbors (iterable): An iterable of neighbor node addresses.
         """
         for nei, data in self.reputation.items():
             if data["reputation"] is not None:
@@ -1280,7 +1351,11 @@ class Reputation:
     
     def create_graphic_reputation(self, addr, round_num):
         """
-        Create a graphic with the reputation of a node in a specific round.
+        Create a graphical representation of the reputation scores and log the data.
+
+        Args:
+            addr (str): The current node's address.
+            round_num (int): The current round number.
         """
         try:
             reputation_dict_with_values = {
@@ -1299,7 +1374,10 @@ class Reputation:
             
     async def update_process_aggregation(self, updates):
         """
-        Update the process of aggregation by removing rejected nodes from the updates.
+        Update the aggregation process by removing nodes that have been rejected.
+
+        Args:
+            updates (dict): The dictionary of updates.
         """
         for rn in self.rejected_nodes:
             if rn in updates:
@@ -1310,6 +1388,14 @@ class Reputation:
         logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
 
     async def include_feedback_in_reputation(self):
+        """
+        Integrate feedback scores into the current reputation values.
+
+        The final reputation is computed as a weighted sum of the current reputation and the average feedback.
+
+        Returns:
+            bool: True if feedback was successfully included, False otherwise.
+        """
         weight_current_reputation = 0.9
         weight_feedback = 0.1
 
@@ -1319,7 +1405,7 @@ class Reputation:
         
         updated = False
 
-        for(current_node, node_ip, round_num), scores in self.reputation_with_all_feedback.items():
+        for (current_node, node_ip, round_num), scores in self.reputation_with_all_feedback.items():
             if not scores:
                 logging.info(f"No feedback received for node {node_ip} in round {round_num}")
                 continue
@@ -1356,6 +1442,12 @@ class Reputation:
             return False
     
     async def on_round_start(self, rse: RoundStartEvent):
+        """
+        Event handler for the start of a round. It stores the start time and updates the expected nodes.
+
+        Args:
+            rse (RoundStartEvent): The event data containing round start information.
+        """
         (round_id, start_time, expected_nodes) = await rse.get_event_data()
         if round_id not in self.round_timing_info:
             self.round_timing_info[round_id] = {}
@@ -1363,6 +1455,12 @@ class Reputation:
         expected_nodes.difference_update(self.rejected_nodes)
 
     async def recollect_model_arrival_latency(self, ure: UpdateReceivedEvent):
+        """
+        Event handler to record the model arrival latency when an update is received.
+
+        Args:
+            ure (UpdateReceivedEvent): The event data for a model update.
+        """
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
         current_time = time.time()
         current_round = round_num
@@ -1395,6 +1493,12 @@ class Reputation:
             logging.info(f"Model arrival latency already calculated for node {source} in round {current_round}")
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
+        """
+        Event handler to recollect and store model similarity metrics when an update is received.
+
+        Args:
+            ure (UpdateReceivedEvent): The event data containing model update information.
+        """
         (decoded_model, weight, nei, round_num, local) = await ure.get_event_data()
         if self._with_reputation and self._reputation_metrics.get("model_similarity"):
             if self._engine.config.participant["adaptive_args"]["model_similarity"]:
@@ -1456,6 +1560,13 @@ class Reputation:
                         self.rejected_nodes.add(nei)
 
     async def recollect_number_message(self, source, message):
+        """
+        Event handler to collect message count metrics when a message is received.
+
+        Args:
+            source (str): The source node's address.
+            message: The received message (content not used directly).
+        """
         if source != self._addr:
             current_time = time.time()
             if current_time:
@@ -1468,6 +1579,12 @@ class Reputation:
                 )
 
     async def recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
+        """
+        Event handler to recollect the fraction of parameters changed when an update is received.
+
+        Args:
+            ure (UpdateReceivedEvent): The event data containing model update information.
+        """
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
         current_round = self._engine.get_round()
         parameters_local = self._engine.trainer.get_model_parameters()
