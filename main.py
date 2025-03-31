@@ -4,6 +4,8 @@ from typing import Annotated
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
+import nebula.node as node
+
 app = FastAPI()
 
 CERTS_FOLDER = "./app/certs/"
@@ -244,13 +246,13 @@ def delete_dataset(
         raise HTTPException(status_code=404, detail="Item not found")
 
     # check if there is a json file in the folder
-    json_files = _find_x_files(CONFIG_FOLDER + path + "/", ".h5")
-    if len(json_files) != DATASET_FILE_COUNT:
+    data_files = _find_x_files(CONFIG_FOLDER + path + "/", ".h5")
+    if len(data_files) != DATASET_FILE_COUNT:
         # raise Exception("There should be only one json file in the folder")
         raise HTTPException(status_code=404, detail="Item not found")
     else:
         removed_files = {}
-        for file_name in json_files:
+        for file_name in data_files:
             os.remove(file_name)
             removed_files[file_name] = "deleted"
         return removed_files
@@ -265,9 +267,9 @@ def get_certs():
     Returns:
         FileResponse: The certs file
     """
-    json_files = _find_x_files(CERTS_FOLDER + "/", ".cert")
+    certs_files = _find_x_files(CERTS_FOLDER + "/", ".cert")
     return_files = []
-    for file_name in json_files:
+    for file_name in certs_files:
         with open(file_name) as file:
             return_files.append(FileResponse(file))
     return return_files
@@ -298,9 +300,9 @@ def delete_certs():
     Returns:
         dict: Name of the deleted file
     """
-    json_files = _find_x_files(CERTS_FOLDER + "/", ".cert")
+    certs_files = _find_x_files(CERTS_FOLDER + "/", ".cert")
     removed_files = {}
-    for file_name in json_files:
+    for file_name in certs_files:
         os.remove(file_name)
         removed_files[file_name] = "deleted"
     return removed_files
@@ -453,7 +455,7 @@ def delete_train_logs(
 # Metrics
 @app.get("/metrics/", tags=["metrics"])
 def get_metrics():
-        # check for path traversal
+    # check for path traversal
 
     log_files = _find_x_files(METRICS_FOLDER, "")
     if not log_files:
@@ -463,3 +465,38 @@ def get_metrics():
         with open(file_name) as file:
             return_files.append(FileResponse(file))
 
+
+# Actions
+@app.get("/run/", tags=["actions"])
+def run(
+    path: str,
+):
+    """
+    Run the models
+
+    """
+    # El comando manual es:
+    # python3.11 /home/dietpi/nebula/nebula/node.py /home/dietpi/nebula/app/config/test_lc/participant_1.json
+    json_files = _find_x_files(CONFIG_FOLDER + path + "/")
+    if len(json_files) != CONFIG_FILE_COUNT:
+        # raise Exception("There should be only one json file in the folder")
+        raise HTTPException(status_code=404, detail="Config file not found")
+    else:
+        node.main(json_files.pop())  # Llamada elegante a node.py
+        return True
+
+
+@app.get("/pause/", tags=["actions"])
+def pause(
+    path: str,
+):
+    # TODO
+    pass
+
+
+@app.get("/stop/", tags=["actions"])
+def stop(
+    path: str,
+):
+    # TODO
+    pass
