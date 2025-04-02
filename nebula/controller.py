@@ -143,6 +143,23 @@ async def get_available_gpu():
         except Exception:  # noqa: S110
             pass
 
+@app.post("/scenarios/remove")
+async def remove_scenario(
+    scenario_name: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to remove a scenario.
+    """
+    from nebula.frontend.database import remove_scenario_by_name
+
+    try:
+        remove_scenario_by_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} removed successfully"}
+
 
 @app.get("/scenarios/{user}/{role}")
 async def get_scenarios(
@@ -177,7 +194,82 @@ async def get_scenarios(
     return {"scenarios": scenarios, "scenario_running": scenario_running}
 
 
-@app.get("/users/list")
+@app.get("/scenarios/running")
+async def get_running_scenario(get_all: bool = False):
+    """
+    Controller endpoint to retrieve the running scenario.
+    """
+    from nebula.frontend.database import get_running_scenario
+
+    try:
+        return get_running_scenario(get_all=get_all)
+    except Exception as e:
+        logging.error(f"Error obtaining running scenario: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/scenarios/check")
+async def check_scenario(role: str, scenario_name: str):
+    """
+    Controller endpoint to check if a scenario is allowed for a specific role.
+    """
+    from nebula.frontend.database import check_scenario_with_role
+
+    try:
+        allowed = check_scenario_with_role(role, scenario_name)
+        return {"allowed": allowed}
+    except Exception as e:
+        logging.error(f"Error checking scenario with role: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/scenarios/{scenario_name}")
+async def get_scenario_by_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_scenario_by_name
+
+    try:
+        scenario = get_scenario_by_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"scenario": scenario}
+
+
+@app.get("/scenarios/user/{scenario_name}")
+async def get_user_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_user_by_scenario_name
+
+    try:
+        user = get_user_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining user {user}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"user": user}
+
+
+@app.get("/user/list")
 async def list_users_controller(all_info: bool = False):
     """
     Controller endpoint to retrieve the list of users.
@@ -228,7 +320,7 @@ async def add_user_controller(
     
 
 @app.post("/user/delete")
-async def add_user_controller(
+async def remove_user_controller(
     user: str = Body(..., embed=True)
 ):
     """
