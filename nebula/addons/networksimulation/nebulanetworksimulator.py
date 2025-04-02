@@ -5,9 +5,6 @@ from nebula.addons.networksimulation.networksimulator import NetworkSimulator
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import GPSEvent
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
 
 class NebulaNS(NetworkSimulator):
     NETWORK_CONDITIONS = {
@@ -29,6 +26,7 @@ class NebulaNS(NetworkSimulator):
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
   
     async def start(self):

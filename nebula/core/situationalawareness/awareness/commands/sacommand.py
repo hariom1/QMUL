@@ -37,13 +37,13 @@ class SACommand:
         action: SACommandAction, 
         target: str, 
         priority: SACOmmandPRIO = SACOmmandPRIO.MEDIUM,
-        paralelelizable = False
+        parallelizable = False
     ):
         self._command_type = command_type
         self._action = action
         self._target = target  # Could be a node, parameter, etc.
         self._priority = priority
-        self._parallelizable = paralelelizable
+        self._parallelizable = parallelizable
 
     @abstractmethod
     async def execute(self):

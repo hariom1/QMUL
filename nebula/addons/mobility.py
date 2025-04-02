@@ -7,9 +7,6 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import GPSEvent
 from nebula.core.utils.locker import Locker
 from nebula.addons.functions import print_msg_box
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
 
 
 class Mobility:
@@ -71,6 +68,7 @@ class Mobility:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     @property

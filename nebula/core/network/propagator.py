@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from nebula.core.aggregation.aggregator import Aggregator
     from nebula.core.engine import Engine
     from nebula.core.training.lightning import Lightning
-    from nebula.core.network.communications import CommunicationsManager
 
 
 class PropagationStrategy(ABC):
@@ -68,12 +67,13 @@ class Propagator:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     def start(self):
-        self.engine: Engine = CommunicationsManager.get_instance().engine
-        self.config: Config = CommunicationsManager.get_instance().get_config()
-        self.addr = CommunicationsManager.get_instance().get_addr()
+        self.engine: Engine = self.cm.engine
+        self.config: Config = self.cm.get_config()
+        self.addr = self.cm.get_addr()
         self.aggregator: Aggregator = self.engine.aggregator
         self.trainer: Lightning = self.engine._trainer
 

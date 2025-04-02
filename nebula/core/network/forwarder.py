@@ -1,14 +1,8 @@
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
-
 from nebula.addons.functions import print_msg_box
 from nebula.core.utils.locker import Locker
-
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
 
 class Forwarder:
     def __init__(self, config):
@@ -23,6 +17,7 @@ class Forwarder:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     async def start(self):

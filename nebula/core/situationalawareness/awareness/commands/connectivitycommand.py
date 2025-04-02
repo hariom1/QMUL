@@ -10,9 +10,9 @@ class ConnectivityCommand(SACommand):
         action: SACommandAction, 
         target: str, 
         priority: SACOmmandPRIO = SACOmmandPRIO.MEDIUM.name,
-        paralelelizable = False
+        parallelizable = False
     ):
-        super().__init__(SACommandType.CONNECTIVITY, action, target, priority, paralelelizable)
+        super().__init__(SACommandType.CONNECTIVITY, action, target, priority, parallelizable)
 
     async def execute(self):
         return await super().execute()

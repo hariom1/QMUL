@@ -1,16 +1,10 @@
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
-
 from nebula.addons.functions import print_msg_box
 
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
-
 class Health:
-    def __init__(self, addr, config, cm: "CommunicationsManager"):
+    def __init__(self, addr, config):
         print_msg_box(msg="Starting health module...", indent=2, title="Health module")
         self.addr = addr
         self.config = config
@@ -21,6 +15,7 @@ class Health:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     async def start(self):

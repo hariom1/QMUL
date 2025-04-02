@@ -7,10 +7,6 @@ from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.actions import factory_message_action, get_action_name_from_value, get_actions_names
 from nebula.core.pb import nebula_pb2
 
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
-
 class MessagesManager:
     def __init__(self, addr, config):
         self.addr = addr
@@ -20,6 +16,7 @@ class MessagesManager:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     def _define_message_templates(self):

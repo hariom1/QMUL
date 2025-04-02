@@ -69,6 +69,7 @@ class Reporter:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     async def enqueue_data(self, name, value):

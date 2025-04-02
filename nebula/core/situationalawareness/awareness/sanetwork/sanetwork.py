@@ -6,9 +6,10 @@ from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import BeaconRecievedEvent
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent
+from nebula.core.network.communications import CommunicationsManager
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
     from nebula.core.situationalawareness.awareness.samodule import SAModule
     
 RESTRUCTURE_COOLDOWN = 5    
@@ -42,7 +43,7 @@ class SANetwork():
         
     @property
     def cm(self):
-        return CommunicationsManager.get_instance()    
+        return CommunicationsManager.get_instance()   
         
     @property    
     def np(self):

@@ -7,10 +7,12 @@ from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import RoundEndEvent
 from nebula.core.eventmanager import EventManager
 
+from nebula.core.network.communications import CommunicationsManager
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.nodemanager import NodeManager
-    from nebula.core.network.communications import CommunicationsManager
+    
 
 RESTRUCTURE_COOLDOWN = 5
 

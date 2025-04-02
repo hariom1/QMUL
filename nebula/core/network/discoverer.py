@@ -1,12 +1,6 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING
-
 from nebula.addons.functions import print_msg_box
-
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
 
 class Discoverer:
     def __init__(self, addr, config):
@@ -19,6 +13,7 @@ class Discoverer:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     async def start(self):

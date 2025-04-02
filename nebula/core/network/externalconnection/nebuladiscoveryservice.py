@@ -7,9 +7,6 @@ from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import BeaconRecievedEvent
 from nebula.core.eventmanager import EventManager
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
 
 class NebulaServerProtocol(asyncio.DatagramProtocol):
     BCAST_IP = '239.255.255.250'
@@ -172,6 +169,7 @@ class NebulaConnectionService(ExternalConnectionService):
         
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     async def start(self):

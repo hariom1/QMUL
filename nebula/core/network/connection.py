@@ -93,6 +93,7 @@ class Connection:
 
     @property
     def cm(self):
+        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     def get_addr(self):

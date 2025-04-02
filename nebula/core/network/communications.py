@@ -35,7 +35,7 @@ class CommunicationsManager:
     
     @classmethod
     def get_instance(cls):
-        """Onbtain CommunicationsManager instance"""
+        """Obtain CommunicationsManager instance"""
         if cls._instance is None:
             raise ValueError("CommunicationsManager has not been initialized yet.")
         return cls._instance
@@ -93,6 +93,7 @@ class CommunicationsManager:
         self._external_connection_service = factory_connection_service("nebula", self.addr)
 
         self._initialized = True
+        logging.info("Communication Manager initialized completed")
 
     @property
     def engine(self):
