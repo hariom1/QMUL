@@ -18,8 +18,7 @@ class NebulaNS(NetworkSimulator):
     }
     IP_MULTICAST = "239.255.255.250"
     
-    def __init__(self, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
-        self._cm = communication_manager
+    def __init__(self, changing_interval, interface, verbose=False):
         self._refresh_interval = changing_interval
         self._node_interface = interface
         self._verbose = verbose
@@ -27,11 +26,15 @@ class NebulaNS(NetworkSimulator):
         self._network_conditions_lock = Locker("network_conditions_lock", async_lock=True)
         self._current_network_conditions = {}
         self._running = False
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
   
     async def start(self):
         logging.info("🌐  Nebula Network Simulator starting...")
         self._running = True
-        grace_time = self._cm.config.participant["mobility_args"]["grace_time_mobility"]
+        grace_time = self.cm.config.participant["mobility_args"]["grace_time_mobility"]
         # if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
         # await asyncio.sleep(grace_time)
         await EventManager.get_instance().subscribe_addonevent(GPSEvent, self._change_network_conditions_based_on_distances)

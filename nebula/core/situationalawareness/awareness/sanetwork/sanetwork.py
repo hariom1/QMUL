@@ -17,7 +17,6 @@ class SANetwork():
     def __init__(
         self,
         sam: "SAModule",
-        communication_manager: "CommunicationsManager",
         addr, 
         topology, 
         strict_topology=True,
@@ -29,7 +28,6 @@ class SANetwork():
             title="Network SA module",
         )
         self._sam = sam
-        self._cm = communication_manager
         self._addr = addr
         self._topology = topology
         self._strict_topology = strict_topology
@@ -44,7 +42,7 @@ class SANetwork():
         
     @property
     def cm(self):
-        return self._cm    
+        return CommunicationsManager.get_instance()    
         
     @property    
     def np(self):

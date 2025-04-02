@@ -12,12 +12,15 @@ if TYPE_CHECKING:
 
 
 class MessagesManager:
-    def __init__(self, addr, config, cm: "CommunicationsManager"):
+    def __init__(self, addr, config):
         self.addr = addr
         self.config = config
-        self.cm = cm
         self._message_templates = {}
         self._define_message_templates()
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     def _define_message_templates(self):
         # Dictionary that maps message types to their required parameters and default values

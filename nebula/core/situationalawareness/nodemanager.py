@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.candidateselection.candidateselector import factory_CandidateSelector
 from nebula.core.situationalawareness.modelhandlers.modelhandler import factory_ModelHandler
-from nebula.core.situationalawareness.momentum import Momentum
 from nebula.core.situationalawareness.awareness.samodule import SAModule
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateNeighborEvent, NodeFoundEvent
+from nebula.core.network.communications import CommunicationsManager
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -56,7 +56,7 @@ class NodeManager:
     
     @property
     def cm(self):
-        return self._engine.cm
+        return CommunicationsManager.get_instance()
 
     @property
     def candidate_selector(self):
@@ -153,7 +153,7 @@ class NodeManager:
     async def confirmation_received(self, addr, confirmation=False):
         logging.info(f" Update | connection confirmation received from: {addr} | confirmation: {confirmation}")
         if confirmation:
-            await self.engine.cm.connect(addr, direct=True)
+            await self.cm.connect(addr, direct=True)
             await self.update_neighbors(addr)
         else:
             self._remove_pending_confirmation_from(addr)
@@ -210,12 +210,12 @@ class NodeManager:
                 if len(self.discarded_offers_addr) > 0:
                     self.discarded_offers_addr = set(
                         self.discarded_offers_addr
-                    ) - await self.engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
+                    ) - await self.cm.get_addrs_current_connections(only_direct=True, myself=False)
                     logging.info(
                         f"Interrupting connections | discarded offers | nodes discarded: {self.discarded_offers_addr}"
                     )
                     for addr in self.discarded_offers_addr:
-                        await self.engine.cm.disconnect(addr, mutual_disconnection=True)
+                        await self.cm.disconnect(addr, mutual_disconnection=True)
                         await asyncio.sleep(1)
                     self.discarded_offers_addr = []
         except asyncio.CancelledError:
@@ -238,7 +238,7 @@ class NodeManager:
         await self.clear_pending_confirmations()
 
         # find federation and send discover
-        connections_stablished = await self.engine.cm.stablish_connection_to_federation(msg_type, addrs_known)
+        connections_stablished = await self.cm.stablish_connection_to_federation(msg_type, addrs_known)
 
         # wait offer
         #TODO actualizar con la informacion de latencias
@@ -254,9 +254,9 @@ class NodeManager:
             logging.info("Candidates found to connect to...")
             # create message to send to candidates selected
             if not connected:
-                msg = self.engine.cm.create_message("connection", "late_connect")
+                msg = self.cm.create_message("connection", "late_connect")
             else:
-                msg = self.engine.cm.create_message("connection", "restructure")
+                msg = self.cm.create_message("connection", "restructure")
 
             best_candidates = self.candidate_selector.select_candidates()
             logging.info(f"Candidates | {[addr for addr, _, _ in best_candidates]}")
@@ -264,7 +264,7 @@ class NodeManager:
             try:
                 for addr, _, _ in best_candidates:
                     await self.add_pending_connection_confirmation(addr)
-                    await self.engine.cm.send_message(addr, msg)
+                    await self.cm.send_message(addr, msg)
                     await asyncio.sleep(1)
             except asyncio.CancelledError:
                 await self.update_neighbors(addr, remove=True)

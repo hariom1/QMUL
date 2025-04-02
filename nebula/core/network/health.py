@@ -14,11 +14,14 @@ class Health:
         print_msg_box(msg="Starting health module...", indent=2, title="Health module")
         self.addr = addr
         self.config = config
-        self.cm = cm
         self.period = self.config.participant["health_args"]["health_interval"]
         self.alive_interval = self.config.participant["health_args"]["send_alive_interval"]
         self.check_alive_interval = self.config.participant["health_args"]["check_alive_interval"]
         self.timeout = self.config.participant["health_args"]["alive_timeout"]
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     async def start(self):
         asyncio.create_task(self.run_send_alive())

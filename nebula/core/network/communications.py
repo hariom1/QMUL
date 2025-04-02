@@ -24,7 +24,26 @@ BLACKLIST_EXPIRATION_TIME = 60
 
 
 class CommunicationsManager:
+    _instance = None
+    _lock = Locker("communications_manager_lock", async_lock=False)
+
+    def __new__(cls, engine: "Engine"):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    @classmethod
+    def get_instance(cls):
+        """Onbtain CommunicationsManager instance"""
+        if cls._instance is None:
+            raise ValueError("CommunicationsManager has not been initialized yet.")
+        return cls._instance
+    
     def __init__(self, engine: "Engine"):
+        if hasattr(self, '_initialized') and self._initialized:
+            return  # Avoid reinicialization
+        
         logging.info("🌐  Initializing Communications Manager")
         self._engine = engine
         self.addr = engine.get_addr()
@@ -47,16 +66,16 @@ class CommunicationsManager:
         self.outgoing_connections = {}
         self.ready_connections = set()
 
-        self._mm = MessagesManager(addr=self.addr, config=self.config, cm=self)
+        self._mm = MessagesManager(addr=self.addr, config=self.config)
         self.received_messages_hashes = collections.deque(
             maxlen=self.config.participant["message_args"]["max_local_messages"]
         )
         self.receive_messages_lock = Locker(name="receive_messages_lock", async_lock=True)
 
-        self._discoverer = Discoverer(addr=self.addr, config=self.config, cm=self)
-        # self._health = Health(addr=self.addr, config=self.config, cm=self)
-        self._forwarder = Forwarder(config=self.config, cm=self)
-        self._propagator = Propagator(cm=self)
+        self._discoverer = Discoverer(addr=self.addr, config=self.config)
+        # self._health = Health(addr=self.addr, config=self.config)
+        self._forwarder = Forwarder(config=self.config)
+        self._propagator = Propagator()
 
         # List of connections to reconnect {addr: addr, tries: 0}
         self.connections_reconnect = []
@@ -71,7 +90,9 @@ class CommunicationsManager:
         self._blacklist = BlackList()
 
         # Connection service to communicate with external devices
-        self._external_connection_service = factory_connection_service("nebula", self, self.addr)
+        self._external_connection_service = factory_connection_service("nebula", self.addr)
+
+        self._initialized = True
 
     @property
     def engine(self):
@@ -119,6 +140,24 @@ class CommunicationsManager:
 
     async def add_ready_connection(self, addr):
         self.ready_connections.add(addr)
+
+    async def start_communications(self, initial_neighbors):
+        logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
+        logging.info(
+            f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"
+        )
+        await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"])
+        await self.start()
+        for i in initial_neighbors:
+            addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
+            await self.connect(addr, direct=True)
+            await asyncio.sleep(1)
+        while not self.verify_connections(initial_neighbors):
+            await asyncio.sleep(1)
+        current_connections = await self.get_addrs_current_connections()
+        logging.info(f"Connections verified: {current_connections}")
+        await self.deploy_additional_services()
+        
 
     """                                                     ##############################
                                                             #    PROCESSING MESSAGES     #
@@ -363,7 +402,6 @@ class CommunicationsManager:
                 logging.info(f"🔗  [incoming] Creating new connection with {addr} (id {connected_node_id})")
                 await writer.drain()
                 connection = Connection(
-                    self,
                     reader,
                     writer,
                     connected_node_id,
@@ -612,7 +650,6 @@ class CommunicationsManager:
                             f"🔗  [outgoing] Creating new connection with {host}:{port} (id {connected_node_id})"
                         )
                         connection = Connection(
-                            self,
                             reader,
                             writer,
                             connected_node_id,

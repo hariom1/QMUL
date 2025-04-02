@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class Reporter:
-    def __init__(self, config, trainer, cm: "CommunicationsManager"):
+    def __init__(self, config, trainer):
         """
         Initializes the reporter module for sending periodic updates to a dashboard controller.
 
@@ -50,7 +50,6 @@ class Reporter:
         logging.info("Starting reporter module")
         self.config = config
         self.trainer = trainer
-        self.cm = cm
         self.frequency = self.config.participant["reporter_args"]["report_frequency"]
         self.grace_time = self.config.participant["reporter_args"]["grace_time_reporter"]
         self.data_queue = asyncio.Queue()
@@ -67,6 +66,10 @@ class Reporter:
         self.acc_bytes_recv = 0
         self.acc_packets_sent = 0
         self.acc_packets_recv = 0
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     async def enqueue_data(self, name, value):
         """

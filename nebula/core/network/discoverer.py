@@ -9,14 +9,17 @@ if TYPE_CHECKING:
 
 
 class Discoverer:
-    def __init__(self, addr, config, cm: "CommunicationsManager"):
+    def __init__(self, addr, config):
         print_msg_box(msg="Starting discoverer module...", indent=2, title="Discoverer module")
         self.addr = addr
         self.config = config
-        self.cm = cm
         self.grace_time = self.config.participant["discoverer_args"]["grace_time_discovery"]
         self.period = self.config.participant["discoverer_args"]["discovery_frequency"]
         self.interval = self.config.participant["discoverer_args"]["discovery_interval"]
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     async def start(self):
         asyncio.create_task(self.run_discover())

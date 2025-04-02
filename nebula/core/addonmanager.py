@@ -17,12 +17,12 @@ class AddondManager():
     async def deploy_additional_services(self):
         print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
         if self._config.participant["mobility_args"]["mobility"]:
-            mobility = Mobility(self._config, self._engine.cm, verbose=False)
+            mobility = Mobility(self._config, verbose=False)
             self._addons.append(mobility)
 
             if self._config.participant["network_args"]["simulation"]:
                 refresh_conditions_interval = 5
-                network_simulation = factory_network_simulator("nebula", self._engine.cm, refresh_conditions_interval, "eth0", verbose=False)
+                network_simulation = factory_network_simulator("nebula", refresh_conditions_interval, "eth0", verbose=False)
                 self._addons.append(network_simulation) 
                 
             update_interval = 5

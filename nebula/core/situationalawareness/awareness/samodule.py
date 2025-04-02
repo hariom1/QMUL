@@ -10,6 +10,7 @@ from nebula.core.eventmanager import EventManager
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.nodemanager import NodeManager
+    from nebula.core.network.communications import CommunicationsManager
 
 RESTRUCTURE_COOLDOWN = 5
 
@@ -30,7 +31,7 @@ class SAModule:
         self._addr = addr
         self._topology = topology
         self._node_manager: NodeManager = nodemanager
-        self._situational_awareness_network = SANetwork(self, self.cm, self._addr, self._topology)
+        self._situational_awareness_network = SANetwork(self, self._addr, self._topology)
         self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
@@ -49,7 +50,7 @@ class SAModule:
 
     @property
     def cm(self):
-        return self.nm.engine.cm
+        return CommunicationsManager.get_instance()
     
 
     async def init(self):

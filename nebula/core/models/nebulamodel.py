@@ -200,14 +200,6 @@ class NebulaModel(pl.LightningModule, ABC):
         self._current_loss = -1
         self._optimizer = None
 
-    def set_communication_manager(self, communication_manager):
-        self.communication_manager = communication_manager
-
-    def get_communication_manager(self):
-        if self.communication_manager is None:
-            raise ValueError("Communication manager not set.")
-        return self.communication_manager
-
     @abstractmethod
     def forward(self, x):
         """Forward pass of the model."""

@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from nebula.config.config import Config
     from nebula.core.aggregation.aggregator import Aggregator
     from nebula.core.engine import Engine
-    from nebula.core.network.communications import CommunicationsManager
     from nebula.core.training.lightning import Lightning
+    from nebula.core.network.communications import CommunicationsManager
 
 
 class PropagationStrategy(ABC):
@@ -63,11 +63,17 @@ class StableModelPropagation(PropagationStrategy):
 
 
 class Propagator:
-    def __init__(self, cm: "CommunicationsManager"):
-        self.engine: Engine = cm.engine
-        self.config: Config = cm.get_config()
-        self.addr = cm.get_addr()
-        self.cm: CommunicationsManager = cm
+    def __init__(self):
+        pass
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
+
+    def start(self):
+        self.engine: Engine = CommunicationsManager.get_instance().engine
+        self.config: Config = CommunicationsManager.get_instance().get_config()
+        self.addr = CommunicationsManager.get_instance().get_addr()
         self.aggregator: Aggregator = self.engine.aggregator
         self.trainer: Lightning = self.engine._trainer
 
@@ -83,8 +89,6 @@ class Propagator:
             "initialization": InitialModelPropagation(self.aggregator, self.trainer, self.engine),
             "stable": StableModelPropagation(self.aggregator, self.trainer, self.engine),
         }
-
-    def start(self):
         print_msg_box(
             msg="Starting propagator functionality...\nModel propagation through the network",
             indent=2,

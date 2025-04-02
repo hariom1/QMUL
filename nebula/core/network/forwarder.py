@@ -11,16 +11,19 @@ if TYPE_CHECKING:
 
 
 class Forwarder:
-    def __init__(self, config, cm: "CommunicationsManager"):
+    def __init__(self, config):
         print_msg_box(msg="Starting forwarder module...", indent=2, title="Forwarder module")
         self.config = config
-        self.cm = cm
         self.pending_messages = asyncio.Queue()
         self.pending_messages_lock = Locker("pending_messages_lock", verbose=False, async_lock=True)
 
         self.interval = self.config.participant["forwarder_args"]["forwarder_interval"]
         self.number_forwarded_messages = self.config.participant["forwarder_args"]["number_forwarded_messages"]
         self.messages_interval = self.config.participant["forwarder_args"]["forward_messages_interval"]
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     async def start(self):
         asyncio.create_task(self.run_forwarder())

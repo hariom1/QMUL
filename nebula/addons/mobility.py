@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class Mobility:
-    def __init__(self, config, cm: "CommunicationsManager", verbose=False):
+    def __init__(self, config, verbose=False):
         """
         Initializes the mobility module with specified configuration and communication manager.
 
@@ -50,7 +50,6 @@ class Mobility:
         """
         logging.info("Starting mobility module...")
         self.config = config
-        self.cm = cm
         self.grace_time = self.config.participant["mobility_args"]["grace_time_mobility"]
         self.period = self.config.participant["mobility_args"]["change_geo_interval"]
         self.mobility = self.config.participant["mobility_args"]["mobility"]
@@ -69,6 +68,10 @@ class Mobility:
         self._nodes_distances = {}
         self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
         self._verbose = verbose
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     @property
     def round(self):

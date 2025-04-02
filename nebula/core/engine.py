@@ -142,11 +142,10 @@ class Engine:
 
         self.config.reload_config_file()
 
-        self._cm = CommunicationsManager(engine=self)
+        cm = CommunicationsManager(engine=self)
         # Set the communication manager in the model (send messages from there)
-        self.trainer.model.set_communication_manager(self._cm)
 
-        self._reporter = Reporter(config=self.config, trainer=self.trainer, cm=self.cm)
+        self._reporter = Reporter(config=self.config, trainer=self.trainer)
 
         self._sinchronized_status = True
         self.sinchronized_status_lock = Locker(name="sinchronized_status_lock")
@@ -173,7 +172,7 @@ class Engine:
 
     @property
     def cm(self):
-        return self._cm
+        return CommunicationsManager.get_instance()
 
     @property
     def reporter(self):
@@ -474,26 +473,12 @@ class Engine:
     async def start_communications(self):
         await self.register_events_callbacks()
         await self.aggregator.init()
-        logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
-        logging.info(
-            f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"
-        )
-        await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"])
-        await self.cm.start()
         initial_neighbors = self.config.participant["network_args"]["neighbors"].split()
-        for i in initial_neighbors:
-            addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
-            await self.cm.connect(addr, direct=True)
-            await asyncio.sleep(1)
-        while not self.cm.verify_connections(initial_neighbors):
-            await asyncio.sleep(1)
-        current_connections = await self.cm.get_addrs_current_connections()
-        logging.info(f"Connections verified: {current_connections}")
+        await self.cm.start_communications(initial_neighbors)
         if self.mobility:
             logging.info("Building NodeManager configurations...")
             await self.nm.set_configs()
         await self._reporter.start()
-        await self.cm.deploy_additional_services()
         await self._addon_manager.deploy_additional_services()
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
 

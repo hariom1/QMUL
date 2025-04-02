@@ -162,8 +162,7 @@ class NebulaBeacon:
             logging.error(f"Error sending beacon: {e}")
 
 class NebulaConnectionService(ExternalConnectionService):
-    def __init__(self, cm: "CommunicationsManager", addr):
-        self._cm = cm
+    def __init__(self, addr):
         self.nodes_found = set()
         self.addr = addr
         self.server : NebulaServerProtocol = None
@@ -173,7 +172,7 @@ class NebulaConnectionService(ExternalConnectionService):
         
     @property
     def cm(self):
-        return self._cm
+        return CommunicationsManager.get_instance()
 
     async def start(self):
         loop = asyncio.get_running_loop()

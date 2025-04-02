@@ -32,7 +32,6 @@ class Connection:
 
     def __init__(
         self,
-        cm: "CommunicationsManager",
         reader,
         writer,
         id,
@@ -44,7 +43,6 @@ class Connection:
         config=None,
         prio="MEDIUM",
     ):
-        self.cm = cm
         self.reader = reader
         self.writer = writer
         self.id = str(id)
@@ -92,6 +90,10 @@ class Connection:
 
     def __del__(self):
         self.stop()
+
+    @property
+    def cm(self):
+        return CommunicationsManager.get_instance()
 
     def get_addr(self):
         return self.addr

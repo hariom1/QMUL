@@ -34,7 +34,7 @@ class ExternalConnectionService(ABC):
 class ExternalConnectionServiceException(Exception):
     pass 
 
-def factory_connection_service(con_serv, cm, addr) -> ExternalConnectionService:
+def factory_connection_service(con_serv, addr) -> ExternalConnectionService:
     from nebula.core.network.externalconnection.nebuladiscoveryservice import NebulaConnectionService
     
     CONNECTION_SERVICES = {
@@ -44,6 +44,6 @@ def factory_connection_service(con_serv, cm, addr) -> ExternalConnectionService:
     con_serv = CONNECTION_SERVICES.get(con_serv, NebulaConnectionService)
     
     if con_serv:
-        return con_serv(cm, addr)
+        return con_serv(addr)
     else:
          raise ExternalConnectionServiceException(f"Connection Service {con_serv} not found")
