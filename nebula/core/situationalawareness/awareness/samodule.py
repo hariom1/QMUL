@@ -7,6 +7,7 @@ from nebula.core.situationalawareness.awareness.satraining.satraining import SAT
 from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import RoundEndEvent
 from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import RoundEndEvent, AggregationEvent
 
 from nebula.core.network.communications import CommunicationsManager
 
@@ -38,6 +39,9 @@ class SAModule:
         self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
+        self._arbitrator_notification = asyncio.Event()
+        self._suggestion_buffer = SuggestionBuffer(self._arbitrator_notification, verbose=True)
+        self._communciation_manager = CommunicationsManager.get_instance()
 
     @property
     def nm(self):
@@ -53,7 +57,11 @@ class SAModule:
 
     @property
     def cm(self):
-        return CommunicationsManager.get_instance()
+        return self._communciation_manager
+    
+    @property
+    def sb(self):
+        return self._suggestion_buffer
     
 
     async def init(self):

@@ -1,18 +1,15 @@
-from nebula.core.utils.locker import Locker
 from abc import abstractmethod
 from enum import Enum
 import asyncio
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
 
-# -----------------------------------------------
-# ENUMS for types of SACommands
-# -----------------------------------------------
 class SACommandType(Enum):
     CONNECTIVITY = "Connectivity"
     AGGREGATION = "Aggregation"
 
-# -----------------------------------------------
-# ENUM for available actions
-# -----------------------------------------------
+#TODO separar por tipos de commands
 class SACommandAction(Enum):
     DISCONNECT = "disconnect"
     RECONNECT = "reconnect"
@@ -26,6 +23,11 @@ class SACommandPRIO(Enum):
     MEDIUM = 5
     LOW = 1
 
+class SACommandState(Enum):
+    PENDING = "pending"
+    DISCARDED = "discarded"
+    EXECUTED = "executed"
+
     """                                             ###############################
                                                     #      SA COMMAND CLASS       #
                                                     ###############################
@@ -36,16 +38,19 @@ class SACommand:
     def __init__(
         self, 
         command_type: SACommandType, 
-        action: SACommandAction, 
+        action: SACommandAction,
+        owner: "SAModuleAgent",  
         target, 
         priority: SACommandPRIO = SACommandPRIO.MEDIUM,
         parallelizable = False
     ):
         self._command_type = command_type
         self._action = action
+        self._owner = owner
         self._target = target  # Could be a node, parameter, etc.
         self._priority = priority
         self._parallelizable = parallelizable
+        self._state = SACommandState.PENDING
 
     @abstractmethod
     async def execute(self):
@@ -54,6 +59,12 @@ class SACommand:
     @abstractmethod
     async def conflicts_with(self, other: "SACommand") -> bool:
         raise NotImplementedError
+    
+    def get_owner(self):
+        return self._owner.get_agent()
+    
+    def update_command_state(self, sacs : SACommandState):
+        self._state = sacs
     
     def is_parallelizable(self):
         return self._parallelizable

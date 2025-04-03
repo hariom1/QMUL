@@ -2,9 +2,9 @@ from abc import abstractmethod, ABC
 from nebula.core.situationalawareness.awareness.sacommand import SACommand
 
 class SAModuleAgent(ABC):
-#TODO hacer el diccionario de tipos de agentes para luego tenerlo en cuenta en el arbitraje
+
     @abstractmethod
-    async def get_agent(self):
+    async def get_agent(self) -> str:
         raise NotImplementedError
 
     @abstractmethod
