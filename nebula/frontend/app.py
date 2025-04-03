@@ -91,31 +91,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from nebula.frontend.database import (
-    # add_user,
-   # check_scenario_with_role,
-    delete_user_from_db,
-    get_all_scenarios_and_check_completed,
-    get_notes,
-    get_running_scenario,
-    # get_scenario_by_name,
-    # get_user_by_scenario_name,
-    get_user_info,
-    initialize_databases,
-    # list_nodes_by_scenario_name,
-    # list_users,
-    remove_nodes_by_scenario_name,
-    remove_note,
-    # remove_scenario_by_name,
-    save_notes,
-    scenario_set_all_status_to_finished,
-    scenario_set_status_to_finished,
-    scenario_update_record,
-    update_node_record,
-    update_user,
-    verify,
-    verify_hash_algorithm,
-)
 from nebula.utils import DockerUtils, FileUtils
 
 logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
@@ -240,9 +215,9 @@ user_data_store = {}
 
 
 # Detect CTRL+C from parent process
-def signal_handler(signal, frame):
+async def signal_handler(signal, frame):
     logging.info("You pressed Ctrl+C [frontend]!")
-    scenario_set_all_status_to_finished()
+    asyncio.get_event_loop().create_task(scenario_set_status_to_finished(all=True))
     sys.exit(0)
 
 
@@ -265,16 +240,17 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return await request.app.default_exception_handler(request, exc)
 
 
-async def get(url):
+async def controller_get(url):
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status == 200:
+                logging.info(f"[FER] GET request to {url} succeeded")
                 return await response.json()
             else:
                 raise HTTPException(status_code=response.status, detail="Error fetching data")
             
 
-async def post(url, data=None):
+async def controller_post(url, data=None):
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=data) as response:
             if response.status == 200:
@@ -285,23 +261,35 @@ async def post(url, data=None):
 
 async def get_available_gpus():
     url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
-    return await get(url)
+    return await controller_get(url)
 
 
 async def get_least_memory_gpu():
     url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
-    return await get(url)
+    return await controller_get(url)
 
 
 async def get_scenarios(user, role):
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/{user}/{role}"
-    return await get(url)
+    return await controller_get(url)
+
+
+async def scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/update"
+    data = {"scenario_name": scenario_name, "start_time": start_time, "end_time": end_time, "scenario": scenario, "status": status, "role": role, "username": username}
+    await controller_post(url, data)
+
+
+async def scenario_set_status_to_finished(scenario_name, all=False):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/set_status_to_finished"
+    data = {"scenario_name": scenario_name, "all": all}
+    await controller_post(url, data)
 
 
 async def remove_scenario_by_name(scenario_name):
-    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/remove/{scenario_name}"
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/remove"
     data = {"scenario_name": scenario_name}
-    await post(url, data)
+    await controller_post(url, data)
 
 
 async def check_scenario_with_role(session, scenario_name):
@@ -309,28 +297,66 @@ async def check_scenario_with_role(session, scenario_name):
                 f"http://{settings.controller_host}:{settings.controller_port}"
                 f"/scenarios/check?role={session['role']}&scenario_name={scenario_name}"
             )
-    check_data = await get(url)
+    check_data = await controller_get(url)
     return check_data.get("allowed", False)
             
             
 async def get_scenario_by_name(scenario_name):
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/{scenario_name}"
-    return await get(url)
-
-
-async def get_user_by_scenario_name(scenario_name):
-    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/user/{scenario_name}"
-    return await get(url)
+    return await controller_get(url)
 
 
 async def get_running_scenarios(get_all=False):
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/running?get_all={get_all}"
-    return await get(url)
+    return await controller_get(url)
 
 
 async def list_nodes_by_scenario_name(scenario_name):
     url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/{scenario_name}"
-    return await get(url)
+    return await controller_get(url)
+
+
+async def update_node_record(uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round_number, scenario_name, run_hash):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/update"
+    data = {
+        "uid": uid,
+        "idx": idx,
+        "ip": ip,
+        "port": port,
+        "role": role,
+        "neighbors": neighbors,
+        "latitude": latitude,
+        "longitude": longitude,
+        "timestamp": timestamp,
+        "federation": federation,
+        "round": round_number,
+        "scenario_name": scenario_name,
+        "run_hash": run_hash,
+    }
+    await controller_post(url, data)
+
+
+async def remove_nodes_by_scenario_name(scenario_name):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/remove"
+    data = {"scenario_name": scenario_name}
+    await controller_post(url, data)
+
+
+async def get_notes(scenario_name):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/{scenario_name}"
+    return await controller_get(url)
+
+
+async def save_notes(scenario_name, notes):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/save"
+    data = {"scenario_name": scenario_name, "notes": notes}
+    await controller_post(url, data)
+
+
+async def remove_note(scenario_name):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/remove"
+    data = {"scenario_name": scenario_name}
+    await controller_post(url, data)
 
 
 async def list_users(allinfo=True):
@@ -344,34 +370,39 @@ async def list_users(allinfo=True):
     - A list of users, as provided by the controller.
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/user/list?all_info={allinfo}"
-    data = await get(url)
+    data = await controller_get(url)
     user_list = data["users"]
 
     return user_list
 
 
+async def get_user_by_scenario_name(scenario_name):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/{scenario_name}"
+    return await controller_get(url)
+
+
 async def add_user(user, password, role):
     url = f"http://{settings.controller_host}:{settings.controller_port}/user/add"
     data = {"user": user, "password": password, "role": role}
-    await post(url, data)
+    await controller_post(url, data)
 
 
 async def update_user(user, password, role):
     url = f"http://{settings.controller_host}:{settings.controller_port}/user/update"
     data = {"user": user, "password": password, "role": role}
-    await post(url, data)
+    await controller_post(url, data)
 
 
 async def delete_user(user):
     url = f"http://{settings.controller_host}:{settings.controller_port}/user/delete"
     data = {"user": user}
-    await post(url, data)
+    await controller_post(url, data)
 
 
 async def verify_user(user, password):
     url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
     data = {"user": user, "password": password}
-    return await post(url, data)
+    return await controller_post(url, data)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -427,7 +458,7 @@ async def save_note_for_scenario(scenario_name: str, request: Request, session: 
         data = await request.json()
         notes = data["notes"]
         try:
-            save_notes(scenario_name, notes)
+            await save_notes(scenario_name, notes)
             return JSONResponse({"status": "success"})
         except Exception as e:
             logging.exception(e)
@@ -441,7 +472,7 @@ async def save_note_for_scenario(scenario_name: str, request: Request, session: 
 
 @app.get("/platform/dashboard/{scenario_name}/notes")
 async def get_notes_for_scenario(scenario_name: str):
-    notes_record = get_notes(scenario_name)
+    notes_record = await get_notes(scenario_name)
     if notes_record:
         notes_data = dict(zip(notes_record.keys(), notes_record, strict=False))
         return JSONResponse({"status": "success", "notes": notes_data["scenario_notes"]})
@@ -642,7 +673,7 @@ async def nebula_dashboard(request: Request, session: dict = Depends(get_session
 
     bool_completed = False
     if scenario_running:
-        bool_completed = scenario_running[6] == "completed"
+        bool_completed = scenario_running["status"] == "completed"
     if scenarios:
         if request.url.path == "/platform/dashboard":
             return templates.TemplateResponse(
@@ -987,7 +1018,7 @@ async def nebula_monitor_image(scenario_name: str):
         raise HTTPException(status_code=404, detail="Topology image not found")
 
 
-def stop_scenario(scenario_name, user):
+async def stop_scenario(scenario_name, user):
     from nebula.scenarios import ScenarioManagement
 
     ScenarioManagement.stop_participants(scenario_name)
@@ -996,18 +1027,18 @@ def stop_scenario(scenario_name, user):
         f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(user).lower()}-nebula-net-scenario"
     )
     ScenarioManagement.stop_blockchain()
-    scenario_set_status_to_finished(scenario_name)
+    await scenario_set_status_to_finished(scenario_name)
     # Generate statistics for the scenario
     path = FileUtils.check_path(settings.log_dir, scenario_name)
     ScenarioManagement.generate_statistics(path)
 
 
-def stop_all_scenarios():
-    from nebula.scenarios import ScenarioManagement
+# def stop_all_scenarios():
+#     from nebula.scenarios import ScenarioManagement
 
-    ScenarioManagement.stop_participants()
-    ScenarioManagement.stop_blockchain()
-    scenario_set_all_status_to_finished()
+#     ScenarioManagement.stop_participants()
+#     ScenarioManagement.stop_blockchain()
+#     scenario_set_all_status_to_finished()
 
 
 @app.get("/platform/dashboard/{scenario_name}/stop/{stop_all}")
@@ -1030,11 +1061,11 @@ async def nebula_stop_scenario(
             user_data.stop_all_scenarios_event.set()
             user_data.scenarios_list_length = 0
             user_data.scenarios_finished = 0
-            stop_scenario(scenario_name, user)
+            await stop_scenario(scenario_name, user)
         else:
             user_data.finish_scenario_event.set()
             user_data.scenarios_list_length -= 1
-            stop_scenario(scenario_name, user)
+            await stop_scenario(scenario_name, user)
         return RedirectResponse(url="/platform/dashboard")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1042,17 +1073,25 @@ async def nebula_stop_scenario(
 
 async def remove_scenario(scenario_name=None, user=None):
     from nebula.scenarios import ScenarioManagement
+    logging.info(f"[FER] remove_scenario {scenario_name} {user}")
 
     user_data = user_data_store[user]
+
+    logging.info("[FER] user_data")
 
     if settings.advanced_analytics:
         logging.info("Advanced analytics enabled")
     # Remove registered nodes and conditions
     user_data.nodes_registration.pop(scenario_name, None)
-    remove_nodes_by_scenario_name(scenario_name)
+    logging.info("[FER] user_data_nodes_pop")
+    await remove_nodes_by_scenario_name(scenario_name)
+    logging.info("[FER] remove_nodes_by_scenario_name")
     await remove_scenario_by_name(scenario_name)
-    remove_note(scenario_name)
+    logging.info("[FER] remove_scenario_by__name")
+    await remove_note(scenario_name)
+    logging.info("[FER] remove_note")
     ScenarioManagement.remove_files_by_scenario(scenario_name)
+    logging.info("[FER] remove files")
 
 
 @app.get("/platform/dashboard/{scenario_name}/relaunch")
@@ -1234,79 +1273,79 @@ async def nebula_dashboard_deployment(request: Request, session: dict = Depends(
     )
 
 
-def attack_node_assign(
-    nodes,
-    federation,
-    attack,
-    poisoned_node_percent,
-    poisoned_sample_percent,
-    poisoned_noise_percent,
-):
-    """Identify which nodes will be attacked"""
-    import math
-    import random
+# def attack_node_assign(
+#     nodes,
+#     federation,
+#     attack,
+#     poisoned_node_percent,
+#     poisoned_sample_percent,
+#     poisoned_noise_percent,
+# ):
+#     """Identify which nodes will be attacked"""
+#     import math
+#     import random
 
-    attack_matrix = []
-    n_nodes = len(nodes)
-    if n_nodes == 0:
-        return attack_matrix
+#     attack_matrix = []
+#     n_nodes = len(nodes)
+#     if n_nodes == 0:
+#         return attack_matrix
 
-    nodes_index = []
-    # Get the nodes index
-    if federation == "DFL":
-        nodes_index = list(nodes.keys())
-    else:
-        for node in nodes:
-            if nodes[node]["role"] != "server":
-                nodes_index.append(node)
+#     nodes_index = []
+#     # Get the nodes index
+#     if federation == "DFL":
+#         nodes_index = list(nodes.keys())
+#     else:
+#         for node in nodes:
+#             if nodes[node]["role"] != "server":
+#                 nodes_index.append(node)
 
-    n_nodes = len(nodes_index)
-    # Number of attacked nodes, round up
-    num_attacked = int(math.ceil(poisoned_node_percent / 100 * n_nodes))
-    if num_attacked > n_nodes:
-        num_attacked = n_nodes
+#     n_nodes = len(nodes_index)
+#     # Number of attacked nodes, round up
+#     num_attacked = int(math.ceil(poisoned_node_percent / 100 * n_nodes))
+#     if num_attacked > n_nodes:
+#         num_attacked = n_nodes
 
-    # Get the index of attacked nodes
-    attacked_nodes = random.sample(nodes_index, num_attacked)
+#     # Get the index of attacked nodes
+#     attacked_nodes = random.sample(nodes_index, num_attacked)
 
-    # Assign the role of each node
-    for node in nodes:
-        node_att = "No Attack"
-        attack_sample_persent = 0
-        poisoned_ratio = 0
-        if (node in attacked_nodes) or (nodes[node]["malicious"]):
-            node_att = attack
-            attack_sample_persent = poisoned_sample_percent / 100
-            poisoned_ratio = poisoned_noise_percent / 100
-        nodes[node]["attacks"] = node_att
-        nodes[node]["poisoned_sample_percent"] = attack_sample_persent
-        nodes[node]["poisoned_ratio"] = poisoned_ratio
-        attack_matrix.append([node, node_att, attack_sample_persent, poisoned_ratio])
-    return nodes, attack_matrix
+#     # Assign the role of each node
+#     for node in nodes:
+#         node_att = "No Attack"
+#         attack_sample_persent = 0
+#         poisoned_ratio = 0
+#         if (node in attacked_nodes) or (nodes[node]["malicious"]):
+#             node_att = attack
+#             attack_sample_persent = poisoned_sample_percent / 100
+#             poisoned_ratio = poisoned_noise_percent / 100
+#         nodes[node]["attacks"] = node_att
+#         nodes[node]["poisoned_sample_percent"] = attack_sample_persent
+#         nodes[node]["poisoned_ratio"] = poisoned_ratio
+#         attack_matrix.append([node, node_att, attack_sample_persent, poisoned_ratio])
+#     return nodes, attack_matrix
 
 
 import math
 
 
-def mobility_assign(nodes, mobile_participants_percent):
-    """Assign mobility to nodes"""
-    import random
+# def mobility_assign(nodes, mobile_participants_percent):
+#     """Assign mobility to nodes"""
+#     import random
 
-    # Number of mobile nodes, round down
-    num_mobile = math.floor(mobile_participants_percent / 100 * len(nodes))
-    if num_mobile > len(nodes):
-        num_mobile = len(nodes)
+#     # Number of mobile nodes, round down
+#     num_mobile = math.floor(mobile_participants_percent / 100 * len(nodes))
+#     if num_mobile > len(nodes):
+#         num_mobile = len(nodes)
 
-    # Get the index of mobile nodes
-    mobile_nodes = random.sample(list(nodes.keys()), num_mobile)
+#     # Get the index of mobile nodes
+#     mobile_nodes = random.sample(list(nodes.keys()), num_mobile)
 
-    # Assign the role of each node
-    for node in nodes:
-        node_mob = False
-        if node in mobile_nodes:
-            node_mob = True
-        nodes[node]["mobility"] = node_mob
-    return nodes
+#     # Assign the role of each node
+#     for node in nodes:
+#         node_mob = False
+#         if node in mobile_nodes:
+#             node_mob = True
+#         nodes[node]["mobility"] = node_mob
+#     return nodes
 
 
 # Recieve a stopped node
@@ -1326,7 +1365,7 @@ async def node_stopped(scenario_name: str, request: Request):
                 finished = False
 
         if finished:
-            stop_scenario(scenario_name, user)
+            await stop_scenario(scenario_name, user)
             user_data.nodes_finished.clear()
             user_data.finish_scenario_event.set()
             return JSONResponse(
@@ -1398,11 +1437,11 @@ async def run_scenario(scenario_data, role, user):
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
-    scenario_update_record(
-        name=scenarioManagement.scenario_name,
+    await scenario_update_record(
+        scenario_name=scenarioManagement.scenario_name,
         start_time=scenarioManagement.start_date_scenario,
         end_time="",
-        scenario=scenarioManagement.scenario,
+        scenario=scenario_data,
         status="running",
         role=role,
         username=user
@@ -1432,28 +1471,27 @@ async def run_scenario(scenario_data, role, user):
 
 # Deploy the list of scenarios
 async def run_scenarios(role, user):
-    from nebula.scenarios import Scenario
-
     try:
         user_data = user_data_store[user]
 
-        scenario_pos = 0
-        created_time = datetime.datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
-        for scenario_data in user_data.scenarios_list:
-            scenario_data["gpu_id"] = []
-            scenario = Scenario.from_dict(scenario_data)
+        # scenario_pos = 0
+        # created_time = datetime.datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+  
+        # for scenario_data in user_data.scenarios_list:
+        #     scenario_data["gpu_id"] = []
+        #     federation = scenario_data["federation"]
 
-            scenario_update_record(
-                name=f"nebula_{scenario.federation}_{created_time}_{scenario_pos}",
-                start_time="",
-                end_time="",
-                scenario=scenario,
-                status="waiting",
-                role=role,
-                username=user
-            )
+        #     await scenario_update_record(
+        #         scenario_name=f"nebula_{federation}_{created_time}_{scenario_pos}",
+        #         start_time="",
+        #         end_time="",
+        #         scenario=scenario_data,
+        #         status="waiting",
+        #         role=role,
+        #         username=user
+        #     )
 
-            scenario_pos+=1
+        #     scenario_pos+=1
 
         for scenario_data in user_data.scenarios_list:
             user_data.finish_scenario_event.clear()

@@ -64,17 +64,17 @@
                 <p style="color: #772953; font-weight: bold; padding-top: 6px;">Scenarios queue {{ scenarios_finished
                     }}/{{ scenarios_list_length }}</p>
                 {% if scenarios_finished != scenarios_list_length %}
-                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario_running[0], stop_all=True) }}"
+                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario_running.name, stop_all=True) }}"
                     class="label btn btn-danger" style="float: left; margin-left: 10px; margin-bottom: 10px;">Stop
                     scenario queue</a>
                 {% endif %}
             </div>
             {% endif %}
             <hr>
-            <h5>Scenario name: <b id="scenario_name">{{ scenario_running[0] }}</b></h5>
-            <h5>Scenario title: <b id="scenario_title">{{ scenario_running[3] }}</b></h5>
-            <h5>Scenario description: <b id="scenario_description">{{ scenario_running[4] }}</b></h5>
-            <h5>Scenario start time: <b id="scenario_start_time">{{ scenario_running[1] }}</b></h5>
+            <h5>Scenario name: <b id="scenario_name">{{ scenario_running.name }}</b></h5>
+            <h5>Scenario title: <b id="scenario_title">{{ scenario_running.title }}</b></h5>
+            <h5>Scenario description: <b id="scenario_description">{{ scenario_running.description }}</b></h5>
+            <h5>Scenario start time: <b id="scenario_start_time">{{ scenario_running.start_time }}</b></h5>
             <div class="d-flex flex-row justify-content-start p-3">
                 <a id="new-scenario-btn" href="{{ url_for('nebula_dashboard_deployment') }}"
                     class="btn btn-dark me-2">Deploy new scenario</a>
@@ -117,59 +117,59 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    {% for name, username, title, start_time, model, dataset, rounds, status in scenarios %}
+                    {% for scenario in scenarios %}
                     <tr id="scenario-vars">
                         {% if user_role == "admin" %}
-                        <td id="username">{{ username|lower }}</td>
+                        <td id="username">{{ scenario.username|lower }}</td>
                         {% endif %}
-                        <td id="title">{{ title }}</td>
-                        <td id="start_time">{{ start_time }}</td>
-                        <td id="model">{{ model }}</td>
-                        <td id="dataset">{{ dataset }}</td>
-                        <td id="rounds">{{ rounds }}</td>
-                        {% if status == "running" %}
+                        <td id="title">{{ scenario.title }}</td>
+                        <td id="start_time">{{ scenario.start_time }}</td>
+                        <td id="model">{{ scenario.model }}</td>
+                        <td id="dataset">{{ scenario.dataset }}</td>
+                        <td id="rounds">{{ scenario.rounds }}</td>
+                        {% if scenario.status == "running" %}
                         <td id="status"><span class="badge text-bg-warning">Running</span></td>
-                        {% elif status == "waiting" %}
+                        {% elif scenario.status == "waiting" %}
                         <td id="status"><span class="badge text-bg-secondary">Waiting</span></td>
                         {% else %}
                         <td id="status"><span class="badge text-bg-danger">Finished</span></td>
                         {% endif %}
                         <td class="td-icons">
-                            <a href="{{ url_for('nebula_dashboard_monitor', scenario_name=name) }}"
+                            <a href="{{ url_for('nebula_dashboard_monitor', scenario_name=scenario.name) }}"
                                 class="label btn btn-dark">Monitor</a>
-                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=name) }}"
+                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario.name) }}"
                                 class="label btn btn-dark">Real-time metrics</a>
-                            <a id="note-btn-{{ name }}" title="Save Note" data-scenario-name="{{ name }}" class="label btn btn-dark"><i
+                            <a id="note-btn-{{ name }}" title="Save Note" data-scenario-name="{{ scenario.name }}" class="label btn btn-dark"><i
                                     class="fa fa-sticky-note" style="color: white;"></i></a>
-                            <a id="config-btn-{{ name }}" title="Scenario Config" data-scenario-name="{{ name }}" class="label btn btn-dark"><i
+                            <a id="config-btn-{{ name }}" title="Scenario Config" data-scenario-name="{{ scenario.name }}" class="label btn btn-dark"><i
                                 class="fa fa-sliders" style="color: white;"></i></a>
-                            {% if status == "running" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
+                            {% if scenario.status == "running" %}
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=False) }}"
                                 class="label btn btn-danger">Stop scenario</a>
-                            {% elif status == "completed" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
+                            {% elif scenario.status == "completed" %}
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=False) }}"
                                 class="label btn btn-danger">Stop scenario</a>
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=True) }}"
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=True) }}"
                                 class="label btn btn-danger">Stop scenario queue</a>
                             {% else %}
-                            <a id="relaunch-btn" title="Relaunch Scenario" data-scenario-name="{{ name }}" data-scenario-title="{{ title }}" class="label btn btn-dark"><i
+                            <a id="relaunch-btn" title="Relaunch Scenario" data-scenario-name="{{ scenario.name }}" data-scenario-title="{{ title }}" class="label btn btn-dark"><i
                                 class="fa fa-rotate-right" style="color: white;"></i></a>
-                            <a id="remove-btn" title="Delete Scenario" data-scenario-name="{{ name }}" class="label btn btn-danger"><i
+                            <a id="remove-btn" title="Delete Scenario" data-scenario-name="{{ scenario.name }}" class="label btn btn-danger"><i
                                     class="fa fa-trash"></i></a>
                             {% endif %}
                         </td>
                     </tr>
-                    <tr id="notes-row-{{ name }}" class="notes-row" style="display: none;">
+                    <tr id="notes-row-{{ scenario.name }}" class="notes-row" style="display: none;">
                         <td colspan="4">
-                            <textarea id="notes-text-{{ name }}" class="form-control" rows="3"
+                            <textarea id="notes-text-{{ scenario.name }}" class="form-control" rows="3"
                                 style="font-size: small; width: 100%;"></textarea>
-                            <button id="save-note-{{ name }}" data-scenario-name="{{ name }}"
+                            <button id="save-note-{{ scenario.name }}" data-scenario-name="{{ scenario.name }}"
                                 class="btn btn-dark mt-2 save-note-btn" style="float: right;">Save</button>
                         </td>
                     </tr>
-                    <tr id="config-row-{{ name }}" class="config-row" style="display: none;">
+                    <tr id="config-row-{{ scenario.name }}" class="config-row" style="display: none;">
                         <td colspan="4">
-                            <textarea id="config-text-{{ name }}" class="form-control" rows="20"
+                            <textarea id="config-text-{{ scenario.name }}" class="form-control" rows="20"
                                 style="font-size: small; width: 100%;"></textarea>
                         </td>
                     </tr>

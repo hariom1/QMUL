@@ -22,7 +22,7 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.config.config import Config
 from nebula.config.mender import Mender
-from nebula.scenarios import ScenarioManagement
+from nebula.scenarios import Scenario, ScenarioManagement
 from nebula.tests import main as deploy_tests
 from nebula.utils import DockerUtils, SocketUtils
 
@@ -143,6 +143,7 @@ async def get_available_gpu():
         except Exception:  # noqa: S110
             pass
 
+
 @app.post("/scenarios/remove")
 async def remove_scenario(
     scenario_name: str = Body(..., embed=True)
@@ -194,6 +195,53 @@ async def get_scenarios(
     return {"scenarios": scenarios, "scenario_running": scenario_running}
 
 
+@app.post("/scenarios/update")
+async def update_scenario(
+    scenario_name: str = Body(..., embed=True),
+    start_time: str = Body(..., embed=True),
+    end_time: str = Body(..., embed=True),
+    scenario: dict = Body(..., embed=True),
+    status: str = Body(..., embed=True),
+    role: str = Body(..., embed=True),
+    username: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to update a scenario.
+    """
+    from nebula.frontend.database import scenario_update_record
+
+    try:
+        scenario = Scenario.from_dict(scenario)
+        scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username)
+    except Exception as e:
+        logging.error(f"Error updating scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} updated successfully"}
+
+
+@app.post("/scenarios/set_status_to_finished")
+async def set_scenario_status_to_finished(
+    scenario_name: str = Body(..., embed=True),
+    all: bool = Body(False, embed=True)
+):
+    """
+    Controller endpoint to set the status of a scenario to finished.
+    """
+    from nebula.frontend.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
+
+    try:
+        if all:
+            scenario_set_all_status_to_finished()
+        else:
+            scenario_set_status_to_finished(scenario_name)
+    except Exception as e:
+        logging.error(f"Error setting scenario {scenario_name} to finished: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} status set to finished successfully"}
+
+
 @app.get("/scenarios/running")
 async def get_running_scenario(get_all: bool = False):
     """
@@ -206,6 +254,94 @@ async def get_running_scenario(get_all: bool = False):
     except Exception as e:
         logging.error(f"Error obtaining running scenario: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/nodes/{scenario_name}")
+async def list_nodes_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    """
+    Controller endpoint to retrieve nodes by scenario name.
+    """
+    from nebula.frontend.database import list_nodes_by_scenario_name
+
+    try:
+        nodes = list_nodes_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"nodes": nodes}
+
+
+@app.post("/nodes/update/")
+async def update_nodes(
+    node_uid: str = Body(..., embed=True),
+    node_idx: str = Body(..., embed=True),
+    node_ip: str = Body(..., embed=True),
+    node_port: str = Body(..., embed=True),
+    node_role: int = Body(..., embed=True),
+    node_neighbors: str = Body(..., embed=True),
+    node_latitude: str = Body(..., embed=True),
+    node_longitude: str = Body(..., embed=True),
+    node_timestamp: str = Body(..., embed=True),
+    node_federation: str = Body(..., embed=True),
+    node_round_number: str = Body(..., embed=True),
+    node_scenario_name: str = Body(..., embed=True),
+    node_run_hash: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to update nodes.
+    """
+    from nebula.frontend.database import update_node_record
+
+    try:
+        update_node_record(
+            node_uid,
+            node_idx,
+            node_ip,
+            node_port,
+            node_role,
+            node_neighbors,
+            node_latitude,
+            node_longitude,
+            node_timestamp,
+            node_federation,
+            node_round_number,
+            node_scenario_name,
+            node_run_hash,
+        )
+    except Exception as e:
+        logging.error(f"Error updating nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": "Nodes updated successfully"}
+
+
+@app.post("/nodes/remove")
+async def remove_nodes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to remove nodes by scenario name.
+    """
+    from nebula.frontend.database import remove_nodes_by_scenario_name
+
+    try:
+        remove_nodes_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
 
 
 @app.get("/scenarios/check")
@@ -235,6 +371,7 @@ async def get_scenario_by_name(
         )
     ]
 ):
+    logging.info("[FER] controller")
     from nebula.frontend.database import get_scenario_by_name
 
     try:
@@ -246,8 +383,8 @@ async def get_scenario_by_name(
     return {"scenario": scenario}
 
 
-@app.get("/scenarios/user/{scenario_name}")
-async def get_user_by_scenario_name(
+@app.get("/notes")
+async def get_notes_by_scenario_name(
     scenario_name: Annotated[
         str,
         Path(
@@ -258,15 +395,46 @@ async def get_user_by_scenario_name(
         )
     ]
 ):
-    from nebula.frontend.database import get_user_by_scenario_name
+    from nebula.frontend.database import get_notes
 
     try:
-        user = get_user_by_scenario_name(scenario_name)
+        notes = get_notes(scenario_name)
     except Exception as e:
-        logging.error(f"Error obtaining user {user}: {e}")
+        logging.error(f"Error obtaining notes {notes}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     
-    return {"user": user}
+    return {"notes": notes}
+
+
+@app.post("/notes/update")
+async def update_notes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True),
+    notes: str = Body(..., embed=True)
+):
+    from nebula.frontend.database import save_notes
+
+    try:
+        save_notes(scenario_name, notes)
+    except Exception as e:
+        logging.error(f"Error updating notes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"message": f"Notes for scenario {scenario_name} updated successfully"}
+
+
+@app.post("/notes/remove")
+async def remove_notes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True)
+):
+    from nebula.frontend.database import remove_note
+
+    try:
+        remove_note(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing notes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"message": f"Notes for scenario {scenario_name} removed successfully"}
 
 
 @app.get("/user/list")
@@ -289,6 +457,29 @@ async def list_users_controller(all_info: bool = False):
             detail=f"Error retrieving users: {e}"
         )
     
+
+@app.get("/user/{scenario_name}")
+async def get_user_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_user_by_scenario_name
+
+    try:
+        user = get_user_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining user {user}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return user
+
 
 @app.post("/user/add")
 async def add_user_controller(
