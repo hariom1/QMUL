@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from nebula.addons.functions import print_msg_box
+from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
 from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
 from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
 from nebula.core.utils.locker import Locker

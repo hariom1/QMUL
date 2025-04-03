@@ -95,6 +95,10 @@ class AggregationEvent(NodeEvent):
         
     def __str__(self):
         return "Aggregation Ready"
+    
+    def update_updates(self, new_updates: dict):
+        """Allows an external module to update the updates dictionary."""
+        self._updates = new_updates
         
     async def get_event_data(self) -> tuple[dict, set, set]:
         """Retrieves the aggregation event data.

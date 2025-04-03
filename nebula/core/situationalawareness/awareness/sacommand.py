@@ -1,5 +1,5 @@
 from nebula.core.utils.locker import Locker
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from enum import Enum
 import asyncio
 
@@ -17,6 +17,7 @@ class SACommandAction(Enum):
     DISCONNECT = "disconnect"
     RECONNECT = "reconnect"
     SEARCH_CONNECTIONS = "search_connections"
+    MAINTAIN_CONNECTIONS = "maintain_connections"
     ADJUST_WEIGHT = "adjust_weight"
     DISCARD_UPDATE = "discard_update"
 
@@ -59,7 +60,7 @@ class SACommand:
 
     def __repr__(self):
         return (f"{self.__class__.__name__}(Type={self._command_type.value}, "
-                f"Action={self._action.value}, Target={self._target}, Priority={self._priority})")
+                f"Action={self._action.value}, Target={self._target}, Priority={self._priority.value})")
     
     """                                             ###############################
                                                     #     SA COMMAND SUBCLASS     #
@@ -92,7 +93,8 @@ class ConnectivityCommand(SACommand):
         """Determines if two commands conflict with each other."""
         if self._target == other._target:
             conflict_pairs = [
-                {SACommandAction.DISCONNECT, SACommandAction.RECONNECT}
+                {SACommandAction.DISCONNECT, SACommandAction.RECONNECT},
+                {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS}
             ]
             return {self._action, other._action} in conflict_pairs
         return False 
@@ -113,12 +115,18 @@ class AggregationCommand(SACommand):
     
     def conflicts_with(self, other: "AggregationCommand") -> bool:
         """Determines if two commands conflict with each other."""
-        if self._target == other._target:
-            conflict_pairs = [
-                {SACommandAction.DISCONNECT, SACommandAction.RECONNECT}
-            ]
-            return {self._action, other._action} in conflict_pairs
-        return False
+        topologic_conflict = False
+        weight_conflict = False
+
+        if set(self._target.keys()) != set(other._target.keys()):
+            topologic_conflict = True
+
+        weight_conflict = any(
+            abs(self._target[node][1] - other._target[node][1]) > 0
+            for node in self._target.keys() if node in other._target.keys()
+        )
+
+        return weight_conflict and topologic_conflict
 
     """                                             ###############################
                                                     #     SA COMMAND FACTORY      #
