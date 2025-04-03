@@ -32,7 +32,7 @@ class SACommandState(Enum):
                                                     #      SA COMMAND CLASS       #
                                                     ###############################
     """
-
+#TODO añadir estados ene xecute
 class SACommand:
     """Base class for Situational Awareness module commands."""
     def __init__(
