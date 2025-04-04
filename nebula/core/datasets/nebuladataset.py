@@ -249,10 +249,10 @@ class NebulaDataset:
         iid="IID",
         partition="dirichlet",
         partition_parameter=0.5,
-        nsplits_percentages = [0.5, 0.25, 0.25],
-        nsplits_iid = ["Non-IID", "IID", "Non-IID"],
-        npartitions = ["dirichlet", "balancediid", "dirichlet"],
-        npartitions_parameter =[0.1, 2, 0.5],
+        nsplits_percentages = [1.0],
+        nsplits_iid = ["Non-IID"],
+        npartitions = ["dirichlet"],
+        npartitions_parameter =[0.1],
         seed=42,
         config_dir=None,
     ):
@@ -315,7 +315,7 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        #self.iid = "a" #TODO REMOVE
+        #self.iid = "a" #TODO REMOVE modificar para q sea string y no boolean el input del front
         logging.info(f"Scenario with data distribution: {self.iid}")
         if self.iid == "IID":
             self.train_indices_map = self.generate_iid_map(self.train_set)

@@ -6,6 +6,9 @@ from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent
+from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.network.communications import CommunicationsManager
 import math
 
 # "Quality-Driven Selection"    (QDS)
@@ -34,6 +37,7 @@ class QDSTrainingPolicy(TrainingPolicy):
             nodes = config["nodes"]
             self._nodes : dict[str, tuple[deque, int]] = {node_id: (deque(maxlen=self.MAX_HISTORIC_SIZE), 0) for node_id in nodes}
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.process_aggregation_event)
+        await self.register_sa_agent()
 
     async def update_neighbors(self, node, remove=False):
         async with self._nodes_lock:
@@ -120,4 +124,27 @@ class QDSTrainingPolicy(TrainingPolicy):
         return result
     
     async def get_evaluation_results(self):
-        return self._evaluation_results.copy()
+        for node_discarded in self._evaluation_results:
+            args = (node_discarded, False, True)
+            sac = ConnectivityCommand(
+                SACommandAction.DISCONNECT, 
+                node_discarded,
+                SACommandPRIO.MEDIUM,
+                True,
+                CommunicationsManager.get_instance().disconnect,
+                *args
+            )
+            await self.suggest_action(sac)
+        await self.notify_all_suggestions_done(AggregationEvent)
+
+    async def get_agent(self) -> str:
+        return "QDS_training_policy"
+
+    async def register_sa_agent(self):
+        await SuggestionBuffer.get_instance().register_event_agents(AggregationEvent, self)
+    
+    async def suggest_action(self, sac : SACommand):
+        await SuggestionBuffer.get_instance().register_suggestion(AggregationEvent, self, sac)
+    
+    async def notify_all_suggestions_done(self, event_type):
+        await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)

@@ -32,7 +32,7 @@ class SACommandState(Enum):
                                                     #      SA COMMAND CLASS       #
                                                     ###############################
     """
-#TODO añadir estados ene xecute
+
 class SACommand:
     """Base class for Situational Awareness module commands."""
     def __init__(
@@ -94,6 +94,7 @@ class ConnectivityCommand(SACommand):
 
     async def execute(self):
         """Executes the assigned action function with the given parameters."""
+        self.update_command_state(SACommandState.EXECUTED)
         if self._action_function:
             if asyncio.iscoroutinefunction(self._action_function):
                 await self._action_function(*self._args)  
@@ -122,6 +123,7 @@ class AggregationCommand(SACommand):
         super().__init__(SACommandType.CONNECTIVITY, action, target, priority, parallelizable)
 
     async def execute(self):
+        self.update_command_state(SACommandState.EXECUTED)
         return self._target
     
     def conflicts_with(self, other: "AggregationCommand") -> bool:

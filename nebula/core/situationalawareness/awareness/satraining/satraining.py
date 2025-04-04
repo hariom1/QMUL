@@ -47,7 +47,5 @@ class SATraining():
 
     async def module_actions(self):
         logging.info("SA Trainng evaluating current scenario")
-        nodes = await self.tp.get_evaluation_results()
-        if nodes:
-            for n in nodes:
-                asyncio.create_task(self.sam.cm.disconnect(n[0], forced=True))
+        asyncio.create_task(self.tp.get_evaluation_results())
+

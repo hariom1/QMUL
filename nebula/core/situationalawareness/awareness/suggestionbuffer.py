@@ -38,6 +38,7 @@ class SuggestionBuffer():
     async def register_event_agents(self, event_type, agent: SAModuleAgent):
         """Registers expected agents for a given event."""
         async with self._expected_agents_lock:
+            if self._verbose: logging.info(f"Registering SA Agent: {agent.get_agent()} for event: {event_type}")
             self._expected_agents[event_type].add(agent)
             if event_type not in self._event_notifications:
                 self._event_notifications[agent] = asyncio.Event()
@@ -45,6 +46,7 @@ class SuggestionBuffer():
     async def register_suggestion(self, event_type, agent: SAModuleAgent, suggestion: SACommand):
         """Registers a suggestion from an agent for a specific event."""
         async with self._suggestion_buffer_lock:
+            if self._verbose: logging.info(f"Registering Suggestion from SA Agent: {agent.get_agent()} for event: {event_type}")
             self._buffer[event_type].append((agent, suggestion))
 
     async def set_event_waited(self, event_type):
@@ -59,10 +61,10 @@ class SuggestionBuffer():
         async with self._expected_agents_lock:
             try:
                 self._event_notifications[saa].set()
-                if self._verbose: logging.info(f"SA Agent: {saa} notifies all suggestions registered for event: {event_type}")
+                if self._verbose: logging.info(f"SA Agent: {saa.get_agent()} notifies all suggestions registered for event: {event_type}")
                 await self._notify_arbitrator(event_type)
             except:
-                if self._verbose: logging.error(f"SAModuleAgent: {saa} not found on notifications awaited")
+                if self._verbose: logging.error(f"SAModuleAgent: {saa.get_agent()} not found on notifications awaited")
 
     async def _notify_arbitrator(self, event_type):
         """Checking if is should notify arbitrator that all suggestions for event_type have been received"""
@@ -88,6 +90,7 @@ class SuggestionBuffer():
         """Retrieves all suggestions registered for a given event."""
         async with self._suggestion_buffer_lock:
             async with  self._expected_agents_lock:
+                if self._verbose: logging.info(f"Retrieving all sugestions for event: {event_type}")
                 return self._buffer.get(event_type, [])
 
     async def clear_suggestions(self, event_type):

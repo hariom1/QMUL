@@ -16,5 +16,5 @@ class SAModuleAgent(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def notify_all_suggestions_done(self, sac : SACommand):
+    async def notify_all_suggestions_done(self, event_type):
         raise NotImplementedError
