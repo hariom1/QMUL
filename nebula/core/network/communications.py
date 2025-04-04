@@ -93,7 +93,7 @@ class CommunicationsManager:
         self._external_connection_service = factory_connection_service("nebula", self.addr)
 
         self._initialized = True
-        logging.info("Communication Manager initialized completed")
+        logging.info("Communication Manager initialization completed")
 
     @property
     def engine(self):

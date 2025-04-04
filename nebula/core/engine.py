@@ -143,6 +143,7 @@ class Engine:
         self.config.reload_config_file()
 
         self._cm = CommunicationsManager(engine=self)
+        # = CommunicationsManager.get_instance()
         # Set the communication manager in the model (send messages from there)
 
         self._reporter = Reporter(config=self.config, trainer=self.trainer)
@@ -172,7 +173,7 @@ class Engine:
 
     @property
     def cm(self):
-        self._cm
+        return self._cm
 
     @property
     def reporter(self):

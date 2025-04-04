@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
 
-class TrainingPolicy(ABC, SAModuleAgent):
+class TrainingPolicy(SAModuleAgent):
     
     @abstractmethod
     async def init(self, config):
