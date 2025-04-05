@@ -4,7 +4,7 @@ import math
 import random
 import time
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import GPSEvent
+from nebula.core.nebulaevents import GPSEvent, ChangeLocationEvent
 from nebula.core.utils.locker import Locker
 from nebula.addons.functions import print_msg_box
 
@@ -240,8 +240,10 @@ class Mobility:
             longitude = self.config.participant["mobility_args"]["longitude"]
 
         self.config.participant["mobility_args"]["latitude"] = latitude
-        self.config.participant["mobility_args"]["longitude"] = longitude
+        self.config.participant["mobility_args"]["longitude"] = latitude
         if self._verbose: logging.info(f"📍  New geo location: {latitude}, {longitude}")
+        cle = ChangeLocationEvent(latitude, latitude)
+        asyncio.create_task(EventManager.get_instance().publish_addonevent(cle))
 
     async def change_geo_location(self):
         """

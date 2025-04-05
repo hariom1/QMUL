@@ -4,7 +4,7 @@ import socket
 import struct
 from nebula.core.network.externalconnection.externalconnectionservice import ExternalConnectionService
 from nebula.core.utils.locker import Locker
-from nebula.core.nebulaevents import BeaconRecievedEvent
+from nebula.core.nebulaevents import BeaconRecievedEvent, ChangeLocationEvent
 from nebula.core.eventmanager import EventManager
 
 
@@ -123,13 +123,21 @@ class NebulaBeacon:
         self.addr = addr
         self.interval = interval  # Intervalo de envío en segundos
         self.running = False
+        self._latitude = None
+        self._longitude = None
 
     async def start(self):
         logging.info("[NebulaBeacon]: Starting sending pressence beacon")
         self.running = True
+        await EventManager.get_instance().subscribe_addonevent(ChangeLocationEvent, self._proces_change_location_event)
         while self.running:
             await asyncio.sleep(self.interval)
             await self.send_beacon()
+            
+    async def _proces_change_location_event(self, cle: ChangeLocationEvent):
+        lat, long = await cle.get_event_data()
+        logging.info(f"Location changed to: ({lat},{long})")
+        self._latitude, self._longitude = lat, long        
             
     async def stop(self):
         logging.info("[NebulaBeacon]: Stop existance beacon")
@@ -140,7 +148,7 @@ class NebulaBeacon:
         self.interval = frequency    
 
     async def send_beacon(self):
-        latitude, longitude = await self.nebula_service.cm.get_geoloc()
+        latitude, longitude = self._latitude, self._longitude
         try:
             message = ("NOTIFY * HTTP/1.1\r\n"
                        "HOST: 239.255.255.250:1900\r\n"

@@ -167,6 +167,7 @@ class Engine:
                 topology,
                 model_handler,
                 engine=self,
+                verbose=True
             )
 
         self._addon_manager = AddondManager(self, self.config)
@@ -309,11 +310,6 @@ class Engine:
 
     async def _connection_disconnect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received disconnection message from {source}")
-        if self.mobility:
-            if await self.nm.waiting_confirmation_from(source):
-                await self.nm.confirmation_received(source, confirmation=False)
-            # if source in await self.cm.get_all_addrs_current_connections(only_direct=True):
-            await self.nm.update_neighbors(source, remove=True)
         await self.cm.disconnect(source, mutual_disconnection=False)
 
     async def _federation_federation_ready_callback(self, source, message):
@@ -384,9 +380,6 @@ class Engine:
         if callable(method):
             await EventManager.get_instance().subscribe((event_type, action), method)
 
-    async def get_geoloc(self):
-        return await self.nm.get_geoloc()
-
     """                                                     ##############################
                                                             #    ENGINE FUNCTIONALITY    #
                                                             ##############################
@@ -403,7 +396,6 @@ class Engine:
     async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
         if self.mobility:
             self.federation_nodes = neighbors
-            await self.nm.update_neighbors(removed_neighbor_addr, remove=remove)
             updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
             asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
 
@@ -473,15 +465,16 @@ class Engine:
 
     async def start_communications(self):
         await self.register_events_callbacks()
-        await self.aggregator.init()
         initial_neighbors = self.config.participant["network_args"]["neighbors"].split()
         await self.cm.start_communications(initial_neighbors)
+        await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
+        
+    async def deploy_components(self):
+        await self.aggregator.init()
         if self.mobility:
-            logging.info("Building NodeManager configurations...")
             await self.nm.set_configs()
         await self._reporter.start()
-        await self._addon_manager.deploy_additional_services()
-        await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
+        await self._addon_manager.deploy_additional_services()    
 
     async def deploy_federation(self):
         await self.federation_ready_lock.acquire_async()

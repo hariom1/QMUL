@@ -216,9 +216,6 @@ class CommunicationsManager:
                                                             ###############################
     """
 
-    async def get_geoloc(self):
-        return await self.engine.get_geoloc()
-
     async def start_external_connection_service(self, run_service=True):
         if self.ecs == None:
             self._external_connection_service = factory_connection_service(self, self.addr)

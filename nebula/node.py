@@ -199,6 +199,7 @@ async def main(config):
         security=False,
     )
     await node.start_communications()
+    await node.deploy_components()
     await node.deploy_federation()
 
     # If it is an additional node, it should wait until additional_node_round to connect to the network
@@ -208,7 +209,7 @@ async def main(config):
         logging.info("Waiting time to start finding federation")
 
         # time.sleep(150)
-        await asyncio.sleep(150)
+        await asyncio.sleep(250)
 
         # time.sleep(6000)  # DEBUG purposes
         # import requests

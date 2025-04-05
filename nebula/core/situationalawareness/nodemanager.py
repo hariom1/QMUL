@@ -24,6 +24,7 @@ class NodeManager:
         topology,
         model_handler,
         engine: "Engine",
+        verbose=False
     ):
         self._aditional_participant = aditional_participant
         self.topology = topology
@@ -49,6 +50,7 @@ class NodeManager:
         self._desc_done = False #TODO remove
         
         self._situational_awareness_module = SAModule(self, self.engine.addr, topology)
+        self._verbose = verbose
 
     @property
     def engine(self):
@@ -85,28 +87,14 @@ class NodeManager:
             - self weight distance
             - self weight hetereogeneity
         """
+        logging.info("Building NodeManager configurations...")
         await self.register_message_events_callbacks()
         await self.sam.init()
+        await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.update_neighbors)
         logging.info("Building candidate selector configuration..")
         self.candidate_selector.set_config([0, 0.5, 0.5])
         # self.engine.trainer.get_loss(), self.config.participant["molibity_args"]["weight_distance"], self.config.participant["molibity_args"]["weight_het"]
-        
-    async def get_geoloc(self):
-        return await self.sam.get_geoloc()
-               
-    """
-                ##############################
-                #      WEIGHT STRATEGIES     #
-                ##############################
-    """
-
-    async def register_late_neighbor(self, addr, joinning_federation=False):
-        logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
-        await self.meet_node(addr)
-        await self.update_neighbors(addr)
-        if joinning_federation:
-            pass
-
+             
     """
                 ##############################
                 #        CONNECTIONS         #
@@ -147,33 +135,32 @@ class NodeManager:
         await self.pending_confirmation_from_nodes_lock.release_async()
         return found
 
-    async def confirmation_received(self, addr, confirmation=False):
-        logging.info(f" Update | connection confirmation received from: {addr} | confirmation: {confirmation}")
-        if confirmation:
-            await self.cm.connect(addr, direct=True)
-            await self.update_neighbors(addr)
-        else:
-            self._remove_pending_confirmation_from(addr)
-
+    async def confirmation_received(self, addr, joining=False):
+        logging.info(f" Update | connection confirmation received from: {addr} | joining federation: {joining}")
+        await self.cm.connect(addr, direct=True)
+        await self._remove_pending_confirmation_from(addr)
+        une = UpdateNeighborEvent(addr, joining=joining)
+        await EventManager.get_instance().publish_node_event(une)
+            
     def add_to_discarded_offers(self, addr_discarded):
         self.discarded_offers_addr_lock.acquire()
         self.discarded_offers_addr.append(addr_discarded)
         self.discarded_offers_addr_lock.release()
 
-    def need_more_neighbors(self):
-        return self.sam.need_more_neighbors()
-
     def get_actions(self):
         return self.sam.get_actions()
 
-    async def update_neighbors(self, node, remove=False):
+    async def register_late_neighbor(self, addr, joinning_federation=False):
+        if self._verbose: logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
+        une = UpdateNeighborEvent(addr, joining=joinning_federation)
+        await EventManager.get_instance().publish_node_event(une)
+
+    async def update_neighbors(self, une : UpdateNeighborEvent):
+        node, remove = await une.get_event_data()
         await self._update_neighbors_lock.acquire_async()
-        self.sam.update_neighbors(node, remove)
-        if remove:
-            pass
-        else:
+        if not remove:
             await self.meet_node(node)
-            self._remove_pending_confirmation_from(node)
+        await self._remove_pending_confirmation_from(node)
         await self._update_neighbors_lock.release_async()
 
     async def meet_node(self, node):
@@ -185,7 +172,7 @@ class NodeManager:
 
     def accept_model_offer(self, source, decoded_model, rounds, round, epochs, n_neighbors, loss):
         if not self.accept_candidates_lock.locked():
-            logging.info(f"🔄 Processing offer from {source}...")
+            if self._verbose: logging.info(f"🔄 Processing offer from {source}...")
             model_accepted = self.model_handler.accept_model(decoded_model)
             self.model_handler.set_config(config=(rounds, round, epochs, self))
             if model_accepted:
@@ -208,7 +195,7 @@ class NodeManager:
                     self.discarded_offers_addr = set(
                         self.discarded_offers_addr
                     ) - await self.cm.get_addrs_current_connections(only_direct=True, myself=False)
-                    logging.info(
+                    if self._verbose: logging.info(
                         f"Interrupting connections | discarded offers | nodes discarded: {self.discarded_offers_addr}"
                     )
                     for addr in self.discarded_offers_addr:
@@ -239,16 +226,16 @@ class NodeManager:
 
         # wait offer
         #TODO actualizar con la informacion de latencias
-        logging.info(f"Connections stablish after finding federation: {connections_stablished}")
+        if self._verbose: logging.info(f"Connections stablish after finding federation: {connections_stablished}")
         if connections_stablished:
-            logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
+            if self._verbose: logging.info(f"Waiting: {self.recieve_offer_timer}s to receive offers from federation")
             await asyncio.sleep(self.recieve_offer_timer)
 
         # acquire lock to not accept late candidates
         self.accept_candidates_lock.acquire()
 
         if self.candidate_selector.any_candidate():
-            logging.info("Candidates found to connect to...")
+            if self._verbose: logging.info("Candidates found to connect to...")
             # create message to send to candidates selected
             if not connected:
                 msg = self.cm.create_message("connection", "late_connect")
@@ -256,7 +243,7 @@ class NodeManager:
                 msg = self.cm.create_message("connection", "restructure")
 
             best_candidates = self.candidate_selector.select_candidates()
-            logging.info(f"Candidates | {[addr for addr, _, _ in best_candidates]}")
+            if self._verbose: logging.info(f"Candidates | {[addr for addr, _, _ in best_candidates]}")
             #TODO candidates not choosen --> disconnect
             try:
                 for addr, _, _ in best_candidates:
@@ -265,7 +252,7 @@ class NodeManager:
                     await asyncio.sleep(1)
             except asyncio.CancelledError:
                 await self.update_neighbors(addr, remove=True)
-                logging.info("Error during stablishment")
+                if self._verbose: logging.info("Error during stablishment")
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             self.candidate_selector.remove_candidates()
@@ -274,11 +261,11 @@ class NodeManager:
             #     asyncio.create_task(self.sam.san.stop_connections_with_federation())
         # if no candidates, repeat process
         else:
-            logging.info("❗️  No Candidates found...")
+            if self._verbose: logging.info("❗️  No Candidates found...")
             self.accept_candidates_lock.release()
             self.late_connection_process_lock.release()
             if not connected:
-                logging.info("❗️  repeating process...")
+                if self._verbose: logging.info("❗️  repeating process...")
                 await self.start_late_connection_process(connected, msg_type, addrs_known)
 
 
@@ -305,7 +292,7 @@ class NodeManager:
         logging.info(f"🔗  handle_connection_message | Trigger | Received late connect message from {source}")
         # Verify if it's a confirmation message from a previous late connection message sent to source
         if await self.waiting_confirmation_from(source):
-            await self.confirmation_received(source, confirmation=True)
+            await self.confirmation_received(source, joining=True)
             return
 
         if not self.engine.get_initialization_status():
@@ -337,7 +324,7 @@ class NodeManager:
         logging.info(f"🔗  handle_connection_message | Trigger | Received restructure message from {source}")
         # Verify if it's a confirmation message from a previous restructure connection message sent to source
         if await self.waiting_confirmation_from(source):
-            await self.confirmation_received(source, confirmation=True)
+            await self.confirmation_received(source)
             return
 
         if not self.engine.get_initialization_status():
@@ -396,7 +383,6 @@ class NodeManager:
 
     async def _discover_discover_nodes_callback(self, source, message):
         logging.info(f"🔍  handle_discover_message | Trigger | Received discover_node message from {source} ")
-        # self.nm.meet_node(source)
         if len(self.engine.get_federation_nodes()) > 0:
             msg = self.cm.create_message(
                 "offer",
@@ -447,8 +433,6 @@ class NodeManager:
         logging.info(f"🔗  handle_link_message | Trigger | Received connect_to message from {source}")
         addrs = message.addrs
         for addr in addrs.split():
-            # await self.cm.connect(addr, direct=True)
-            # self.nm.update_neighbors(addr)
             await self.meet_node(addr)
 
     async def _link_disconnect_from_callback(self, source, message):

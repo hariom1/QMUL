@@ -129,7 +129,7 @@ class AggregationEvent(NodeEvent):
         return False
     
 class UpdateNeighborEvent(NodeEvent):
-    def __init__(self, node_addr, removed=False):
+    def __init__(self, node_addr, removed=False, joining=False):
         """Event triggered when a neighboring node is updated.
 
         Args:
@@ -139,6 +139,7 @@ class UpdateNeighborEvent(NodeEvent):
         """
         self._node_addr = node_addr
         self._removed = removed
+        self._joining_federation = joining
         
     def __str__(self):
         return f"Node addr: {self._node_addr}, removed: {self._removed}"
@@ -155,6 +156,9 @@ class UpdateNeighborEvent(NodeEvent):
     
     async def is_concurrent(self) -> bool:
         return False
+    
+    def is_joining_federation(self):
+        return self._joining_federation
     
 class NodeFoundEvent(NodeEvent):
     def __init__(self, node_addr):
@@ -262,3 +266,14 @@ class GPSEvent(AddonEvent):
         
     async def get_event_data(self) -> dict:
         return self.distances.copy()
+
+class ChangeLocationEvent(AddonEvent):
+    def __init__(self, latitude, longitude):
+        self.latitude = latitude
+        self.longitude = longitude
+    
+    def __str__(self):
+        return "ChangeLocationEvent"    
+        
+    async def get_event_data(self):
+        return ( self.latitude, self.longitude)

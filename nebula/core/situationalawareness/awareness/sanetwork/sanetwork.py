@@ -144,7 +144,6 @@ class SANetwork():
         latitude, longitude = geoloc
         nfe = NodeFoundEvent(addr)
         asyncio.create_task(EventManager.get_instance().publish_node_event(nfe))
-        #self.meet_node(addr)
         #logging.info(f"Beacon received SANetwork, source: {addr}, geolocalization: {latitude},{longitude}")        
         
     """                                                     ###############################

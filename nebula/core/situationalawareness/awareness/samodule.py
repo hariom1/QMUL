@@ -73,11 +73,6 @@ class SAModule:
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
 
-    async def get_geoloc(self):
-        latitude = self.nm.config.participant["mobility_args"]["latitude"]
-        longitude = self.nm.config.participant["mobility_args"]["longitude"]
-        return (latitude, longitude)    
-    
     async def _mobility_actions(self, ree : RoundEndEvent):
         logging.info("🔄 Starting additional mobility actions...")
         await self.san.module_actions()
@@ -99,14 +94,6 @@ class SAModule:
 
     async def register_node(self, node, neighbor=False, remove=False):
         await self.san.register_node(self, node, neighbor, remove)
-
-    def meet_node(self, node):
-        self.san.meet_node(node)
-
-    def update_neighbors(self, node, remove=False):
-        self.san.update_neighbors(node, remove)
-        if not remove:
-            self.san.meet_node(node)
 
     def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
         return self.san.get_nodes_known(neighbors_too, neighbors_only)
