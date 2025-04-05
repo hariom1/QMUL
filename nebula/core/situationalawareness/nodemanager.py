@@ -93,10 +93,7 @@ class NodeManager:
         
     async def get_geoloc(self):
         return await self.sam.get_geoloc()
-        
-    async def experiment_finish(self):
-        await self.sam.experiment_finish()        
-
+               
     """
                 ##############################
                 #      WEIGHT STRATEGIES     #

@@ -78,7 +78,21 @@ class RoundEndEvent(NodeEvent):
         return (self._round, self._round_end_time)
     
     async def is_concurrent(self):
-        return False    
+        return False
+    
+class ExperimentFinishEvent(NodeEvent):
+    def __init__(self):
+        """Event triggered when experiment is going to finish."""
+        pass
+
+    def __str__(self):
+        return "Experiment finished"
+
+    async def get_event_data(self):
+        pass
+    
+    async def is_concurrent(self):
+        return False   
 
 class AggregationEvent(NodeEvent):
     def __init__(self, updates : dict, expected_nodes : set, missing_nodes : set):

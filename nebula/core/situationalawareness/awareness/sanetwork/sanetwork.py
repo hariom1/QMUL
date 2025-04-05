@@ -5,7 +5,7 @@ from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.neigh
 from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import BeaconRecievedEvent
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent
+from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent, ExperimentFinishEvent
 from nebula.core.network.communications import CommunicationsManager
 
 from typing import TYPE_CHECKING
@@ -36,6 +36,7 @@ class SANetwork():
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
         self._verbose = verbose
+        self._cm = CommunicationsManager.get_instance()
         
     @property
     def sam(self):
@@ -43,7 +44,7 @@ class SANetwork():
         
     @property
     def cm(self):
-        return CommunicationsManager.get_instance()   
+        return self._cm    
         
     @property    
     def np(self):
@@ -54,6 +55,7 @@ class SANetwork():
             logging.info("Deploying External Connection Service")
             await self.cm.start_external_connection_service()
             await EventManager.get_instance().subscribe_node_event(BeaconRecievedEvent, self.beacon_received)
+            await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent,self.experiment_finish)
             await self.cm.start_beacon()
         else:
             logging.info("Deploying External Connection Service | No running")

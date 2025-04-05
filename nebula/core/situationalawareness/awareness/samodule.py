@@ -73,9 +73,6 @@ class SAModule:
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
 
-    async def experiment_finish(self):
-        await self.san.experiment_finish()
-        
     async def get_geoloc(self):
         latitude = self.nm.config.participant["mobility_args"]["latitude"]
         longitude = self.nm.config.participant["mobility_args"]["longitude"]
