@@ -487,7 +487,6 @@ class Engine:
                 while not await self.cm.check_federation_ready():
                     await asyncio.sleep(1)
                 logging.info("Sending FEDERATION_START to neighbors...")
-                # message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_START)
                 message = self.cm.create_message("federation", "federation_start")
                 await self.cm.send_message_to_neighbors(message)
                 await self.get_federation_ready_lock().release_async()
@@ -498,7 +497,6 @@ class Engine:
 
         else:
             logging.info("Sending FEDERATION_READY to neighbors...")
-            # message = self.cm.mm.generate_federation_message(nebula_pb2.FederationMessage.Action.FEDERATION_READY)
             message = self.cm.create_message("federation", "federation_ready")
             await self.cm.send_message_to_neighbors(message)
             logging.info("💤  Waiting until receiving the start signal from the start node")

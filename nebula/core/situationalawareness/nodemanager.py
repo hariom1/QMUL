@@ -10,6 +10,7 @@ from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateNeighborEvent, NodeFoundEvent
 from nebula.core.network.communications import CommunicationsManager
+from functools import cached_property
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -33,6 +34,7 @@ class NodeManager:
         )
         logging.info("🌐  Initializing Node Manager")
         self._engine = engine
+        self._cm = None
         self.config = engine.get_config()
         logging.info("Initializing Candidate Selector")
         self._candidate_selector = factory_CandidateSelector(self.topology)
@@ -56,7 +58,7 @@ class NodeManager:
     def engine(self):
         return self._engine
     
-    @property
+    @cached_property
     def cm(self):
         return CommunicationsManager.get_instance()
 
@@ -374,7 +376,8 @@ class NodeManager:
                     round=round,
                     epochs=epochs,
                 )
-                await self.cm.send_offer_model(source, msg)
+                logging.info(f"Sending offer model to {source}")
+                await self.cm.send_message(source, msg, is_compressed=True)
             else:
                 logging.info("Discover join received before federation is running..")
                 # starter node is going to send info to the new node
@@ -388,8 +391,9 @@ class NodeManager:
                 "offer",
                 "offer_metric",
                 n_neighbors=len(self.engine.get_federation_nodes()),
-                loss=self.engine.trainer.get_current_loss(),
+                loss=0 #self.engine.trainer.get_current_loss(),
             )
+            logging.info(f"Sending offer metric to {source}")
             await self.cm.send_message(source, msg)
         else:
             logging.info(f"🔗  Dissmissing discover nodes from {source} | no active connections at the moment")

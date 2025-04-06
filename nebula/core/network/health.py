@@ -8,6 +8,7 @@ class Health:
         print_msg_box(msg="Starting health module...", indent=2, title="Health module")
         self.addr = addr
         self.config = config
+        self._cm = None
         self.period = self.config.participant["health_args"]["health_interval"]
         self.alive_interval = self.config.participant["health_args"]["send_alive_interval"]
         self.check_alive_interval = self.config.participant["health_args"]["check_alive_interval"]
@@ -15,8 +16,12 @@ class Health:
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     async def start(self):
         asyncio.create_task(self.run_send_alive())

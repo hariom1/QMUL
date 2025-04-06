@@ -48,6 +48,7 @@ class Reporter:
             - Initializes both current and accumulated metrics for traffic monitoring.
         """
         logging.info("Starting reporter module")
+        self._cm = None
         self.config = config
         self.trainer = trainer
         self.frequency = self.config.participant["reporter_args"]["report_frequency"]
@@ -69,8 +70,12 @@ class Reporter:
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     async def enqueue_data(self, name, value):
         """

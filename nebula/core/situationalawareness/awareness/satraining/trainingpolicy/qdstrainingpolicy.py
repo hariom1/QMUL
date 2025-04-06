@@ -5,7 +5,7 @@ from nebula.core.utils.locker import Locker
 from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import AggregationEvent
+from nebula.core.nebulaevents import AggregationEvent, UpdateNeighborEvent
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
 from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
 from nebula.core.network.communications import CommunicationsManager
@@ -17,7 +17,7 @@ class QDSTrainingPolicy(TrainingPolicy):
     SIMILARITY_THRESHOLD = 0.73
     INACTIVE_THRESHOLD = 3
     GRACE_ROUNDS = 0
-    CHECK_COOLDOWN = 50
+    CHECK_COOLDOWN = 1
 
     def __init__(self, config : dict):
         self._addr = config["addr"]
@@ -37,9 +37,11 @@ class QDSTrainingPolicy(TrainingPolicy):
             nodes = config["nodes"]
             self._nodes : dict[str, tuple[deque, int]] = {node_id: (deque(maxlen=self.MAX_HISTORIC_SIZE), 0) for node_id in nodes}
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.process_aggregation_event)
+        await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.update_neighbors)
         await self.register_sa_agent()
 
-    async def update_neighbors(self, node, remove=False):
+    async def update_neighbors(self, une: UpdateNeighborEvent):
+        node, remove = await une.get_event_data()
         async with self._nodes_lock:
             if remove:
                 self._nodes.pop(node, None)
@@ -138,7 +140,7 @@ class QDSTrainingPolicy(TrainingPolicy):
         await self.notify_all_suggestions_done(AggregationEvent)
 
     async def get_agent(self) -> str:
-        return "QDS_training_policy"
+        return "SATraining"
 
     async def register_sa_agent(self):
         await SuggestionBuffer.get_instance().register_event_agents(AggregationEvent, self)

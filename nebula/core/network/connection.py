@@ -54,6 +54,7 @@ class Connection:
         self.last_active = time.time()
         self.compression = compression
         self.config = config
+        self._cm = None
 
         self.federated_round = Connection.DEFAULT_FEDERATED_ROUND
         self.loop = asyncio.get_event_loop()
@@ -93,8 +94,12 @@ class Connection:
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     def get_addr(self):
         return self.addr

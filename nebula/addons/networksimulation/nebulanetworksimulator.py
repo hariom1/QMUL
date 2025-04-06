@@ -1,6 +1,8 @@
 import asyncio
 import subprocess
 import logging
+from functools import cached_property
+from nebula.core.network.communications import CommunicationsManager
 from nebula.addons.networksimulation.networksimulator import NetworkSimulator
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
@@ -24,9 +26,8 @@ class NebulaNS(NetworkSimulator):
         self._current_network_conditions = {}
         self._running = False
 
-    @property
+    @cached_property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
   
     async def start(self):

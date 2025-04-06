@@ -11,13 +11,18 @@ class MessagesManager:
     def __init__(self, addr, config):
         self.addr = addr
         self.config = config
+        self._cm = None
         self._message_templates = {}
         self._define_message_templates()
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     def _define_message_templates(self):
         # Dictionary that maps message types to their required parameters and default values

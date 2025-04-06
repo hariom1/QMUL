@@ -8,6 +8,7 @@ class Forwarder:
     def __init__(self, config):
         print_msg_box(msg="Starting forwarder module...", indent=2, title="Forwarder module")
         self.config = config
+        self._cm = None
         self.pending_messages = asyncio.Queue()
         self.pending_messages_lock = Locker("pending_messages_lock", verbose=False, async_lock=True)
 
@@ -17,8 +18,12 @@ class Forwarder:
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     async def start(self):
         asyncio.create_task(self.run_forwarder())

@@ -510,32 +510,43 @@ class CommunicationsManager:
             if interval > 0:
                 await asyncio.sleep(interval)
 
-    async def send_message(self, dest_addr, message):
-        try:
-            conn = self.connections[dest_addr]
-            await conn.send(data=message)
-        except Exception as e:
-            logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
-            await self.disconnect(dest_addr, mutual_disconnection=False)
-
-    async def send_model(self, dest_addr, round, serialized_model, weight=1):
-        async with self.semaphore_send_model:
+    async def send_message(self, dest_addr, message, is_compressed=False):
+        if not is_compressed:
             try:
-                conn = self.connections.get(dest_addr)
-                if conn is None:
-                    logging.info(f"❗️  Connection with {dest_addr} not found")
-                    return
-                logging.info(
-                    f"Sending model to {dest_addr} with round {round}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
-                )
-                # message = self.mm.generate_model_message(round, serialized_model, weight)
-                parameters = serialized_model
-                message = self.create_message("model", "", round, parameters, weight)
-                await conn.send(data=message, is_compressed=True)
-                logging.info(f"Model sent to {dest_addr} with round {round}")
+                conn = self.connections[dest_addr]
+                await conn.send(data=message)
             except Exception as e:
-                logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
+                logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
                 await self.disconnect(dest_addr, mutual_disconnection=False)
+        else:
+            async with self.semaphore_send_model:
+                try:
+                    conn = self.connections.get(dest_addr)
+                    if conn is None:
+                        logging.info(f"❗️  Connection with {dest_addr} not found")
+                        return
+                    await conn.send(data=message, is_compressed=True)
+                except Exception as e:
+                    logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
+                    await self.disconnect(dest_addr, mutual_disconnection=False)
+
+    # async def send_model(self, dest_addr, round, serialized_model, weight=1):        
+    #     async with self.semaphore_send_model:
+    #         try:
+    #             conn = self.connections.get(dest_addr)
+    #             if conn is None:
+    #                 logging.info(f"❗️  Connection with {dest_addr} not found")
+    #                 return
+    #             logging.info(
+    #                 f"Sending model to {dest_addr} with round {round}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+    #             )
+    #             parameters = serialized_model
+    #             message = self.create_message("model", "", round, parameters, weight)
+    #             await conn.send(data=message, is_compressed=True)
+    #             logging.info(f"Model sent to {dest_addr} with round {round}")
+    #         except Exception as e:
+    #             logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
+    #             await self.disconnect(dest_addr, mutual_disconnection=False)
 
     async def send_offer_model(self, dest_addr, offer_message):
         async with self.semaphore_send_model:

@@ -3,6 +3,8 @@ import logging
 import math
 import random
 import time
+from functools import cached_property
+from nebula.core.network.communications import CommunicationsManager
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import GPSEvent, ChangeLocationEvent
 from nebula.core.utils.locker import Locker
@@ -66,9 +68,8 @@ class Mobility:
         self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
         self._verbose = verbose
 
-    @property
+    @cached_property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
         return CommunicationsManager.get_instance()
 
     @property

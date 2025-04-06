@@ -136,7 +136,7 @@ class NebulaBeacon:
             
     async def _proces_change_location_event(self, cle: ChangeLocationEvent):
         lat, long = await cle.get_event_data()
-        logging.info(f"Location changed to: ({lat},{long})")
+        #logging.info(f"Location changed to: ({lat},{long})")
         self._latitude, self._longitude = lat, long        
             
     async def stop(self):
@@ -170,6 +170,7 @@ class NebulaConnectionService(ExternalConnectionService):
     def __init__(self, addr):
         self.nodes_found = set()
         self.addr = addr
+        self._cm = None
         self.server : NebulaServerProtocol = None
         self.client : NebulaClientProtocol = None
         self.beacon : NebulaBeacon = NebulaBeacon(self, self.addr)
@@ -177,8 +178,12 @@ class NebulaConnectionService(ExternalConnectionService):
         
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     async def start(self):
         loop = asyncio.get_running_loop()

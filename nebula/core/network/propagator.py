@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
@@ -11,8 +12,7 @@ if TYPE_CHECKING:
     from nebula.core.aggregation.aggregator import Aggregator
     from nebula.core.engine import Engine
     from nebula.core.training.lightning import Lightning
-
-
+    
 class PropagationStrategy(ABC):
     @abstractmethod
     def is_node_eligible(self, node: str) -> bool:
@@ -63,12 +63,16 @@ class StableModelPropagation(PropagationStrategy):
 
 class Propagator:
     def __init__(self):
-        pass
+        self._cm = None
 
     @property
     def cm(self):
-        from nebula.core.network.communications import CommunicationsManager
-        return CommunicationsManager.get_instance()
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     def start(self):
         self.engine: Engine = self.cm.engine
@@ -163,12 +167,15 @@ class Propagator:
             serialized_model = None
 
         round_number = -1 if strategy_id == "initialization" else self.get_round()
-
+        parameters = serialized_model
+        message = self.cm.create_message("model", "", round_number, parameters, weight)
         for neighbor_addr in eligible_neighbors:
-            asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
-
-        # if len(self.aggregator.get_nodes_pending_models_to_aggregate()) >= len(self.aggregator._federation_nodes):
-        #     return False
+            logging.info(
+                    f"Sending model to {neighbor_addr} with round {self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+                )
+            asyncio.create_task(self.cm.send_message(neighbor_addr, message, is_compressed=True))
+            #asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
+            
 
         await asyncio.sleep(self.interval)
         return True
