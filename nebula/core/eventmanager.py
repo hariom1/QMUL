@@ -84,7 +84,7 @@ class EventManager:
             callbacks = self._addons_events_subs.get(event_type, [])
 
         if not callbacks:
-            logging.error(f"EventManager | No subscribers for AddonEvent type: {event_type.__name__}")
+            if self._verbose: logging.error(f"EventManager | No subscribers for AddonEvent type: {event_type.__name__}")
             return
 
         for callback in self._addons_events_subs[event_type]:
