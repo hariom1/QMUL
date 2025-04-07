@@ -5,7 +5,7 @@ import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateReceivedEvent, AggregationEvent, RoundStartEvent, UpdateNeighborEvent, RoundEndEvent
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
-from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, SACommandAction, SACommandPRIO, factory_sa_command
 from nebula.core.network.communications import CommunicationsManager
 import time
 import asyncio
@@ -235,8 +235,10 @@ class SOSTrainingPolicy(TrainingPolicy):
         nodes_to_discard = await self._evaluate()
         for node_discarded in nodes_to_discard:
             args = (node_discarded, False, True)
-            sac = ConnectivityCommand(
-                SACommandAction.DISCONNECT, 
+            sac = factory_sa_command(
+                "connectivity",
+                SACommandAction.DISCONNECT,
+                self, 
                 node_discarded,
                 SACommandPRIO.MEDIUM,
                 False,

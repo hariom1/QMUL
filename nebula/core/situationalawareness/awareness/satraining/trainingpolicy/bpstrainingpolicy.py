@@ -1,6 +1,6 @@
 from nebula.core.situationalawareness.awareness.satraining.trainingpolicy.trainingpolicy import TrainingPolicy
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
-from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, factory_sa_command, SACommandAction, SACommandPRIO
 from nebula.core.nebulaevents import RoundEndEvent
 
 class BPSTrainingPolicy(TrainingPolicy):
@@ -12,8 +12,10 @@ class BPSTrainingPolicy(TrainingPolicy):
         await self.register_sa_agent()    
 
     async def get_evaluation_results(self):
-        sac = ConnectivityCommand(
-            SACommandAction.MAINTAIN_CONNECTIONS, 
+        sac = factory_sa_command(
+            "connectivity",
+            SACommandAction.MAINTAIN_CONNECTIONS,
+            self, 
             "",
             SACommandPRIO.LOW,
             False,

@@ -10,7 +10,7 @@ from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent, Experi
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.awareness.samodule import SAMComponent
 from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
-from nebula.core.situationalawareness.awareness.sacommand import SACommand, SACommandAction, SACommandPRIO, SACommandState
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, SACommandAction, SACommandPRIO, SACommandState, factory_sa_command
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
 
 from typing import TYPE_CHECKING
@@ -246,7 +246,27 @@ class SANetworkAgent(SAModuleAgent):
         
     async def create_and_suggest_action(self, saca: SACommandAction, function : Callable, *args):
         if saca == SACommandAction.MAINTAIN_CONNECTIONS:
-            pass
+            sac = factory_sa_command(
+                "connectivity",
+                SACommandAction.MAINTAIN_CONNECTIONS, 
+                "",
+                SACommandPRIO.MEDIUM,
+                False,
+                function,
+                None
+            )
+            await self.suggest_action(sac)
+            await self.notify_all_suggestions_done(RoundEndEvent)
         elif saca == SACommandAction.SEARCH_CONNECTIONS:
-            pass
+            sac = factory_sa_command(
+                "connectivity",
+                SACommandAction.MAINTAIN_CONNECTIONS, 
+                "",
+                SACommandPRIO.MEDIUM,
+                True,
+                function,
+                *args
+            )
+            await self.suggest_action(sac)
+            await self.notify_all_suggestions_done(RoundEndEvent)
         

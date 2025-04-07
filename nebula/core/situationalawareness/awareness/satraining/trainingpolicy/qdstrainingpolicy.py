@@ -7,7 +7,7 @@ import logging
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, UpdateNeighborEvent, RoundEndEvent
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
-from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, SACommandAction, SACommandPRIO, factory_sa_command
 from nebula.core.network.communications import CommunicationsManager
 import math
 
@@ -132,13 +132,15 @@ class QDSTrainingPolicy(TrainingPolicy):
         if self._check_done:
             for node_discarded in self._evaluation_results:
                 args = (node_discarded, False, True)
-                sac = ConnectivityCommand(
-                    SACommandAction.DISCONNECT, 
-                    node_discarded,
-                    SACommandPRIO.MEDIUM,
-                    False,
-                    CommunicationsManager.get_instance().disconnect,
-                    *args
+                sac = factory_sa_command(
+                    "connectivity",                        
+                    SACommandAction.DISCONNECT,
+                    self,           
+                    node_discarded,                       
+                    SACommandPRIO.MEDIUM,                 
+                    False,                                
+                    CommunicationsManager.get_instance().disconnect,  
+                    *args                                  
                 )
                 await self.suggest_action(sac)
             await self.notify_all_suggestions_done(RoundEndEvent)

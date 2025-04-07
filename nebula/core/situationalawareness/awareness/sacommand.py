@@ -91,14 +91,15 @@ class ConnectivityCommand(SACommand):
     """Commands related to connectivity."""
     def __init__(
         self, 
-        action: SACommandAction, 
+        action: SACommandAction,
+        owner : SAModuleAgent, 
         target: str, 
         priority: SACommandPRIO = SACommandPRIO.MEDIUM,
         parallelizable = False,
         action_function = None,
         *args
     ):
-        super().__init__(SACommandType.CONNECTIVITY, action, target, priority, parallelizable)
+        super().__init__(SACommandType.CONNECTIVITY, action, owner, target, priority, parallelizable)
         self._action_function = action_function
         self._args = args
 
@@ -111,12 +112,14 @@ class ConnectivityCommand(SACommand):
             else:
                 self._action_function(*self._args)
 
+    #TODO repasar
     def conflicts_with(self, other: "ConnectivityCommand") -> bool:
         """Determines if two commands conflict with each other."""
         if self._target == other._target:
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.RECONNECT},
-                {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS}
+                {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS},
+                {SACommandAction.DISCONNECT, SACommandAction.SEARCH_CONNECTIONS}
             ]
             return {self._action, other._action} in conflict_pairs
         return False 
@@ -125,12 +128,13 @@ class AggregationCommand(SACommand):
     """Commands related to data aggregation."""
     def __init__(
         self, 
-        action: SACommandAction, 
+        action: SACommandAction,
+        owner : SAModuleAgent, 
         target: dict, 
         priority: SACommandPRIO = SACommandPRIO.MEDIUM,
         parallelizable = False,
     ):
-        super().__init__(SACommandType.CONNECTIVITY, action, target, priority, parallelizable)
+        super().__init__(SACommandType.CONNECTIVITY, action, owner, target, priority, parallelizable)
 
     async def execute(self):
         await self._update_command_state(SACommandState.EXECUTED)
@@ -163,6 +167,8 @@ def factory_sa_command(sacommand_type, *config) -> SACommand:
     } 
     
     cs = options.get(sacommand_type, None)
+    if cs is None:
+        raise ValueError(f"Unknown SACommand type: {sacommand_type}")
     return cs(*config)
 
 

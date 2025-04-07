@@ -84,8 +84,8 @@ class SAModule:
 
     async def _mobility_actions(self, ree : RoundEndEvent):
         logging.info("🔄 Starting additional mobility actions...")
-        await self.san.sa_component_actions()
-        await self.sat.sa_component_actions()    
+        asyncio.create_task(self.san.sa_component_actions())
+        asyncio.create_task(self.sat.sa_component_actions())    
 
 
     """                                                     ###############################
