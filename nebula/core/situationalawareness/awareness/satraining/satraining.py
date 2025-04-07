@@ -2,15 +2,16 @@ import asyncio
 import logging
 from nebula.core.utils.locker import Locker
 from nebula.core.situationalawareness.awareness.satraining.trainingpolicy.trainingpolicy import factory_training_policy
+from nebula.core.situationalawareness.awareness.samodule import SAMComponent
 from nebula.addons.functions import print_msg_box
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from nebula.core.situationalawareness.awareness.samodule import SAModule
+    from nebula.core.situationalawareness.awareness.samodule import SAModule, SAMComponent
     from nebula.core.eventmanager import EventManager
     
 RESTRUCTURE_COOLDOWN = 5    
     
-class SATraining():
+class SATraining(SAMComponent):
     def __init__(
         self,
         sam: "SAModule",
@@ -45,7 +46,7 @@ class SATraining():
         config["nodes"] = set(self._sam.get_nodes_known(neighbors_only=True)) 
         await self.tp.init(config)
 
-    async def module_actions(self):
+    async def sa_component_actions(self):
         logging.info("SA Trainng evaluating current scenario")
         asyncio.create_task(self.tp.get_evaluation_results())
 

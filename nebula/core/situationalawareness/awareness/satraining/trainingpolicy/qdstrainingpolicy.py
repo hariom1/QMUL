@@ -5,7 +5,7 @@ from nebula.core.utils.locker import Locker
 from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import AggregationEvent, UpdateNeighborEvent
+from nebula.core.nebulaevents import AggregationEvent, UpdateNeighborEvent, RoundEndEvent
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
 from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
 from nebula.core.network.communications import CommunicationsManager
@@ -27,6 +27,7 @@ class QDSTrainingPolicy(TrainingPolicy):
         self._round_missing_nodes = set()
         self._grace_rounds = self.GRACE_ROUNDS
         self._last_check = 0
+        self._check_done = False
         self._evaluation_results = set()
         
     def __str__(self):
@@ -88,6 +89,7 @@ class QDSTrainingPolicy(TrainingPolicy):
     
         result = set()     
         if self._last_check == 0:
+            self._check_done = True
             nodes = await self._get_nodes()
             redundant_nodes = set()
             inactive_nodes = set()
@@ -120,33 +122,35 @@ class QDSTrainingPolicy(TrainingPolicy):
                 result = result.union(discard_nodes)
         else:
             if self._verbose: logging.info(f"Evaluation is on cooldown... | {self.CHECK_COOLDOWN - self._last_check} rounds remaining")
+            self._check_done = False
             
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
                              
         return result
     
     async def get_evaluation_results(self):
-        for node_discarded in self._evaluation_results:
-            args = (node_discarded, False, True)
-            sac = ConnectivityCommand(
-                SACommandAction.DISCONNECT, 
-                node_discarded,
-                SACommandPRIO.MEDIUM,
-                True,
-                CommunicationsManager.get_instance().disconnect,
-                *args
-            )
-            await self.suggest_action(sac)
-        await self.notify_all_suggestions_done(AggregationEvent)
+        if self._check_done:
+            for node_discarded in self._evaluation_results:
+                args = (node_discarded, False, True)
+                sac = ConnectivityCommand(
+                    SACommandAction.DISCONNECT, 
+                    node_discarded,
+                    SACommandPRIO.MEDIUM,
+                    False,
+                    CommunicationsManager.get_instance().disconnect,
+                    *args
+                )
+                await self.suggest_action(sac)
+            await self.notify_all_suggestions_done(RoundEndEvent)
 
     async def get_agent(self) -> str:
-        return "SATraining"
+        return "SATraining_QDSTP"
 
     async def register_sa_agent(self):
-        await SuggestionBuffer.get_instance().register_event_agents(AggregationEvent, self)
+        await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
     
     async def suggest_action(self, sac : SACommand):
-        await SuggestionBuffer.get_instance().register_suggestion(AggregationEvent, self, sac)
+        await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
     
     async def notify_all_suggestions_done(self, event_type):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)

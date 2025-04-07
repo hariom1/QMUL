@@ -3,7 +3,10 @@ from nebula.core.utils.locker import Locker
 from collections import deque
 import logging
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateReceivedEvent, AggregationEvent, RoundStartEvent
+from nebula.core.nebulaevents import UpdateReceivedEvent, AggregationEvent, RoundStartEvent, UpdateNeighborEvent, RoundEndEvent
+from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.network.communications import CommunicationsManager
 import time
 import asyncio
 
@@ -76,6 +79,8 @@ class SOSTrainingPolicy(TrainingPolicy):
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self._process_update_received_event)
         await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self._process_round_start)
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
+        await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.update_neighbors)
+        await self.register_sa_agent()
 
     async def _get_nodes(self):
         async with self._nodes_lock:
@@ -130,7 +135,8 @@ class SOSTrainingPolicy(TrainingPolicy):
 
             self._nodes[source] = (history, missed_count, time_between_updts_historic, last_update_times)
 
-    async def update_neighbors(self, node, remove=False):
+    async def update_neighbors(self, une : UpdateNeighborEvent):
+        node, remove = await une.get_event_data()
         async with self._nodes_lock:
             if remove:
                 self._nodes.pop(node, None)
@@ -138,10 +144,7 @@ class SOSTrainingPolicy(TrainingPolicy):
                 if not node in self._nodes:
                     self._nodes.update({node : (deque(maxlen=self.MAX_HISTORIC_SIZE), 0, float('inf'), float('inf'))})
 
-    async def get_evaluation_results(self):
-        return None
-    
-    async def evaluate(self):
+    async def _evaluate(self):
         if self._verbose: logging.info("Evaluating using speed-oriented strategy")
         if self._grace_rounds:  # Grace rounds
             self._grace_rounds -= 1
@@ -227,5 +230,32 @@ class SOSTrainingPolicy(TrainingPolicy):
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
                              
         return nodes_below_th
+    
+    async def get_evaluation_results(self):
+        nodes_to_discard = await self._evaluate()
+        for node_discarded in nodes_to_discard:
+            args = (node_discarded, False, True)
+            sac = ConnectivityCommand(
+                SACommandAction.DISCONNECT, 
+                node_discarded,
+                SACommandPRIO.MEDIUM,
+                False,
+                CommunicationsManager.get_instance().disconnect,
+                *args
+            )
+            await self.suggest_action(sac)
+        await self.notify_all_suggestions_done(RoundEndEvent)
+    
+    async def get_agent(self) -> str:
+        return "SATraining_SOSTP"
+
+    async def register_sa_agent(self):
+        await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
+    
+    async def suggest_action(self, sac : SACommand):
+        await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
+    
+    async def notify_all_suggestions_done(self, event_type):
+        await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)
     
     

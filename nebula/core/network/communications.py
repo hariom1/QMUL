@@ -548,19 +548,19 @@ class CommunicationsManager:
     #             logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
     #             await self.disconnect(dest_addr, mutual_disconnection=False)
 
-    async def send_offer_model(self, dest_addr, offer_message):
-        async with self.semaphore_send_model:
-            try:
-                conn = self.connections.get(dest_addr)
-                if conn is None:
-                    logging.info(f"❗️  Connection with {dest_addr} not found")
-                    return
-                logging.info(f"Sending offer model to {dest_addr}")
-                await conn.send(data=offer_message, is_compressed=True)
-                logging.info(f"Offer_Model sent to {dest_addr}")
-            except Exception as e:
-                logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
-                await self.disconnect(dest_addr, mutual_disconnection=False)
+    # async def send_offer_model(self, dest_addr, offer_message):
+    #     async with self.semaphore_send_model:
+    #         try:
+    #             conn = self.connections.get(dest_addr)
+    #             if conn is None:
+    #                 logging.info(f"❗️  Connection with {dest_addr} not found")
+    #                 return
+    #             logging.info(f"Sending offer model to {dest_addr}")
+    #             await conn.send(data=offer_message, is_compressed=True)
+    #             logging.info(f"Offer_Model sent to {dest_addr}")
+    #         except Exception as e:
+    #             logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
+    #             await self.disconnect(dest_addr, mutual_disconnection=False)
 
     async def establish_connection(self, addr, direct=True, reconnect=False):
         logging.info(f"🔗  [outgoing] Establishing connection with {addr} (direct: {direct})")

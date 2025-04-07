@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 import asyncio
 import logging
 from nebula.addons.functions import print_msg_box
@@ -17,6 +18,14 @@ if TYPE_CHECKING:
     
 
 RESTRUCTURE_COOLDOWN = 5
+
+class SAMComponent(ABC):
+    @abstractmethod
+    async def init(self):
+        raise NotImplementedError
+    @abstractmethod
+    async def sa_component_actions(self):
+        raise NotImplementedError
 
 
 class SAModule:
@@ -75,8 +84,8 @@ class SAModule:
 
     async def _mobility_actions(self, ree : RoundEndEvent):
         logging.info("🔄 Starting additional mobility actions...")
-        await self.san.module_actions()
-        await self.sat.module_actions()    
+        await self.san.sa_component_actions()
+        await self.sat.sa_component_actions()    
 
 
     """                                                     ###############################
@@ -91,9 +100,6 @@ class SAModule:
                                                             #          SA NETWORK         #
                                                             ###############################
     """
-
-    async def register_node(self, node, neighbor=False, remove=False):
-        await self.san.register_node(self, node, neighbor, remove)
 
     def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
         return self.san.get_nodes_known(neighbors_too, neighbors_only)

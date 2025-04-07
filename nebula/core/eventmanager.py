@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from nebula.core.network.messages import MessageEvent
 from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import AddonEvent, NodeEvent
+from typing import Callable
 
 class EventManager:
     _instance = None
@@ -40,7 +41,7 @@ class EventManager:
             EventManager(verbose=verbose)
         return EventManager._instance
 
-    async def subscribe(self, event_type: tuple[str, str], callback: callable):
+    async def subscribe(self, event_type: tuple[str, str], callback: Callable):
         """Register a callback for a specific event type."""
         async with self._message_events_lock:
             if event_type not in self._subscribers:
@@ -68,7 +69,7 @@ class EventManager:
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for event {event_type}: {e}")
                  
-    async def subscribe_addonevent(self, addonEventType: type[AddonEvent], callback: callable):
+    async def subscribe_addonevent(self, addonEventType: type[AddonEvent], callback: Callable):
         """Register a callback for a specific type of AddonEvent."""
         async with self._addons_event_lock:
             if addonEventType not in self._addons_events_subs:
@@ -98,7 +99,7 @@ class EventManager:
                 logging.exception(f"EventManager | Error in callback for AddonEvent {event_type.__name__}: {e}")
                     
                   
-    async def subscribe_node_event(self, nodeEventType: type[NodeEvent], callback: callable):
+    async def subscribe_node_event(self, nodeEventType: type[NodeEvent], callback: Callable):
         """Register a callback for a specific type of AddonEvent."""
         async with self._node_events_lock:
             if nodeEventType not in self._node_events_subs:

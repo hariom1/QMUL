@@ -1,20 +1,25 @@
 import asyncio
 import logging
 from nebula.core.utils.locker import Locker
+from typing import Callable
 from nebula.core.situationalawareness.awareness.sanetwork.neighborpolicies.neighborpolicy import factory_NeighborPolicy
 from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import BeaconRecievedEvent
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent, ExperimentFinishEvent
+from nebula.core.nebulaevents import NodeFoundEvent, UpdateNeighborEvent, ExperimentFinishEvent, RoundEndEvent
 from nebula.core.network.communications import CommunicationsManager
+from nebula.core.situationalawareness.awareness.samodule import SAMComponent
+from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, SACommandAction, SACommandPRIO, SACommandState
+from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.awareness.samodule import SAModule
     
-RESTRUCTURE_COOLDOWN = 5    
-    
-class SANetwork():
+RESTRUCTURE_COOLDOWN = 5
+
+class SANetwork(SAMComponent):
     def __init__(
         self,
         sam: "SAModule",
@@ -37,6 +42,7 @@ class SANetwork():
         self._restructure_cooldown = 0
         self._verbose = verbose
         self._cm = CommunicationsManager.get_instance()
+        self._sa_network_agent = SANetworkAgent(self)
         
     @property
     def sam(self):
@@ -49,6 +55,10 @@ class SANetwork():
     @property    
     def np(self):
         return self._neighbor_policy
+    
+    @property
+    def sana(self):
+        return self._sa_network_agent
     
     async def init(self):
         if not self.sam.is_additional_participant():
@@ -72,8 +82,9 @@ class SANetwork():
         
         await EventManager.get_instance().subscribe_node_event(NodeFoundEvent, self.process_node_found_event)
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.process_update_neighbor_event)
+        await self.sana.register_sa_agent()
         
-    async def module_actions(self):
+    async def sa_component_actions(self):
         logging.info("SA Network evaluating current scenario")
         await self._check_external_connection_service_status()
         await self._analize_topology_robustness()    
@@ -94,19 +105,8 @@ class SANetwork():
         if self._verbose: logging.info(f"Processing Update Neighbor Event, node addr: {node_addr}, remove: {removed}")
         self.np.update_neighbors(node_addr, removed)    
     
-    async def register_node(self, node, neighbor=False, remove=False):
-        if not neighbor:
-            self.meet_node(node)
-        else:
-            self.update_neighbors(node, remove)
-
     def meet_node(self, node):
         if node != self._addr:
-            self.np.meet_node(node)
-
-    def update_neighbors(self, node, remove=False):
-        self.np.update_neighbors(node, remove)
-        if not remove:
             self.np.meet_node(node)
 
     def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
@@ -157,7 +157,7 @@ class SANetwork():
 
     def _restructure_available(self):
         if self._restructure_cooldown:
-            logging.info("Reestructure on cooldown")
+             if self._verbose: logging.info("Reestructure on cooldown")
         return self._restructure_cooldown == 0
 
     def get_restructure_process_lock(self):
@@ -167,22 +167,22 @@ class SANetwork():
         logging.info("🔄 Analizing node network robustness...")
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
-                logging.info("No Neighbors left | reconnecting with Federation")
+                 if self._verbose: logging.info("No Neighbors left | reconnecting with Federation")
                 #await self.reconnect_to_federation()
             elif self.np.need_more_neighbors() and self._restructure_available():
-                logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
+                if self._verbose: logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()
                 possible_neighbors = self.np.get_nodes_known(neighbors_too=False)
                 possible_neighbors = await self.cm.apply_restrictions(possible_neighbors)
                 if not possible_neighbors:
-                    logging.info("All possible neighbors using nodes known are restricted...")
+                     if self._verbose: logging.info("All possible neighbors using nodes known are restricted...")
                 else:
                     pass
                     # asyncio.create_task(self.upgrade_connection_robustness(possible_neighbors))
             else:
-                logging.info("Sufficient Robustness | no actions required")
+                 if self._verbose: logging.info("Sufficient Robustness | no actions required")
         else:
-            logging.info("❗️ Reestructure/Reconnecting process already running...")
+             if self._verbose: logging.info("❗️ Reestructure/Reconnecting process already running...")
 
     async def reconnect_to_federation(self):
         self._restructure_process_lock.acquire()
@@ -190,12 +190,12 @@ class SANetwork():
         await asyncio.sleep(120)
         # If we got some refs, try to reconnect to them
         if len(self.np.get_nodes_known()) > 0:
-            logging.info("Reconnecting | Addrs availables")
+            if self._verbose: logging.info("Reconnecting | Addrs availables")
             await self.sam.nm.start_late_connection_process(
                 connected=False, msg_type="discover_nodes", addrs_known=self.np.get_nodes_known()
             )
         else:
-            logging.info("Reconnecting | NO Addrs availables")
+            if self._verbose: logging.info("Reconnecting | NO Addrs availables")
             await self.sam.nm.start_late_connection_process(connected=False, msg_type="discover_nodes")
         self._restructure_process_lock.release()
 
@@ -204,12 +204,12 @@ class SANetwork():
         # addrs_to_connect = self.neighbor_policy.get_nodes_known(neighbors_too=False)
         # If we got some refs, try to connect to them
         if len(possible_neighbors) > 0:
-            logging.info(f"Reestructuring | Addrs availables | addr list: {possible_neighbors}")
+            if self._verbose: logging.info(f"Reestructuring | Addrs availables | addr list: {possible_neighbors}")
             await self.sam.nm.start_late_connection_process(
                 connected=True, msg_type="discover_nodes", addrs_known=possible_neighbors
             )
         else:
-            logging.info("Reestructuring | NO Addrs availables")
+            if self._verbose: logging.info("Reestructuring | NO Addrs availables")
             await self.sam.nm.start_late_connection_process(connected=True, msg_type="discover_nodes")
         self._restructure_process_lock.release()
 
@@ -221,3 +221,32 @@ class SANetwork():
             await self.cm.add_to_blacklist(n)
         for n in neighbors:
             await self.cm.disconnect(n, mutual_disconnection=False, forced=True)    
+        
+    """                                                     ###############################
+                                                            #       SA NETWORK AGENT      #
+                                                            ###############################
+    """        
+            
+class SANetworkAgent(SAModuleAgent):
+
+    def __init__(self, sanetwork : SANetwork):
+        self._san = sanetwork
+        
+    async def get_agent(self) -> str:
+        return "SANetwork_MainNetworkAgent"
+
+    async def register_sa_agent(self):
+        await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
+    
+    async def suggest_action(self, sac : SACommand):
+        await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
+    
+    async def notify_all_suggestions_done(self, event_type):
+        await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)
+        
+    async def create_and_suggest_action(self, saca: SACommandAction, function : Callable, *args):
+        if saca == SACommandAction.MAINTAIN_CONNECTIONS:
+            pass
+        elif saca == SACommandAction.SEARCH_CONNECTIONS:
+            pass
+        

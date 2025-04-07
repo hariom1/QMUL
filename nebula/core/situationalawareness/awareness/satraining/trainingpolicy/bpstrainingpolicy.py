@@ -1,4 +1,7 @@
 from nebula.core.situationalawareness.awareness.satraining.trainingpolicy.trainingpolicy import TrainingPolicy
+from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
+from nebula.core.situationalawareness.awareness.sacommand import SACommand, ConnectivityCommand, SACommandAction, SACommandPRIO
+from nebula.core.nebulaevents import RoundEndEvent
 
 class BPSTrainingPolicy(TrainingPolicy):
     
@@ -6,13 +9,28 @@ class BPSTrainingPolicy(TrainingPolicy):
         pass
     
     async def init(self, config):
-        pass    
+        await self.register_sa_agent()    
 
-    async def update_neighbors(self, node, remove=False):
-        pass
-    
-    async def evaluate(self):
-        return None
-    
     async def get_evaluation_results(self):
-        return None
+        sac = ConnectivityCommand(
+            SACommandAction.MAINTAIN_CONNECTIONS, 
+            "",
+            SACommandPRIO.LOW,
+            False,
+            None,
+            None
+        )
+        await self.suggest_action(sac)
+        await self.notify_all_suggestions_done(RoundEndEvent)
+    
+    async def get_agent(self) -> str:
+        return "SATraining_BPSTP"
+
+    async def register_sa_agent(self):
+        await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
+    
+    async def suggest_action(self, sac : SACommand):
+        await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
+    
+    async def notify_all_suggestions_done(self, event_type):
+        await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)

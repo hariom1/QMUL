@@ -8,10 +8,6 @@ class TrainingPolicy(SAModuleAgent):
         pass
 
     @abstractmethod
-    async def update_neighbors(self, node, remove=False):
-        pass
-    
-    @abstractmethod
     async def get_evaluation_results(self):
         pass
     

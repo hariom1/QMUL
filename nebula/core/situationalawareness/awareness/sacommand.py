@@ -51,6 +51,7 @@ class SACommand:
         self._priority = priority
         self._parallelizable = parallelizable
         self._state = SACommandState.PENDING
+        self._state_future = asyncio.get_event_loop().create_future()
 
     @abstractmethod
     async def execute(self):
@@ -60,11 +61,19 @@ class SACommand:
     async def conflicts_with(self, other: "SACommand") -> bool:
         raise NotImplementedError
     
+    async def discard_command(self):
+        await self._update_command_state(SACommandState.DISCARDED)
+    
     def get_owner(self):
         return self._owner.get_agent()
     
-    def update_command_state(self, sacs : SACommandState):
+    async def _update_command_state(self, sacs : SACommandState):
         self._state = sacs
+        if not self._state_future.done():
+            self._state_future.set_result(sacs)
+            
+    def get_state_future(self):
+        return self._state_future
     
     def is_parallelizable(self):
         return self._parallelizable
@@ -72,6 +81,7 @@ class SACommand:
     def __repr__(self):
         return (f"{self.__class__.__name__}(Type={self._command_type.value}, "
                 f"Action={self._action.value}, Target={self._target}, Priority={self._priority.value})")
+    
     
     """                                             ###############################
                                                     #     SA COMMAND SUBCLASS     #
@@ -94,7 +104,7 @@ class ConnectivityCommand(SACommand):
 
     async def execute(self):
         """Executes the assigned action function with the given parameters."""
-        self.update_command_state(SACommandState.EXECUTED)
+        await self._update_command_state(SACommandState.EXECUTED)
         if self._action_function:
             if asyncio.iscoroutinefunction(self._action_function):
                 await self._action_function(*self._args)  
@@ -123,7 +133,7 @@ class AggregationCommand(SACommand):
         super().__init__(SACommandType.CONNECTIVITY, action, target, priority, parallelizable)
 
     async def execute(self):
-        self.update_command_state(SACommandState.EXECUTED)
+        await self._update_command_state(SACommandState.EXECUTED)
         return self._target
     
     def conflicts_with(self, other: "AggregationCommand") -> bool:
