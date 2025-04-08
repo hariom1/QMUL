@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from enum import Enum
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
@@ -63,9 +64,18 @@ class SACommand:
     
     async def discard_command(self):
         await self._update_command_state(SACommandState.DISCARDED)
+
+    def got_higher_priority_than(self, other_prio: SACommandPRIO):
+        return self._priority > other_prio
+    
+    def get_prio(self):
+        return self._priority
     
     def get_owner(self):
         return self._owner.get_agent()
+    
+    def get_action(self) -> SACommandAction:
+        return self._action
     
     async def _update_command_state(self, sacs : SACommandState):
         self._state = sacs
@@ -115,11 +125,13 @@ class ConnectivityCommand(SACommand):
     def conflicts_with(self, other: "ConnectivityCommand") -> bool:
         """Determines if two commands conflict with each other."""
         if self._target == other._target:
+            logging.info(f"Evaluation posible conflict | targets {self._target}, {other._target}")
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.DISCONNECT},
             ]
             return {self._action, other._action} in conflict_pairs
         else:
+            logging.info(f"Evaluation posible conflict | actions {self._action}, {other._action}")
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.RECONNECT},
                 {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS},

@@ -254,7 +254,7 @@ class SANetworkAgent(SAModuleAgent):
                 SACommandAction.MAINTAIN_CONNECTIONS,
                 self, 
                 "",
-                SACommandPRIO.MEDIUM,
+                SACommandPRIO.HIGH,
                 False,
                 function,
                 None
@@ -267,7 +267,7 @@ class SANetworkAgent(SAModuleAgent):
                 SACommandAction.SEARCH_CONNECTIONS,
                 self, 
                 "",
-                SACommandPRIO.MEDIUM,
+                SACommandPRIO.HIGH,
                 True,
                 function,
                 *args
@@ -280,7 +280,7 @@ class SANetworkAgent(SAModuleAgent):
                 SACommandAction.RECONNECT,
                 self, 
                 "",
-                SACommandPRIO.MEDIUM,
+                SACommandPRIO.HIGH,
                 True,
                 None,
                 *args

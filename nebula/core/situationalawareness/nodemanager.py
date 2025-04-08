@@ -51,7 +51,7 @@ class NodeManager:
 
         self._desc_done = False #TODO remove
         
-        self._situational_awareness_module = SAModule(self, self.engine.addr, topology)
+        self._situational_awareness_module = SAModule(self, self.engine.addr, topology, True)
         self._verbose = verbose
 
     @property

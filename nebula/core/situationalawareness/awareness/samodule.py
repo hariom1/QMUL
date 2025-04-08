@@ -3,6 +3,7 @@ import asyncio
 import logging
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
+from nebula.core.situationalawareness.awareness.sacommand import SACommand
 from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import RoundEndEvent
 from nebula.core.eventmanager import EventManager
@@ -28,6 +29,7 @@ class SAModule:
         nodemanager,
         addr,
         topology,
+        verbose = False,
     ):
         print_msg_box(
             msg=f"Starting Situational Awareness module...",
@@ -45,6 +47,7 @@ class SAModule:
         self._arbitrator_notification = asyncio.Event()
         self._suggestion_buffer = SuggestionBuffer(self._arbitrator_notification, verbose=True)
         self._communciation_manager = CommunicationsManager.get_instance()
+        self._verbose = verbose
 
     @property
     def nm(self):
@@ -72,19 +75,14 @@ class SAModule:
         from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
         self._situational_awareness_network = SANetwork(self, self._addr, self._topology, True)
         self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
-        await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._mobility_actions)
+        await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
+        await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
         await self.san.init()
         await self.sat.init()
 
           
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
-
-    async def _mobility_actions(self, ree : RoundEndEvent):
-        logging.info("🔄 Starting additional mobility actions...")
-        asyncio.create_task(self.san.sa_component_actions())
-        asyncio.create_task(self.sat.sa_component_actions())    
-
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #
@@ -115,7 +113,68 @@ class SAModule:
         return self.san.get_actions()
 
     """                                                     ###############################
-                                                            #          ARBITRATION        #
+                                                            #         ARBITRATION         #
                                                             ###############################
     """
     
+    async def _tie_breaker(c1: SACommand, c2: SACommand):
+        return True
+    
+    async def _process_round_end_event(self, ree : RoundEndEvent):
+        logging.info("🔄 Arbitration | Round End Event...")
+        asyncio.create_task(self.san.sa_component_actions())
+        asyncio.create_task(self.sat.sa_component_actions())
+        valid_commands = await self._mediate_suggestions(RoundEndEvent)
+
+        # Execute SACommand selected
+        for cmd in valid_commands:
+            if cmd.is_parallelizable():
+                asyncio.create_task(cmd.execute())
+            else:
+                await cmd.execute()
+
+    async def _process_aggregation_event(self, age : AggregationEvent):
+        logging.info("🔄 Arbitration | Aggregation Event...")
+        aggregation_command: SACommand = (await self._mediate_suggestions(AggregationEvent))[0]
+        final_updates = await aggregation_command.execute()
+        age.update_updates(final_updates)
+
+    async def _mediate_suggestions(self, event_type):
+        if self._verbose: logging.info("Waiting for all suggestions done")
+        await self.sb.set_event_waited(event_type)
+        self._arbitrator_notification.wait()
+        suggestions = await self.sb.get_suggestions(event_type)
+        self._arbitrator_notification.clear()
+        if self._verbose: logging.info("Starting mediation, suggestions received")
+        if self._verbose: logging.info(f"Number of suggestions received: {len(suggestions)}")
+        
+        valid_commands: list[SACommand] = []
+
+        for cmd in suggestions:
+            has_conflict = False
+            to_remove: list[SACommand] = []
+
+            for other in valid_commands:
+                if await cmd.conflicts_with(other):
+                    if self._verbose: logging.info(f"Conflict detected | between -- {await cmd.get_owner().get_agent()} and {await other.get_owner().get_agent()} --")
+                    if self._verbose: logging.info(f"Action in conflict ({cmd.get_action()}, {other.get_action()})")
+                    if cmd.got_higher_priority_than(other.get_prio()):
+                        to_remove.append(other)
+                    elif cmd.get_prio() == other.get_prio():
+                        if await self._tie_breaker(cmd, other):
+                            to_remove.append(other)
+                        else:
+                            has_conflict = True
+                            break
+                    else:
+                        has_conflict = True
+                        break
+
+            if not has_conflict:
+                for r in to_remove:
+                    await r.discard_command()
+                    valid_commands.remove(r)
+                valid_commands.append(cmd)
+
+        return valid_commands
+

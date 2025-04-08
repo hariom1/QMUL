@@ -5,6 +5,7 @@ from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAge
 from nebula.core.situationalawareness.awareness.sacommand import SACommand
 from nebula.core.nebulaevents import NodeEvent, RoundEndEvent, AggregationEvent
 from collections import defaultdict
+from typing import Type
 
 class SuggestionBuffer():
     _instance = None
@@ -28,11 +29,11 @@ class SuggestionBuffer():
         self._arbitrator_notification = arbitrator_notification
         self._arbitrator_notification_lock = Locker("arbitrator_notification_lock", async_lock=True)
         self._verbose = verbose
-        self._buffer : dict[NodeEvent, list[SACommand]] = defaultdict(list)             # {event: [suggestion]}
+        self._buffer : dict[Type[NodeEvent], list[SACommand]] = defaultdict(list)             # {event: [suggestion]}
         self._suggestion_buffer_lock = Locker("suggestion_buffer_lock", async_lock=True)
         self._expected_agents = defaultdict(set)                                        # {event: {agents}}
         self._expected_agents_lock = Locker("expected_agents_lock", async_lock=True)
-        self._event_notifications : dict[NodeEvent, list[tuple[SAModuleAgent, asyncio.Event]]] = {}
+        self._event_notifications : dict[Type[NodeEvent], list[tuple[SAModuleAgent, asyncio.Event]]] = {}
         self._event_waited = None
                       
     async def register_event_agents(self, event_type, agent: SAModuleAgent):
@@ -56,8 +57,9 @@ class SuggestionBuffer():
     async def set_event_waited(self, event_type):
         """Registers event to be waited"""
         if not self._event_waited:
-            if self._verbose: logging.info(f"Set notification when all suggestiones are being received for event: {event_type}")
+            if self._verbose: logging.info(f"Set notification when all suggestions are being received for event: {event_type}")
             self._event_waited = event_type
+            await self._notify_arbitrator(event_type)
 
     async def notify_all_suggestions_done_for_agent(self, saa : SAModuleAgent, event_type):
         """SA Agent notification that has registered all the suggestions for event_type."""
