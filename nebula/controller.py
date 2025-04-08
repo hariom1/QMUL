@@ -279,22 +279,22 @@ async def list_nodes_by_scenario_name(
         logging.error(f"Error obtaining nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"nodes": nodes}
+    return nodes
 
 
-@app.post("/nodes/update/")
+@app.post("/nodes/update")
 async def update_nodes(
     node_uid: str = Body(..., embed=True),
     node_idx: str = Body(..., embed=True),
     node_ip: str = Body(..., embed=True),
     node_port: str = Body(..., embed=True),
-    node_role: int = Body(..., embed=True),
+    node_role: str = Body(..., embed=True),
     node_neighbors: str = Body(..., embed=True),
     node_latitude: str = Body(..., embed=True),
     node_longitude: str = Body(..., embed=True),
     node_timestamp: str = Body(..., embed=True),
     node_federation: str = Body(..., embed=True),
-    node_round_number: str = Body(..., embed=True),
+    node_round: str = Body(..., embed=True),
     node_scenario_name: str = Body(..., embed=True),
     node_run_hash: str = Body(..., embed=True)
 ):
@@ -302,9 +302,8 @@ async def update_nodes(
     Controller endpoint to update nodes.
     """
     from nebula.frontend.database import update_node_record
-
     try:
-        update_node_record(
+        await update_node_record(
             node_uid,
             node_idx,
             node_ip,
@@ -315,7 +314,7 @@ async def update_nodes(
             node_longitude,
             node_timestamp,
             node_federation,
-            node_round_number,
+            node_round,
             node_scenario_name,
             node_run_hash,
         )
@@ -379,7 +378,7 @@ async def get_scenario_by_name(
         logging.error(f"Error obtaining scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     
-    return {"scenario": scenario}
+    return scenario
 
 
 @app.get("/notes")
@@ -1143,7 +1142,6 @@ class Controller:
                 f"{self.root_path}:/nebula",
                 "/var/run/docker.sock:/var/run/docker.sock",
                 f"{self.root_path}/nebula/frontend/config/nebula:/etc/nginx/sites-available/default",
-                # f"{self.databases_dir}:/nebula/nebula/frontend/databases",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={80: self.frontend_port, 8080: self.statistics_port},

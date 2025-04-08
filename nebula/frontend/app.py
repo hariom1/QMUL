@@ -320,19 +320,19 @@ async def list_nodes_by_scenario_name(scenario_name):
 async def update_node_record(uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round_number, scenario_name, run_hash):
     url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/update"
     data = {
-        "uid": uid,
-        "idx": idx,
-        "ip": ip,
-        "port": port,
-        "role": role,
-        "neighbors": neighbors,
-        "latitude": latitude,
-        "longitude": longitude,
-        "timestamp": timestamp,
-        "federation": federation,
-        "round": round_number,
-        "scenario_name": scenario_name,
-        "run_hash": run_hash,
+        "node_uid": uid,
+        "node_idx": idx,
+        "node_ip": ip,
+        "node_port": port,
+        "node_role": role,
+        "node_neighbors": neighbors,
+        "node_latitude": latitude,
+        "node_longitude": longitude,
+        "node_timestamp": timestamp,
+        "node_federation": federation,
+        "node_round": round_number,
+        "node_scenario_name": scenario_name,
+        "node_run_hash": run_hash,
     }
     await controller_post(url, data)
 
@@ -717,6 +717,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
     scenario = await get_scenario_by_name(scenario_name)
     if scenario:
         nodes_list = await list_nodes_by_scenario_name(scenario_name)
+        logging.info("[FER] nodes_list: %s", nodes_list)
         if nodes_list:
             nodes_config = []
             nodes_status = []
@@ -855,21 +856,24 @@ async def nebula_update_node(scenario_name: str, request: Request):
             config = await request.json()
             timestamp = datetime.datetime.now()
             # Update the node in database
-            await update_node_record(
-                str(config["device_args"]["uid"]),
-                str(config["device_args"]["idx"]),
-                str(config["network_args"]["ip"]),
-                str(config["network_args"]["port"]),
-                str(config["device_args"]["role"]),
-                str(config["network_args"]["neighbors"]),
-                str(config["mobility_args"]["latitude"]),
-                str(config["mobility_args"]["longitude"]),
-                str(timestamp),
-                str(config["scenario_args"]["federation"]),
-                str(config["federation_args"]["round"]),
-                str(config["scenario_args"]["name"]),
-                str(config["tracking_args"]["run_hash"]),
-            )
+            try:
+                await update_node_record(
+                    str(config["device_args"]["uid"]),
+                    str(config["device_args"]["idx"]),
+                    str(config["network_args"]["ip"]),
+                    str(config["network_args"]["port"]),
+                    str(config["device_args"]["role"]),
+                    str(config["network_args"]["neighbors"]),
+                    str(config["mobility_args"]["latitude"]),
+                    str(config["mobility_args"]["longitude"]),
+                    str(timestamp),
+                    str(config["scenario_args"]["federation"]),
+                    str(config["federation_args"]["round"]),
+                    str(config["scenario_args"]["name"]),
+                    str(config["tracking_args"]["run_hash"]),
+                )
+            except Exception as e:
+                logging.info("[FER] Error updating node record")
 
             neighbors_distance = config["mobility_args"]["neighbors_distance"]
 
@@ -1325,7 +1329,7 @@ async def nebula_dashboard_deployment(request: Request, session: dict = Depends(
 #     return nodes, attack_matrix
 
 
-import math
+# import math
 
 
 # def mobility_assign(nodes, mobile_participants_percent):
@@ -1364,6 +1368,8 @@ async def node_stopped(scenario_name: str, request: Request):
         for node in nodes_list:
             if str(node[1]) not in map(str, user_data.nodes_finished):
                 finished = False
+
+        logging.info(f"[FER] Finished nodes: {user_data.nodes_finished} Finished: {finished}")
 
         if finished:
             await stop_scenario(scenario_name, user)
