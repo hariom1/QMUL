@@ -97,6 +97,7 @@ class DFLUpdateHandler(UpdateHandler):
     async def storage_update(self, updt_received_event: UpdateReceivedEvent):
         time_received = time.time()
         (model, weight, source, round, _) = await updt_received_event.get_event_data()
+
         if source in self._sources_expected:
             updt = Update(model, weight, source, round, time_received)
             await self._updates_storage_lock.acquire_async()
@@ -130,6 +131,9 @@ class DFLUpdateHandler(UpdateHandler):
         if updates_missing:
             self._missing_ones = updates_missing
             logging.info(f"Missing updates from sources: {updates_missing}")
+        else:
+            self._missing_ones.clear()
+            
         self._nodes_using_historic.clear()
         updates = {}
         for sr in self._sources_received:
