@@ -256,6 +256,7 @@ async def controller_post(url, data=None):
             if response.status == 200:
                 return await response.json()
             else:
+                logging.info(f"[FER] POST request to {url} data {data} failed with status code {response.status}")
                 raise HTTPException(status_code=response.status, detail="Error posting data")
             
 

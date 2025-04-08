@@ -145,9 +145,6 @@ async def initialize_databases(databases_dir):
                 poisoned_noise_percent TEXT,
                 attack_params TEXT,
                 with_reputation TEXT,
-                is_dynamic_topology TEXT,
-                is_dynamic_aggregation TEXT,
-                target_aggregation TEXT,
                 random_geo TEXT,
                 latitude TEXT,
                 longitude TEXT,
@@ -200,9 +197,6 @@ async def initialize_databases(databases_dir):
             "poisoned_noise_percent": "TEXT",
             "attack_params": "TEXT",
             "with_reputation": "TEXT",
-            "is_dynamic_topology": "TEXT",
-            "is_dynamic_aggregation": "TEXT",
-            "target_aggregation": "TEXT",
             "random_geo": "TEXT",
             "latitude": "TEXT",
             "longitude": "TEXT",
@@ -605,9 +599,6 @@ def scenario_update_record(
                 poisoned_noise_percent,
                 attack_params,
                 with_reputation,
-                is_dynamic_topology,
-                is_dynamic_aggregation,
-                target_aggregation,
                 random_geo,
                 latitude,
                 longitude,
@@ -623,7 +614,7 @@ def scenario_update_record(
                 role,
                 username
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             );
         """
         _c.execute(insert_command, (
@@ -660,9 +651,6 @@ def scenario_update_record(
             scenario.poisoned_noise_percent,
             json.dumps(scenario.attack_params),
             scenario.with_reputation,
-            scenario.is_dynamic_topology,
-            scenario.is_dynamic_aggregation,
-            scenario.target_aggregation,
             scenario.random_geo,
             scenario.latitude,
             scenario.longitude,
@@ -713,9 +701,6 @@ def scenario_update_record(
                 poisoned_noise_percent = ?,
                 attack_params = ?,
                 with_reputation = ?,
-                is_dynamic_topology = ?,
-                is_dynamic_aggregation = ?,
-                target_aggregation = ?,
                 random_geo = ?,
                 latitude = ?,
                 longitude = ?,
@@ -765,9 +750,6 @@ def scenario_update_record(
             scenario.poisoned_noise_percent,
             json.dumps(scenario.attack_params),
             scenario.with_reputation,
-            scenario.is_dynamic_topology,
-            scenario.is_dynamic_aggregation,
-            scenario.target_aggregation,
             scenario.random_geo,
             scenario.latitude,
             scenario.longitude,

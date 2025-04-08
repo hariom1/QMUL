@@ -371,7 +371,6 @@ async def get_scenario_by_name(
         )
     ]
 ):
-    logging.info("[FER] controller")
     from nebula.frontend.database import get_scenario_by_name
 
     try:
