@@ -167,8 +167,9 @@ class SANetwork(SAMComponent):
         logging.info("🔄 Analizing node network robustness...")
         if not self._restructure_process_lock.locked():
             if not await self.neighbors_left():
-                 if self._verbose: logging.info("No Neighbors left | reconnecting with Federation")
+                if self._verbose: logging.info("No Neighbors left | reconnecting with Federation")
                 #await self.reconnect_to_federation()
+                await self.sana.create_and_suggest_action(SACommandAction.RECONNECT, self.reconnect_to_federation, None)
             elif self.np.need_more_neighbors() and self._restructure_available():
                 if self._verbose: logging.info("Insufficient Robustness | Upgrading robustness | Searching for more connections")
                 self._update_restructure_cooldown()
@@ -178,9 +179,11 @@ class SANetwork(SAMComponent):
                      if self._verbose: logging.info("All possible neighbors using nodes known are restricted...")
                 else:
                     pass
+                await self.sana.create_and_suggest_action(SACommandAction.SEARCH_CONNECTIONS, self.upgrade_connection_robustness, possible_neighbors)
                     # asyncio.create_task(self.upgrade_connection_robustness(possible_neighbors))
             else:
                  if self._verbose: logging.info("Sufficient Robustness | no actions required")
+                 await self.sana.create_and_suggest_action(SACommandAction.MAINTAIN_CONNECTIONS)
         else:
              if self._verbose: logging.info("❗️ Reestructure/Reconnecting process already running...")
 
@@ -244,11 +247,12 @@ class SANetworkAgent(SAModuleAgent):
     async def notify_all_suggestions_done(self, event_type):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)
         
-    async def create_and_suggest_action(self, saca: SACommandAction, function : Callable, *args):
+    async def create_and_suggest_action(self, saca: SACommandAction, function: Callable = None, *args):
         if saca == SACommandAction.MAINTAIN_CONNECTIONS:
             sac = factory_sa_command(
                 "connectivity",
-                SACommandAction.MAINTAIN_CONNECTIONS, 
+                SACommandAction.MAINTAIN_CONNECTIONS,
+                self, 
                 "",
                 SACommandPRIO.MEDIUM,
                 False,
@@ -260,7 +264,8 @@ class SANetworkAgent(SAModuleAgent):
         elif saca == SACommandAction.SEARCH_CONNECTIONS:
             sac = factory_sa_command(
                 "connectivity",
-                SACommandAction.MAINTAIN_CONNECTIONS, 
+                SACommandAction.SEARCH_CONNECTIONS,
+                self, 
                 "",
                 SACommandPRIO.MEDIUM,
                 True,
@@ -269,4 +274,16 @@ class SANetworkAgent(SAModuleAgent):
             )
             await self.suggest_action(sac)
             await self.notify_all_suggestions_done(RoundEndEvent)
-        
+        elif saca == SACommandAction.RECONNECT:
+            sac = factory_sa_command(
+                "connectivity",
+                SACommandAction.RECONNECT,
+                self, 
+                "",
+                SACommandPRIO.MEDIUM,
+                True,
+                None,
+                *args
+            )
+            await self.suggest_action(sac)
+            await self.notify_all_suggestions_done(RoundEndEvent)

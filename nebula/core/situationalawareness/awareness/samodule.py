@@ -3,22 +3,16 @@ import asyncio
 import logging
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.suggestionbuffer import SuggestionBuffer
-from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
-from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
 from nebula.core.utils.locker import Locker
 from nebula.core.nebulaevents import RoundEndEvent
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import RoundEndEvent, AggregationEvent
-
 from nebula.core.network.communications import CommunicationsManager
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.nodemanager import NodeManager
     
-
-RESTRUCTURE_COOLDOWN = 5
-
 class SAMComponent(ABC):
     @abstractmethod
     async def init(self):
@@ -44,8 +38,8 @@ class SAModule:
         self._addr = addr
         self._topology = topology
         self._node_manager: NodeManager = nodemanager
-        self._situational_awareness_network = SANetwork(self, self._addr, self._topology)
-        self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
+        self._situational_awareness_network = None
+        self._situational_awareness_training = None
         self._restructure_process_lock = Locker(name="restructure_process_lock")
         self._restructure_cooldown = 0
         self._arbitrator_notification = asyncio.Event()
@@ -74,6 +68,10 @@ class SAModule:
     
 
     async def init(self):
+        from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
+        from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
+        self._situational_awareness_network = SANetwork(self, self._addr, self._topology, True)
+        self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._mobility_actions)
         await self.san.init()
         await self.sat.init()
@@ -116,4 +114,8 @@ class SAModule:
     def get_actions(self):
         return self.san.get_actions()
 
+    """                                                     ###############################
+                                                            #          ARBITRATION        #
+                                                            ###############################
+    """
     

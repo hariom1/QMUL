@@ -92,7 +92,7 @@ class ConnectivityCommand(SACommand):
     def __init__(
         self, 
         action: SACommandAction,
-        owner : SAModuleAgent, 
+        owner : "SAModuleAgent", 
         target: str, 
         priority: SACommandPRIO = SACommandPRIO.MEDIUM,
         parallelizable = False,
@@ -112,24 +112,27 @@ class ConnectivityCommand(SACommand):
             else:
                 self._action_function(*self._args)
 
-    #TODO repasar
     def conflicts_with(self, other: "ConnectivityCommand") -> bool:
         """Determines if two commands conflict with each other."""
         if self._target == other._target:
+            conflict_pairs = [
+                {SACommandAction.DISCONNECT, SACommandAction.DISCONNECT},
+            ]
+            return {self._action, other._action} in conflict_pairs
+        else:
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.RECONNECT},
                 {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS},
                 {SACommandAction.DISCONNECT, SACommandAction.SEARCH_CONNECTIONS}
             ]
             return {self._action, other._action} in conflict_pairs
-        return False 
 
 class AggregationCommand(SACommand):
     """Commands related to data aggregation."""
     def __init__(
         self, 
         action: SACommandAction,
-        owner : SAModuleAgent, 
+        owner : "SAModuleAgent", 
         target: dict, 
         priority: SACommandPRIO = SACommandPRIO.MEDIUM,
         parallelizable = False,
