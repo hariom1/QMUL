@@ -76,11 +76,8 @@ class Reputation:
         self.previous_std_dev_number_message = {}
         self.messages_model_arrival_latency = {}
         self.model_arrival_latency_history = {}
-        self.previous_percentile_25_number_message = {}
-        self.previous_percentile_85_number_message = {}
         self._addr = engine.addr
         self._log_dir = engine.log_dir
-        self._idx = engine.idx
         self.connection_metrics = []
          
         neighbors:str = self._config.participant["network_args"]["neighbors"]
@@ -121,10 +118,7 @@ class Reputation:
         time=None,
         current_round=None,
         fraction_changed=None,
-        total_params=None,
-        changed_params=None,
         threshold=None,
-        changes_record=None,
         latency=None,
     ):
         """
@@ -494,13 +488,11 @@ class Reputation:
                     if entry["metric_name"] == metric_name and entry["round"] == current_round and entry["nei"] == nei:
                         entry["weight"] = weight
 
-    async def calculate_value_metrics(self, log_dir, id_node, addr, nei, metrics_active=None):
+    async def calculate_value_metrics(self, addr, nei, metrics_active=None):
         """
         Calculate the reputation of each participant based on the data stored in self.connection_metrics.
 
         Args:
-            log_dir (str): Log directory.
-            id_node (str): Node ID.
             addr (str): Source IP address.
             nei (str): Destination IP address.
             metrics_active (dict): The active metrics.
@@ -554,80 +546,70 @@ class Reputation:
                         fraction_changed,
                         threshold,
                     )
+                
+                if current_round >= 5:
+                    if fraction_score_normalized > 0:
+                        key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                        fraction_previous_round = None
+
+                        if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
+                            fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
+                            fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+
+                        if fraction_previous_round is not None:
+                            fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
+                            self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
+                        else:
+                            fraction_score_asign = fraction_score_normalized
+                            self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
+                    else:
+                        fraction_previous_round = None
+                        key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
+                        if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
+                            fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
+                            fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+
+                        if fraction_previous_round is not None:
+                            fraction_score_asign = fraction_previous_round - (fraction_previous_round * 0.5)
+                        else:
+                            if fraction_neighbors_scores is None:
+                                fraction_neighbors_scores = {}
+
+                            for key, value in self.fraction_changed_history.items():
+                                score = value.get("fraction_score")
+                                if score is not None:
+                                    fraction_neighbors_scores[key] = score
+
+                            if fraction_neighbors_scores:
+                                fraction_score_asign = np.mean(list(fraction_neighbors_scores.values()))
+                            else:
+                                fraction_score_asign = 0 
+                else:
+                    fraction_score_asign = 0
 
             if metrics_active.get("model_arrival_latency", False):
                 if metrics_instance.model_arrival_latency.get("round_received") == current_round:
-                    round_latency = metrics_instance.model_arrival_latency.get("round")
+                    round_num = metrics_instance.model_arrival_latency.get("round")
                     latency = metrics_instance.model_arrival_latency.get("latency")
                     messages_model_arrival_latency_normalized = self.manage_model_arrival_latency(
-                        round_latency,
                         addr,
                         nei,
                         latency,
-                        current_round
+                        current_round,
+                        round_num
                     )
+
+                if messages_model_arrival_latency_normalized >= 0:
+                    avg_model_arrival_latency = self.save_model_arrival_latency_history(
+                        nei, messages_model_arrival_latency_normalized, current_round
+                    )
+                    if avg_model_arrival_latency is None and current_round > 4:
+                        avg_model_arrival_latency = self.model_arrival_latency_history[(addr, nei)][current_round - 1]["score"]
 
             if current_round >= 5 and metrics_active.get("model_similarity", False):
                 similarity_reputation = self.calculate_similarity_from_metrics(nei, current_round)
             else:
                 similarity_reputation = 0
-
-            if messages_model_arrival_latency_normalized >= 0:
-                avg_model_arrival_latency = self.save_model_arrival_latency_history(
-                    nei, messages_model_arrival_latency_normalized, current_round
-                )
-                if avg_model_arrival_latency is None and current_round > 4:
-                    avg_model_arrival_latency = self.model_arrival_latency_history[(addr, nei)][current_round - 1]["score"]
-
-            if self.messages_number_message is not None:
-                messages_number_message_normalized, messages_number_message_count = self.manage_metric_number_message(
-                    self.messages_number_message, addr, nei, current_round, metrics_active.get("num_messages", False)
-                )
-                avg_messages_number_message_normalized = self.save_number_message_history(
-                    addr, nei, messages_number_message_normalized, current_round
-                )
-                if avg_messages_number_message_normalized is None and current_round > 4:
-                    avg_messages_number_message_normalized = self.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
-
-            if current_round >= 5:
-                if fraction_score_normalized > 0:
-                    key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
-                    fraction_previous_round = None
-
-                    if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
-                        fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
-                        fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
-
-                    if fraction_previous_round is not None:
-                        fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
-                        self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
-                    else:
-                        fraction_score_asign = fraction_score_normalized
-                        self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = fraction_score_asign
-                else:
-                    fraction_previous_round = None
-                    key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
-                    if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
-                        fraction_score_prev = self.fraction_changed_history[key_previous_round].get("fraction_score")
-                        fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
-
-                    if fraction_previous_round is not None:
-                        fraction_score_asign = fraction_previous_round - (fraction_previous_round * 0.5)
-                    else:
-                        if fraction_neighbors_scores is None:
-                            fraction_neighbors_scores = {}
-
-                        for key, value in self.fraction_changed_history.items():
-                            score = value.get("fraction_score")
-                            if score is not None:
-                                fraction_neighbors_scores[key] = score
-
-                        if fraction_neighbors_scores:
-                            fraction_score_asign = np.mean(list(fraction_neighbors_scores.values()))
-                        else:
-                            fraction_score_asign = 0 
-            else:
-                fraction_score_asign = 0
  
             self.create_graphics_to_metrics(
                 messages_number_message_count,
@@ -797,7 +779,7 @@ class Reputation:
                     current_threshold = self.fraction_changed_history[key]["threshold"]
 
                     upper_mean_fraction_prev = (mean_fraction_prev + std_dev_fraction_prev) * 1.20
-                    upper_mean_threshold_prev = (mean_threshold_prev + std_dev_threshold_prev) * 1.10
+                    upper_mean_threshold_prev = (mean_threshold_prev + std_dev_threshold_prev) * 1.15
 
                     fraction_anomaly = current_fraction > upper_mean_fraction_prev
                     threshold_anomaly = current_threshold > upper_mean_threshold_prev
@@ -865,17 +847,17 @@ class Reputation:
             return -1
     
     def manage_model_arrival_latency(
-        self, round_num, addr, nei, latency, current_round
+        self, addr, nei, latency, current_round, round_num
     ):
         """
         Manage the model_arrival_latency metric with persistent storage of mean latency.
 
         Args:
-            round_num (int): The round number.
             addr (str): Source IP address.
             nei (str): Destination IP address.
             latency (float): Latency value for the current model_arrival_latency.
             current_round (int): The current round of the program.
+            round_num (int): The round number of the model_arrival_latency.
 
         Returns:
             float: Normalized model_arrival_latency latency value between 0 and 1.
@@ -891,34 +873,29 @@ class Reputation:
                 "score": 0.0,
             }
 
-            prev_mean_latency = 0
+            mean_latency = 0
             difference = 0
 
             if current_round >= 5:
                 all_latencies = [
                     data["latency"]
                     for r in self.model_arrival_latency_history
+                    if r > 0
                     for key, data in self.model_arrival_latency_history[r].items()
                     if "latency" in data and data["latency"] != 0
                 ]
 
-                prev_mean_latency = np.mean(all_latencies) if all_latencies else 0
-                aument_mean_latency = prev_mean_latency * 1.30
-                difference = latency - aument_mean_latency
+                mean_latency = np.mean(all_latencies) if all_latencies else 0
+                aument_mean_latency = mean_latency * 1.9
+                difference = latency - mean_latency
 
                 if latency <= aument_mean_latency:
                     score = 1.0
                 else:
-                    score = 1 / (1 + np.exp(abs(difference) / prev_mean_latency))
-
-                if round_num < current_round:
-                    round_diff = current_round - round_num
-                    penalty_factor = round_diff * 0.1
-                    penalty = penalty_factor * (1 - score)
-                    score -= penalty * score
+                    score = 1 / (1 + np.exp(abs(difference) / mean_latency))
 
                 self.model_arrival_latency_history[current_round][current_key].update({
-                    "mean_latency": prev_mean_latency,
+                    "mean_latency": mean_latency,
                     "score": score,
                 })
             else:
@@ -927,12 +904,11 @@ class Reputation:
             data = {
                 "addr": addr,
                 "nei": nei,
-                "round": current_round,
+                "round": round_num,
+                "current_round": current_round,
                 "latency": latency,
-                "mean_latency": prev_mean_latency if current_round >= 5 else None,
+                "mean_latency": mean_latency if current_round >= 5 else None,
                 "aument_mean_latency": aument_mean_latency if current_round >= 5 else None,
-                # "prev_percentil_0": prev_percentil_0 if current_round >= 5 else None,
-                # "prev_percentil_30": prev_percentil_30 if current_round >= 5 else None,
                 "difference": difference if current_round >= 5 else None,
                 "score": score,
             }
@@ -1003,7 +979,7 @@ class Reputation:
         except Exception:
             logging.exception("Error saving model_arrival_latency history")
     
-    def manage_metric_number_message(self, messages_number_message, addr, nei, current_round, metric_active=True):
+    def manage_metric_number_message(self, messages_number_message: list, addr: str, nei: str, current_round: int, metric_active: bool = True) -> tuple[float, int]:
         """
         Manage the number_message metric using percentiles for normalization, considering the last 5 rounds dynamically.
 
@@ -1019,71 +995,65 @@ class Reputation:
             int: Messages count.
         """
         try:
-            if current_round == 0:
-                return 0.0, 0
-
-            if not metric_active:
+            if current_round == 0 or not metric_active:
                 return 0.0, 0
 
             current_addr_nei = (addr, nei)
+
             relevant_messages = [
-                msg
-                for msg in messages_number_message
+                msg for msg in messages_number_message
                 if msg["key"] == current_addr_nei and msg["current_round"] == current_round
             ]
-            messages_count = len(relevant_messages) if relevant_messages else 0
-            rounds_to_consider = []
-            if current_round >= 4:
-                rounds_to_consider = [current_round - 4, current_round - 3, current_round - 2, current_round - 1]
-            elif current_round == 3:
-                rounds_to_consider = [0, 1, 2, 3]
-            elif current_round == 2:
-                rounds_to_consider = [0, 1, 2]
-            elif current_round == 1:
-                rounds_to_consider = [0, 1]
-            elif current_round == 0:
-                rounds_to_consider = [0]
-
+            messages_count = len(relevant_messages)
+            rounds_to_consider = [r for r in range(max(0, current_round - 4), current_round)]
             previous_counts = [
-                len([m for m in messages_number_message if m["key"] == current_addr_nei and m["current_round"] == r])
+                len([
+                    m for m in messages_number_message
+                    if m["key"] == current_addr_nei and m["current_round"] == r
+                ])
                 for r in rounds_to_consider
             ]
 
-            self.previous_percentile_25_number_message[current_addr_nei] = (
-                np.percentile(previous_counts, 25) if previous_counts else 0
-            )
-            self.previous_percentile_85_number_message[current_addr_nei] = (
-                np.percentile(previous_counts, 100) * 1.5 if previous_counts else 0
-            )
+            percentile_25 = np.percentile(previous_counts, 25) if previous_counts else 0
+            normalized_messages: float = 1.0
+            relative_increase: float = 0.0
+            std_dev: float = 0.0
+            percentile_85: float = 0.0
 
-            normalized_messages = 1.0
-            relative_position = 0
+            if current_round >= 5 and previous_counts:
+                filtered_counts = [
+                    x for x in previous_counts
+                    if x <= np.percentile(previous_counts, 90)
+                ]
+                percentile_85 = np.percentile(filtered_counts, 85) * 1.2 if filtered_counts else 0
+                relative_increase = max((messages_count - percentile_85) / max(percentile_85, 1), 0)
+                normalized_messages = np.exp(-relative_increase)
 
-            if current_round > 4:
-                percentile_25 = self.previous_percentile_25_number_message.get(current_addr_nei, 0)
-                percentile_85 = self.previous_percentile_85_number_message.get(current_addr_nei, 0)
-                if messages_count > percentile_85:
-                    relative_position = (messages_count - percentile_85) / (percentile_85 - percentile_25)
-                    normalized_messages = np.exp(-relative_position)
+                std_dev = np.std(previous_counts)
+                if std_dev > 2:
+                    normalized_messages *= np.exp(-std_dev / 2)
 
-                normalized_messages = max(0.01, normalized_messages)
+                normalized_messages = max(0.001, normalized_messages)
 
             data = {
                 "addr": addr,
                 "nei": nei,
                 "round": current_round,
                 "messages_count": messages_count,
+                "percentile_25": percentile_25,
+                "percentile_85": percentile_85,
+                "relative_increase": relative_increase,
+                "std_dev": std_dev,
                 "normalized_messages": normalized_messages,
-                "percentile_25": self.previous_percentile_25_number_message[current_addr_nei],
-                "percentile_85": self.previous_percentile_85_number_message[current_addr_nei],
             }
             self.metrics(data, addr, nei, type="number_message")
 
             return normalized_messages, messages_count
+
         except Exception:
             logging.exception("Error managing metric number_message")
             return 0.0, 0
-    
+
     def save_number_message_history(self, addr, nei, messages_number_message_normalized, current_round):
         """
         Save the number_message history of a participant (addr) regarding its neighbor (nei) in memory.
@@ -1236,7 +1206,6 @@ class Reputation:
             source_ip = metric.get("nei")
             round_in_metric = metric.get("round")
 
-            logging.info(f"[FER] source_ip {source_ip}, round_in_metric {round_in_metric}, current_round {current_round}")
             if source_ip == nei and round_in_metric == current_round:
                 weight_cosine = 0.25
                 weight_euclidean = 0.25
@@ -1330,8 +1299,6 @@ class Reputation:
             for nei in neighbors:
                 metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency = (
                     await self.calculate_value_metrics(
-                        self._log_dir,
-                        self._idx,
                         self._addr,
                         nei,
                         metrics_active=self._reputation_metrics,
@@ -1446,17 +1413,39 @@ class Reputation:
             
     async def update_process_aggregation(self, updates):
         """
-        Update the process of aggregation by removing rejected nodes from the updates.
+        Update the process of aggregation by removing rejected nodes from the updates and
+        scaling the weights of the models based on their reputation.
         """
+        # Reject node if the reputation is below 0.6 from the updates
         for rn in self.rejected_nodes:
             if rn in updates:
                 updates.pop(rn)
+
+        # Scale the model weights based on the reputation of the nodes
+        if self.engine.get_round() >= 5:
+            for nei in list(updates.keys()):
+                if nei in self.reputation:
+                    rep = self.reputation[nei].get("reputation", 0)
+                    if rep >= 0.6:
+                        weight = (rep - 0.6) / (1.0 - 0.6)
+                        model_dict = updates[nei][0]
+                        extra_data = updates[nei][1]
+
+                        scaled_model = {k: v * weight for k, v in model_dict.items()}
+                        updates[nei] = (scaled_model, extra_data)
+
+                        logging.info(f"✅ Nei {nei} with reputation {rep:.4f}, scaled model with weight {weight:.4f}")
+                    else:
+                        logging.info(f"⛔ Nei {nei} with reputation {rep:.4f}, model rejected")
 
         logging.info(f"Updates after rejected nodes: {list(updates.keys())}")
         self.rejected_nodes.clear()
         logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
 
     async def include_feedback_in_reputation(self):
+        """
+            Include feedback of neighbors in the reputation.
+        """
         weight_current_reputation = 0.9
         weight_feedback = 0.1
 
@@ -1503,6 +1492,9 @@ class Reputation:
             return False
     
     async def on_round_start(self, rse: RoundStartEvent):
+        """
+            Handle the start of a new round and initialize the round timing information.
+        """
         (round_id, start_time, expected_nodes) = await rse.get_event_data()
         if round_id not in self.round_timing_info:
             self.round_timing_info[round_id] = {}
@@ -1511,98 +1503,92 @@ class Reputation:
 
     async def recollect_model_arrival_latency(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
-        current_time = time.time()
         current_round = self._engine.get_round()
 
+        # logging.info(f"Model from source {source}, round {round_num}, current_round {current_round}")
+
+        self.round_timing_info.setdefault(round_num, {})
+
         if round_num == current_round:
-            logging.info(f"Model from source {source} arrived in the current round {current_round}.")
-            
-            if round_num not in self.round_timing_info:
-                self.round_timing_info[round_num] = {}
-            
-            if "start_time" in self.round_timing_info[round_num]:
-                if "model_received_time" not in self.round_timing_info[round_num]:
-                    self.round_timing_info[round_num]["model_received_time"] = {}
-
-                self.round_timing_info[round_num]["model_received_time"][source] = current_time
-
-                received_time = self.round_timing_info[round_num]["model_received_time"][source]
-                start_time = self.round_timing_info[round_num]["start_time"]
-                duration = received_time - start_time
-                self.round_timing_info[round_num]["duration"] = duration
-                logging.info(f"Source {source} , round {round_num}, duration: {duration:.4f} seconds")
-
-                self.save_data(
-                    "model_arrival_latency",
-                    source,
-                    self._addr,
-                    num_round=round_num,
-                    current_round=current_round,
-                    latency=duration,
-                )
-            else:
-                logging.info(f"Start time not yet available for round {round_num}.")
+            self._process_current_round(round_num, source)
 
         elif round_num > current_round:
-            logging.info(f"Model from future round {round_num} arrived at round {current_round}, storing latency without penalization.")
-            
-            if round_num not in self.round_timing_info:
-                self.round_timing_info[round_num] = {}
+            self.round_timing_info[round_num]["pending_recalculation"] = True
+            self.round_timing_info[round_num].setdefault("pending_sources", set()).add(source)
+            logging.info(f"Model from future round {round_num} stored, pending recalculation.")
 
-            if "model_received_time" not in self.round_timing_info[round_num]:
-                self.round_timing_info[round_num]["model_received_time"] = {}
+        else:
+            self._process_past_round(round_num, source)
 
+        self._recalculate_pending_latencies(current_round)
+
+    def _process_current_round(self, round_num, source):
+        """ 
+            Process models that arrive in the current round. 
+        """
+        if "start_time" in self.round_timing_info[round_num]:
+            current_time = time.time()
+            self.round_timing_info[round_num].setdefault("model_received_time", {})
             self.round_timing_info[round_num]["model_received_time"][source] = current_time
-            logging.info(f"Model from source {source} received on time for round {round_num}.")
 
-            if round_num in self.round_timing_info and "start_time" in self.round_timing_info[round_num]:
-                start_time = self.round_timing_info[round_num]["start_time"]
-                received_time = self.round_timing_info[round_num]["model_received_time"][source]
-                duration = received_time - start_time
-                self.round_timing_info[round_num]["duration"] = duration
-                logging.info(f"Source {source} , round {round_num}, duration: {duration:.4f} seconds")
+            start_time = self.round_timing_info[round_num]["start_time"]
+            duration = current_time - start_time
+            self.round_timing_info[round_num]["duration"] = duration
 
-                self.save_data(
-                    "model_arrival_latency",
-                    source,
-                    self._addr,
-                    num_round=round_num,
-                    current_round=current_round,
-                    latency=duration,
-                )
+            logging.info(f"Source {source}, round {round_num}, duration: {duration:.4f} seconds")
 
-        elif round_num < current_round:
-            logging.info(f"Model from previous round {round_num} arrived at round {current_round}, storing without penalization.")
-            
-            if round_num not in self.round_timing_info:
-                self.round_timing_info[round_num] = {}
+            self.save_data("model_arrival_latency", source, self._addr, num_round=round_num,
+                        current_round=self._engine.get_round(), latency=duration)
+        else:
+            logging.info(f"Start time not yet available for round {round_num}.")
 
-            if "model_received_time" not in self.round_timing_info[round_num]:
-                self.round_timing_info[round_num]["model_received_time"] = {}
+    def _process_past_round(self, round_num, source):
+        """
+            Process models that arrive in past rounds.
+        """
+        current_time = time.time()
+        self.round_timing_info.setdefault(round_num, {})
+        self.round_timing_info[round_num].setdefault("model_received_time", {})
+        self.round_timing_info[round_num]["model_received_time"][source] = current_time
 
-            self.round_timing_info[round_num]["model_received_time"][source] = current_time
-            logging.info(f"Model from source {source} stored for previous round {round_num}.")
+        prev_start_time = self.round_timing_info.get(round_num, {}).get("start_time")
+        if prev_start_time:
+            duration = current_time - prev_start_time
+            self.round_timing_info[round_num]["duration"] = duration
 
-            if round_num - 1 in self.round_timing_info:
-                previous_round_start_time = self.round_timing_info[round_num - 1].get("start_time", None)
-                if previous_round_start_time:
-                    received_time = self.round_timing_info[round_num]["model_received_time"][source]
-                    duration = received_time - previous_round_start_time
-                    self.round_timing_info[round_num]["duration"] = duration
-                    logging.info(f"Source {source} , round {round_num}, calculated latency using previous round's start_time: {duration:.4f} seconds")
+            # logging.info(f"Source {source}, calculated latency using start_time at round {round_num}: {duration:.4f} seconds")
 
-                    self.save_data(
-                        "model_arrival_latency",
-                        source,
-                        self._addr,
-                        num_round=round_num,
-                        current_round=current_round,
-                        latency=duration,
-                    )
-                else:
-                    logging.info(f"Start time for previous round {round_num - 1} not available yet.")
-            else:
-                logging.info(f"No data available for previous round {round_num - 1}.")
+            self.save_data("model_arrival_latency", source, self._addr, num_round=round_num,
+                        current_round=self._engine.get_round(), latency=duration)
+        else:
+            logging.info(f"Start time for previous round {round_num - 1} not available yet.")
+
+    def _recalculate_pending_latencies(self, current_round):
+        """
+            Recalculate latencies for rounds that have pending recalculation.
+        """
+        logging.info(f"Recalculating latencies for rounds with pending recalculation.")
+        for r_num, r_data in self.round_timing_info.items():
+            new_time = time.time()
+            # logging.info(f"Round {r_num} data: {r_data}")
+            if r_data.get("pending_recalculation"): 
+                if "start_time" in r_data and "model_received_time" in r_data:
+                    # logging.info(f"Recalculating latency for round {r_num}.")
+
+                    r_data.setdefault("model_received_time", {})
+
+                    for src in list(r_data["pending_sources"]):
+                        r_data["model_received_time"][src] = new_time
+                        duration = new_time - r_data["start_time"]
+                        r_data["duration"] = duration
+
+                        # logging.info(f"Source {src}, round {r_num}, recalculated duration: {duration:.4f} seconds")
+
+                        self.save_data("model_arrival_latency", src, self._addr, num_round=r_num,
+                                    current_round=current_round, latency=duration)
+
+                    r_data["pending_sources"].clear()
+                    r_data["pending_recalculation"] = False
 
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, nei, round_num, local) = await ure.get_event_data()
@@ -1733,8 +1719,5 @@ class Reputation:
             self._addr,
             current_round,
             fraction_changed=fraction_changed,
-            total_params=total_params,
-            changed_params=changed_params,
             threshold=current_threshold,
-            changes_record=changes_record,
         )
