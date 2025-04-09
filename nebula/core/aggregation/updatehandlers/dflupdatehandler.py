@@ -110,8 +110,12 @@ class DFLUpdateHandler(UpdateHandler):
                 logging.info(
                     f"Storage Update | source={source} | round={round} | weight={weight} | federation nodes: {self._sources_expected}"
                 )
-
-                self._sources_received.add(source)
+                if round != self._aggregator.engine.get_round():
+                    logging.info(f"Discard update | round: {round} not in current round")
+                    await self._updates_storage_lock.release_async()
+                else:
+                    self._sources_received.add(source)
+                
                 updates_left = self._sources_expected.difference(self._sources_received)
                 logging.info(
                     f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}"
