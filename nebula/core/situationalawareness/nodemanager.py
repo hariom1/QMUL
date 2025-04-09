@@ -246,7 +246,6 @@ class NodeManager:
 
             best_candidates = self.candidate_selector.select_candidates()
             if self._verbose: logging.info(f"Candidates | {[addr for addr, _, _ in best_candidates]}")
-            #TODO candidates not choosen --> disconnect
             try:
                 for addr, _, _ in best_candidates:
                     await self.add_pending_connection_confirmation(addr)

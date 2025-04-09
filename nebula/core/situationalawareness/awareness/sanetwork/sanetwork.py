@@ -77,7 +77,7 @@ class SANetwork(SAMComponent):
             await self.cm.get_addrs_current_connections(only_direct=True, myself=False),
             await self.cm.get_addrs_current_connections(only_direct=False, only_undirected=False, myself=False),
             self._addr,
-            self,
+            self._strict_topology,
         ])
         
         await EventManager.get_instance().subscribe_node_event(NodeFoundEvent, self.process_node_found_event)
@@ -206,7 +206,7 @@ class SANetwork(SAMComponent):
         self._restructure_process_lock.acquire()
         # addrs_to_connect = self.neighbor_policy.get_nodes_known(neighbors_too=False)
         # If we got some refs, try to connect to them
-        if len(possible_neighbors) > 0:
+        if possible_neighbors and len(possible_neighbors) > 0:
             if self._verbose: logging.info(f"Reestructuring | Addrs availables | addr list: {possible_neighbors}")
             await self.sam.nm.start_late_connection_process(
                 connected=True, msg_type="discover_nodes", addrs_known=possible_neighbors
@@ -223,7 +223,10 @@ class SANetwork(SAMComponent):
         for n in neighbors:
             await self.cm.add_to_blacklist(n)
         for n in neighbors:
-            await self.cm.disconnect(n, mutual_disconnection=False, forced=True)    
+            await self.cm.disconnect(n, mutual_disconnection=False, forced=True)
+
+    async def forget_nodes(self, nodes_to_forget):
+        self.np.forget_nodes(nodes_to_forget)    
         
     """                                                     ###############################
                                                             #       SA NETWORK AGENT      #
@@ -248,6 +251,7 @@ class SANetworkAgent(SAModuleAgent):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)
         
     async def create_and_suggest_action(self, saca: SACommandAction, function: Callable = None, *args):
+        sac = None
         if saca == SACommandAction.MAINTAIN_CONNECTIONS:
             sac = factory_sa_command(
                 "connectivity",
@@ -274,6 +278,9 @@ class SANetworkAgent(SAModuleAgent):
             )
             await self.suggest_action(sac)
             await self.notify_all_suggestions_done(RoundEndEvent)
+            sa_command_state = await sac.get_state_future()
+            #TODO en este caso se ha tratado de hacer conexiones con los nodos conocidos en el caso de haberlos,
+            # habría que lanzar una tarea que los borre en el caso de no realizarse la conexión a ellos
         elif saca == SACommandAction.RECONNECT:
             sac = factory_sa_command(
                 "connectivity",

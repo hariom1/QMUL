@@ -28,7 +28,7 @@ class FCNeighborPolicy(NeighborPolicy):
             config[0] -> list of self neighbors
             config[1] -> list of nodes known on federation
             config[2] -> self addr
-            config[3] -> NodeManager reference
+            config[3] -> stricted_topology
         """
         logging.info("Initializing Fully-Connected Topology Neighbor Policy")
         self.neighbors_lock.acquire()
@@ -73,12 +73,13 @@ class FCNeighborPolicy(NeighborPolicy):
         self.nodes_known_lock.release()
         return nk     
     
-    def forget_nodes(self, node, forget_all=False):
+    def forget_nodes(self, nodes, forget_all=False):
         self.nodes_known_lock.acquire()
         if forget_all:
             self.nodes_known.clear()
         else:
-            self.nodes_known.discard(node)
+            for node in nodes:
+                self.nodes_known.discard(node)
         self.nodes_known_lock.release()
         
     def get_actions(self): 
@@ -113,4 +114,7 @@ class FCNeighborPolicy(NeighborPolicy):
         else:
             self.neighbors.add(node)
             logging.info(f"Add neighbor | addr: {node}")
-        self.neighbors_lock.release() 
+        self.neighbors_lock.release()
+
+    def stricted_topology_status(stricted_topology: bool):
+        pass 

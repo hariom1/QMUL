@@ -23,6 +23,7 @@ class STARNeighborPolicy(NeighborPolicy):
             config[0] -> list of self neighbors, in this case, the star point
             config[1] -> list of nodes known on federation
             config[2] -> self.addr
+            config[3] -> stricted_topology
         """
         self.neighbors_lock.acquire()
         self.neighbors = config[0]
@@ -43,12 +44,13 @@ class STARNeighborPolicy(NeighborPolicy):
         self.nodes_known.add(node)
         self.nodes_known_lock.release()
         
-    def forget_nodes(self, node, forget_all=False):
+    def forget_nodes(self, nodes, forget_all=False):
         self.nodes_known_lock.acquire()
         if forget_all:
             self.nodes_known.clear()
         else:
-            self.nodes_known.discard(node)
+            for node in nodes:
+                self.nodes_known.discard(node)
         self.nodes_known_lock.release()
         
     def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
@@ -77,4 +79,7 @@ class STARNeighborPolicy(NeighborPolicy):
         return [ct_actions, df_actions]
     
     def update_neighbors(self, node, remove=False):
+        pass
+
+    def stricted_topology_status(stricted_topology: bool):
         pass

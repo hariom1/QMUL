@@ -24,7 +24,7 @@ class NeighborPolicy(ABC):
         pass
     
     abstractmethod
-    def forget_nodes(self, node, forget_all=False):
+    def forget_nodes(self, nodes, forget_all=False):
         pass
     
     @abstractmethod
@@ -33,6 +33,10 @@ class NeighborPolicy(ABC):
     
     @abstractmethod
     def update_neighbors(self, node, remove=False):
+        pass
+
+    @abstractmethod
+    def stricted_topology_status(stricted_topology: bool):
         pass
 
 def factory_NeighborPolicy(topology) -> NeighborPolicy:

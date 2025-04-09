@@ -81,7 +81,7 @@ class SACommand:
         if not self._state_future.done():
             self._state_future.set_result(sacs)
             
-    def get_state_future(self):
+    def get_state_future(self) -> asyncio.Future:
         return self._state_future
     
     def is_parallelizable(self):

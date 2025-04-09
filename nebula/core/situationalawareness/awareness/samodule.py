@@ -127,9 +127,10 @@ class SAModule:
         # Execute SACommand selected
         for cmd in valid_commands:
             if cmd.is_parallelizable():
-                logging.info(f"going to execute parallelizable action: {cmd.get_action()}")
+                if self._verbose: logging.info(f"going to execute parallelizable action: {cmd.get_action()}")
                 asyncio.create_task(cmd.execute())
             else:
+                if self._verbose: logging.info(f"going to execute action: {cmd.get_action()}")
                 await cmd.execute()
 
     async def _process_aggregation_event(self, age : AggregationEvent):
