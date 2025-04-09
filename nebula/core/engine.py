@@ -2,18 +2,19 @@ import asyncio
 import logging
 import os
 import time
+
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
+from nebula.addons.reputation.reputation import Reputation
 from nebula.core.addonmanager import AddonManager
 from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
-from nebula.addons.reputation.reputation import Reputation
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -282,7 +283,9 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+            logging.info(
+                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
+            )
 
             current_node = self.addr
             nei = message.node_id
@@ -540,7 +543,7 @@ class Engine:
             expected_nodes = self.federation_nodes.copy()
             rse = RoundStartEvent(self.round, current_time, expected_nodes)
             await EventManager.get_instance().publish_node_event(rse)
-            self.trainer.on_round_start()   
+            self.trainer.on_round_start()
             logging.info(f"Expected nodes: {expected_nodes}")
             direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
@@ -549,7 +552,7 @@ class Engine:
             await self.aggregator.update_federation_nodes(expected_nodes)
             await self._extended_learning_cycle()
             await self.get_round_lock().acquire_async()
-            
+
             print_msg_box(
                 msg=f"Round {self.round} of {self.total_rounds - 1} finished (max. {self.total_rounds} rounds)",
                 indent=2,
@@ -598,6 +601,7 @@ class Engine:
         functionalities. The method is called in the _learning_cycle method.
         """
         pass
+
 
 class MaliciousNode(Engine):
     def __init__(

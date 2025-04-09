@@ -88,11 +88,19 @@ class DFLUpdateHandler(UpdateHandler):
     async def _check_updates_already_received(self):
         for se in self._sources_expected:
             (last_updt, node_storage) = self._updates_storage[se]
-            if len(node_storage) and last_updt != node_storage[-1]:
-                    logging.info(
-                        f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received"
+            if len(node_storage):
+                try:
+                    if (last_updt and node_storage[-1] and last_updt != node_storage[-1]) or (
+                        node_storage[-1] and not last_updt
+                    ):
+                        self._sources_received.add(se)
+                        logging.info(
+                            f"Update already received from source: {se} | ({len(self._sources_received)}/{len(self._sources_expected)}) Updates received"
+                        )
+                except:
+                    logging.exception(
+                        f"ERROR: source expected: {se} | last_update None: {(True if not last_updt else False)}, last update storaged None: {(True if not node_storage[-1] else False)}"
                     )
-                    self._sources_received.add(se)
 
     async def storage_update(self, updt_received_event: UpdateReceivedEvent):
         time_received = time.time()
@@ -115,7 +123,7 @@ class DFLUpdateHandler(UpdateHandler):
                     await self._updates_storage_lock.release_async()
                 else:
                     self._sources_received.add(source)
-                
+
                 updates_left = self._sources_expected.difference(self._sources_received)
                 logging.info(
                     f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}"
