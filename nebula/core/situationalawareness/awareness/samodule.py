@@ -69,18 +69,16 @@ class SAModule:
     def sb(self):
         return self._suggestion_buffer
     
-
     async def init(self):
         from nebula.core.situationalawareness.awareness.sanetwork.sanetwork import SANetwork
         from nebula.core.situationalawareness.awareness.satraining.satraining import SATraining
-        self._situational_awareness_network = SANetwork(self, self._addr, self._topology, True)
+        self._situational_awareness_network = SANetwork(self, self._addr, self._topology, verbose=True)
         self._situational_awareness_training = SATraining(self, self._addr, "qds", "fastreboot", verbose=True)
-        await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
-        await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
         await self.san.init()
         await self.sat.init()
+        await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
+        await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
 
-          
     def is_additional_participant(self):
         return self.nm.is_additional_participant()
 
@@ -124,39 +122,46 @@ class SAModule:
         logging.info("🔄 Arbitration | Round End Event...")
         asyncio.create_task(self.san.sa_component_actions())
         asyncio.create_task(self.sat.sa_component_actions())
-        valid_commands = await self._mediate_suggestions(RoundEndEvent)
+        valid_commands = await self._arbitatrion_suggestions(RoundEndEvent)
 
         # Execute SACommand selected
         for cmd in valid_commands:
             if cmd.is_parallelizable():
+                logging.info(f"going to execute parallelizable action: {cmd.get_action()}")
                 asyncio.create_task(cmd.execute())
             else:
                 await cmd.execute()
 
     async def _process_aggregation_event(self, age : AggregationEvent):
         logging.info("🔄 Arbitration | Aggregation Event...")
-        aggregation_command: SACommand = (await self._mediate_suggestions(AggregationEvent))[0]
-        final_updates = await aggregation_command.execute()
-        age.update_updates(final_updates)
+        aggregation_command = await self._arbitatrion_suggestions(AggregationEvent)
+        if len(aggregation_command):
+            if self._verbose: logging.info(f"Aggregation event resolved. SA Agente that suggest action: {await aggregation_command[0].get_owner}") 
+            final_updates = await aggregation_command[0].execute()
+            age.update_updates(final_updates)
 
-    async def _mediate_suggestions(self, event_type):
+    async def _arbitatrion_suggestions(self, event_type):
         if self._verbose: logging.info("Waiting for all suggestions done")
         await self.sb.set_event_waited(event_type)
-        self._arbitrator_notification.wait()
+        await self._arbitrator_notification.wait()
+        logging.info("waiting released")
         suggestions = await self.sb.get_suggestions(event_type)
         self._arbitrator_notification.clear()
-        if self._verbose: logging.info("Starting mediation, suggestions received")
-        if self._verbose: logging.info(f"Number of suggestions received: {len(suggestions)}")
+        if not len(suggestions):
+            if self._verbose: logging.info("No suggestions for this event | Arbitatrion not required")
+            return []
+
+        if self._verbose: logging.info(f"Starting arbitatrion | Number of suggestions received: {len(suggestions)}")
         
         valid_commands: list[SACommand] = []
 
-        for cmd in suggestions:
+        for agent, cmd in suggestions:
             has_conflict = False
             to_remove: list[SACommand] = []
 
             for other in valid_commands:
                 if await cmd.conflicts_with(other):
-                    if self._verbose: logging.info(f"Conflict detected | between -- {await cmd.get_owner().get_agent()} and {await other.get_owner().get_agent()} --")
+                    if self._verbose: logging.info(f"Conflict detected between -- {await cmd.get_owner()} and {await other.get_owner()} --")
                     if self._verbose: logging.info(f"Action in conflict ({cmd.get_action()}, {other.get_action()})")
                     if cmd.got_higher_priority_than(other.get_prio()):
                         to_remove.append(other)
@@ -176,5 +181,6 @@ class SAModule:
                     valid_commands.remove(r)
                 valid_commands.append(cmd)
 
+        logging.info("Arbitatrion finished")
         return valid_commands
 

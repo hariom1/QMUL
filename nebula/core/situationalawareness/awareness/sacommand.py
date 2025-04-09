@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from enum import Enum
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nebula.core.situationalawareness.awareness.samoduleagent import SAModuleAgent
@@ -66,13 +65,13 @@ class SACommand:
         await self._update_command_state(SACommandState.DISCARDED)
 
     def got_higher_priority_than(self, other_prio: SACommandPRIO):
-        return self._priority > other_prio
+        return self._priority.value > other_prio.value
     
     def get_prio(self):
         return self._priority
     
-    def get_owner(self):
-        return self._owner.get_agent()
+    async def get_owner(self):
+        return await self._owner.get_agent()
     
     def get_action(self) -> SACommandAction:
         return self._action
@@ -122,16 +121,14 @@ class ConnectivityCommand(SACommand):
             else:
                 self._action_function(*self._args)
 
-    def conflicts_with(self, other: "ConnectivityCommand") -> bool:
+    async def conflicts_with(self, other: "ConnectivityCommand") -> bool:
         """Determines if two commands conflict with each other."""
         if self._target == other._target:
-            logging.info(f"Evaluation posible conflict | targets {self._target}, {other._target}")
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.DISCONNECT},
             ]
             return {self._action, other._action} in conflict_pairs
         else:
-            logging.info(f"Evaluation posible conflict | actions {self._action}, {other._action}")
             conflict_pairs = [
                 {SACommandAction.DISCONNECT, SACommandAction.RECONNECT},
                 {SACommandAction.DISCONNECT, SACommandAction.MAINTAIN_CONNECTIONS},
@@ -155,7 +152,7 @@ class AggregationCommand(SACommand):
         await self._update_command_state(SACommandState.EXECUTED)
         return self._target
     
-    def conflicts_with(self, other: "AggregationCommand") -> bool:
+    async def conflicts_with(self, other: "AggregationCommand") -> bool:
         """Determines if two commands conflict with each other."""
         topologic_conflict = False
         weight_conflict = False

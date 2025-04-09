@@ -29,21 +29,24 @@ class SuggestionBuffer():
         self._arbitrator_notification = arbitrator_notification
         self._arbitrator_notification_lock = Locker("arbitrator_notification_lock", async_lock=True)
         self._verbose = verbose
-        self._buffer : dict[Type[NodeEvent], list[SACommand]] = defaultdict(list)             # {event: [suggestion]}
+        self._buffer : dict[Type[NodeEvent], list[tuple[SAModuleAgent, SACommand]]] = defaultdict(list)               
         self._suggestion_buffer_lock = Locker("suggestion_buffer_lock", async_lock=True)
-        self._expected_agents = defaultdict(set)                                        # {event: {agents}}
+        self._expected_agents: dict[Type[NodeEvent] ,list[SAModuleAgent]] = defaultdict(list)                                               
         self._expected_agents_lock = Locker("expected_agents_lock", async_lock=True)
-        self._event_notifications : dict[Type[NodeEvent], list[tuple[SAModuleAgent, asyncio.Event]]] = {}
+        self._event_notifications : dict[Type[NodeEvent], list[tuple[SAModuleAgent, asyncio.Event]]] = defaultdict(list)
         self._event_waited = None
                       
     async def register_event_agents(self, event_type, agent: SAModuleAgent):
         """Registers expected agents for a given event."""
         async with self._expected_agents_lock:
             if self._verbose:
-                logging.info(f"Registering SA Agent: {await agent.get_agent()} for event: {event_type}")
+                logging.info(f"Registering SA Agent: {await agent.get_agent()} for event: {event_type. __name__}")
+                
             if event_type not in self._event_notifications:
-                self._event_notifications[event_type] = []    
-            self._expected_agents[event_type].add(agent)
+                self._event_notifications[event_type] = []
+                
+            self._expected_agents[event_type].append(agent)
+                 
             existing_agents = {a for a, _ in self._event_notifications[event_type]}
             if agent not in existing_agents:
                 self._event_notifications[event_type].append((agent, asyncio.Event()))
@@ -51,13 +54,13 @@ class SuggestionBuffer():
     async def register_suggestion(self, event_type, agent: SAModuleAgent, suggestion: SACommand):
         """Registers a suggestion from an agent for a specific event."""
         async with self._suggestion_buffer_lock:
-            if self._verbose: logging.info(f"Registering Suggestion from SA Agent: {await agent.get_agent()} for event: {event_type}")
+            if self._verbose: logging.info(f"Registering Suggestion from SA Agent: {await agent.get_agent()} for event: {event_type. __name__}")
             self._buffer[event_type].append((agent, suggestion))
 
     async def set_event_waited(self, event_type):
         """Registers event to be waited"""
         if not self._event_waited:
-            if self._verbose: logging.info(f"Set notification when all suggestions are being received for event: {event_type}")
+            if self._verbose: logging.info(f"Set notification when all suggestions are being received for event: {event_type. __name__}")
             self._event_waited = event_type
             await self._notify_arbitrator(event_type)
 
@@ -70,11 +73,11 @@ class SuggestionBuffer():
                     event.set()
                     agent_found = True
                     if self._verbose:
-                        logging.info(f"SA Agent: {await saa.get_agent()} notifies all suggestions registered for event: {event_type}")
+                        logging.info(f"SA Agent: {await saa.get_agent()} notifies all suggestions registered for event: {event_type. __name__}")
                     break
             if not agent_found and self._verbose:
-                logging.error(f"SAModuleAgent: {await saa.get_agent()} not found on notifications awaited for event {event_type}")
-            await self._notify_arbitrator(event_type)
+                logging.error(f"SAModuleAgent: {await saa.get_agent()} not found on notifications awaited for event {event_type. __name__}")
+        await self._notify_arbitrator(event_type)
 
     async def _notify_arbitrator(self, event_type):
         """Checks whether to notify the arbitrator that all suggestions for event_type are received."""
@@ -104,12 +107,12 @@ class SuggestionBuffer():
             if agent in agents:
                 event.clear()
 
-    async def get_suggestions(self, event_type):
+    async def get_suggestions(self, event_type) -> list[tuple[SAModuleAgent, SACommand]]:
         """Retrieves all suggestions registered for a given event."""
         async with self._suggestion_buffer_lock:
             async with  self._expected_agents_lock:
-                if self._verbose: logging.info(f"Retrieving all sugestions for event: {event_type}")
-                suggestions = self._buffer.get(event_type, []).copy()
+                suggestions = list(self._buffer.get(event_type, []))
+                if self._verbose: logging.info(f"Retrieving all sugestions for event: {event_type. __name__}")
                 await self._clear_suggestions(event_type)
                 return suggestions
 
